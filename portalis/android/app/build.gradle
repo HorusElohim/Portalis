@@ -42,3 +42,28 @@ android {
 flutter {
     source = "../.."
 }
+
+// Build Rust shared libraries and place them in jniLibs before Android build.
+def rustBuildScript = new File(rootProject.projectDir, "build_rust_android.sh")
+
+tasks.register("buildRustAndroidRelease", Exec) {
+    workingDir rootProject.projectDir
+    commandLine "bash", rustBuildScript.absolutePath, "release"
+}
+
+tasks.register("buildRustAndroidDebug", Exec) {
+    workingDir rootProject.projectDir
+    commandLine "bash", rustBuildScript.absolutePath, "debug"
+}
+
+afterEvaluate {
+    // Hook into variant preBuild so Rust libs exist before packaging.
+    android.applicationVariants.all { variant ->
+        def cap = variant.name.capitalize()
+        if (variant.buildType.name == "release") {
+            tasks.named("pre${cap}Build").configure { dependsOn(tasks.named("buildRustAndroidRelease")) }
+        } else {
+            tasks.named("pre${cap}Build").configure { dependsOn(tasks.named("buildRustAndroidDebug")) }
+        }
+    }
+}

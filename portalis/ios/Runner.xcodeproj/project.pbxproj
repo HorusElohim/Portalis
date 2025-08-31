@@ -13,7 +13,9 @@
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
-		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+        97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+        A1B2C3D41A2B3C4D5E6F7081 /* backend.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D51A2B3C4D5E6F7081 /* backend.xcframework */; };
+        A1B2C3D81A2B3C4D5E6F7081 /* backend.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D51A2B3C4D5E6F7081 /* backend.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,16 +29,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		9705A1C41CF9048500538489 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+        9705A1C41CF9048500538489 /* Embed Frameworks */ = {
+            isa = PBXCopyFilesBuildPhase;
+            buildActionMask = 2147483647;
+            dstPath = "";
+            dstSubfolderSpec = 10;
+            files = (
+                A1B2C3D81A2B3C4D5E6F7081 /* backend.xcframework in Embed Frameworks */,
+            );
+            name = "Embed Frameworks";
+            runOnlyForDeploymentPostprocessing = 0;
+        };
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -54,17 +57,19 @@
 		97C146FB1CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        A1B2C3D51A2B3C4D5E6F7081 /* backend.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = backend.xcframework; path = backend.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		97C146EB1CF9000F007C117D /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+        97C146EB1CF9000F007C117D /* Frameworks */ = {
+            isa = PBXFrameworksBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                A1B2C3D41A2B3C4D5E6F7081 /* backend.xcframework in Frameworks */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -94,7 +99,17 @@
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
+				A1B2C3D61A2B3C4D5E6F7081 /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		A1B2C3D61A2B3C4D5E6F7081 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D51A2B3C4D5E6F7081 /* backend.xcframework */,
+			);
+			name = Frameworks;
+			path = Frameworks;
 			sourceTree = "<group>";
 		};
 		97C146EF1CF9000F007C117D /* Products */ = {
@@ -146,6 +161,7 @@
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
 				9740EEB61CF901F6004384FC /* Run Script */,
+				A1B2C3D71A2B3C4D5E6F7081 /* Build Rust (iOS) */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
@@ -252,6 +268,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		A1B2C3D71A2B3C4D5E6F7081 /* Build Rust (iOS) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust (iOS)";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Runner/build_rust_ios.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

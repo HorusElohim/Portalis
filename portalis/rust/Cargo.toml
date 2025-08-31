@@ -1,9 +1,0 @@
-[package]
-name = "portalis_backend"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-flutter_rust_bridge = "2.6.0"        # https://docs.rs/flutter_rust_bridge/latest/flutter_rust_bridge/
-anyhow = "1.0.93"                    # https://docs.rs/anyhow/latest/anyhow/
-log = "0.4.22"                       # https://docs.rs/log/latest/log/
