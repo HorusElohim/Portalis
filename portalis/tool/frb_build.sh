@@ -79,9 +79,15 @@ function build_web() {
   echo "Artifacts: web/pkg/backend.js, web/pkg/backend_bg.wasm"
 }
 
+function build_android() {
+  echo "==> Android build via cargo-ndk"
+  bash android/build_rust_android.sh release
+}
+
 case "$PLATFORM" in
   macos) maybe_codegen; build_macos ;;
   ios) maybe_codegen; echo "iOS: Codegen done. Xcode will build XCFramework via build phase." ;;
+  android) maybe_codegen; build_android ;;
   linux) maybe_codegen; build_linux ;;
   windows) maybe_codegen; build_windows ;;
   web) maybe_codegen; build_web ;;
