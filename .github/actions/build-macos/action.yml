@@ -1,0 +1,36 @@
+name: Build macOS (Portalis)
+description: Build macOS app and upload artifact
+inputs:
+  working-dir:
+    description: Path to Flutter project
+    required: false
+    default: portalis
+runs:
+  using: composite
+  steps:
+    - name: Compute metadata
+      id: meta
+      shell: bash
+      run: |
+        echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        echo "run_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+    - name: Toolchains
+      id: setup
+      uses: ./.github/actions/setup-flutter-rust
+      with:
+        extract-version: 'true'
+        extract-backend-version: 'true'
+        working-dir: ${{ inputs.working-dir }}
+        backend-dir: rust/backend
+
+    - name: Flutter build macOS
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: flutter build macos --release
+
+    - name: Upload macOS app
+      uses: actions/upload-artifact@v4
+      with:
+        name: Portalis-${{ steps.setup.outputs.backend-version }}-macOS-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
+        path: ${{ inputs.working-dir }}/build/macos/Build/Products/Release/portalis.app
+        retention-days: 7

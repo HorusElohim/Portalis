@@ -1,0 +1,48 @@
+name: Build Web (Portalis)
+description: Build web bundle with Rust WASM and upload artifact
+inputs:
+  working-dir:
+    description: Path to Flutter project
+    required: false
+    default: portalis
+runs:
+  using: composite
+  steps:
+    - name: Compute metadata
+      id: meta
+      shell: bash
+      run: |
+        echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        echo "run_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+    - name: Toolchains
+      id: setup
+      uses: ./.github/actions/setup-flutter-rust
+      with:
+        rust-targets: wasm32-unknown-unknown
+        install-wasm-bindgen: 'true'
+        wasm-bindgen-version: '0.2.100'
+        install-frb-codegen: 'true'
+        frb-codegen-version: '2.11.1'
+        install-cargo-expand: 'true'
+        cache-key-suffix: web
+        extract-version: 'true'
+        extract-backend-version: 'true'
+        working-dir: ${{ inputs.working-dir }}
+        backend-dir: rust/backend
+
+    - name: Build FRB (web)
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: bash ./tool/frb_build.sh web
+
+    - name: Flutter build web
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: flutter build web --release
+
+    - name: Upload web artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Portalis-${{ steps.setup.outputs.backend-version }}-Web-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
+        path: ${{ inputs.working-dir }}/build/web
+        retention-days: 7

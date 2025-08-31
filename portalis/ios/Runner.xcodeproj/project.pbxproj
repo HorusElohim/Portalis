@@ -282,7 +282,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"$SRCROOT/Runner/build_rust_ios.sh\"\n";
+			shellScript = "bash \"$SRCROOT/Runner/build_rust_ios.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

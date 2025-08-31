@@ -1,0 +1,122 @@
+name: Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'portalis/**'
+      - '.github/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'portalis/**'
+      - '.github/**'
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WORKING_DIR: portalis
+
+jobs:
+  analyze:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchains
+        uses: ./.github/actions/setup-flutter-rust
+      - name: Pub get
+        working-directory: ${{ env.WORKING_DIR }}
+        run: flutter pub get
+      - name: Analyze
+        working-directory: ${{ env.WORKING_DIR }}
+        run: flutter analyze
+      - name: Test
+        working-directory: ${{ env.WORKING_DIR }}
+        run: flutter test --no-pub
+
+  web:
+    name: Build Web
+    runs-on: ubuntu-latest
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Web
+        uses: ./.github/actions/build-web
+        with:
+          working-dir: ${{ env.WORKING_DIR }}
+
+  android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Android
+        uses: ./.github/actions/build-android
+        with:
+          working-dir: ${{ env.WORKING_DIR }}
+
+  macos:
+    name: Build macOS
+    runs-on: macos-latest
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build macOS
+        uses: ./.github/actions/build-macos
+        with:
+          working-dir: ${{ env.WORKING_DIR }}
+
+  ios:
+    name: Build iOS (simulator)
+    runs-on: macos-latest
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build iOS
+        uses: ./.github/actions/build-ios
+        with:
+          working-dir: ${{ env.WORKING_DIR }}
+
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [web, android, macos, ios]
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract app version
+        id: version
+        run: |
+          set -euo pipefail
+          fe_ver=$(grep -m1 '^version:' $WORKING_DIR/pubspec.yaml | awk '{print $2}')
+          be_ver=$(awk -F '"' '/^version\s*=\s*"/ {print $2; exit}' $WORKING_DIR/rust/backend/Cargo.toml)
+          echo "APP_VERSION=$fe_ver" >> $GITHUB_ENV
+          echo "BACKEND_VERSION=$be_ver" >> $GITHUB_ENV
+      - name: Summarize artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId = context.runId;
+            const {owner, repo} = context.repo;
+            const res = await github.rest.actions.listWorkflowRunArtifacts({owner, repo, run_id: runId});
+            const arts = res.data.artifacts || [];
+            // Build nice Markdown links with sizes
+            const items = arts
+              .sort((a,b) => a.name.localeCompare(b.name))
+              .map(a => `<li><a href="${a.archive_download_url}">${a.name}</a> · ${(a.size_in_bytes/1024/1024).toFixed(2)} MB</li>`);
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            await core.summary
+              .addHeading(`Portalis CI Summary`)
+              .addRaw(`\n**Frontend:** ${process.env.APP_VERSION}\n`)
+              .addRaw(`**Backend:** ${process.env.BACKEND_VERSION}\n\n`)
+              .addRaw(`**Commit:** ${process.env.GITHUB_SHA.slice(0,7)}\n\n`)
+              .addRaw(`**Run:** ${runUrl}\n\n`)
+              .addHeading('Artifacts')
+              .addRaw(items.length ? `<ul>\n${items.join('\n')}\n</ul>` : '<p>No artifacts found</p>')
+              .write();

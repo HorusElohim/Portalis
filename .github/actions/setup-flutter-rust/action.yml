@@ -1,0 +1,212 @@
+name: Setup Flutter & Rust
+description: Install Flutter and Rust toolchains for Portalis builds
+inputs:
+  flutter-channel:
+    description: Flutter channel (stable/beta)
+    required: false
+    default: stable
+  rust-targets:
+    description: Space-separated Rust targets to add via rustup
+    required: false
+    default: ''
+  extra-commands:
+    description: Extra shell commands to run (e.g., install wasm-bindgen, cargo-ndk)
+    required: false
+    default: ''
+  cache-key-suffix:
+    description: Extra suffix for cargo cache key
+    required: false
+    default: ''
+  install-wasm-bindgen:
+    description: Install wasm-bindgen-cli (pinned version)
+    required: false
+    default: 'false'
+  wasm-bindgen-version:
+    description: Version of wasm-bindgen-cli to install
+    required: false
+    default: '0.2.100'
+  install-frb-codegen:
+    description: Install flutter_rust_bridge_codegen (pinned version)
+    required: false
+    default: 'false'
+  frb-codegen-version:
+    description: Version of flutter_rust_bridge_codegen to install
+    required: false
+    default: '2.11.1'
+  install-cargo-ndk:
+    description: Install cargo-ndk (Android helper)
+    required: false
+    default: 'false'
+  cargo-ndk-version:
+    description: Version of cargo-ndk to install (empty for latest)
+    required: false
+    default: ''
+  install-cargo-expand:
+    description: Install cargo-expand (and nightly toolchain)
+    required: false
+    default: 'false'
+  cargo-expand-version:
+    description: Version of cargo-expand to install (empty for latest)
+    required: false
+    default: ''
+  extract-version:
+    description: Parse app version from pubspec.yaml and expose as output
+    required: false
+    default: 'false'
+  extract-backend-version:
+    description: Parse backend (Rust crate) version and expose as output
+    required: false
+    default: 'false'
+  working-dir:
+    description: Project working directory containing pubspec.yaml
+    required: false
+    default: portalis
+  backend-dir:
+    description: Relative path from working-dir to Rust backend crate directory
+    required: false
+    default: rust/backend
+outputs:
+  app-version:
+    description: Version parsed from pubspec.yaml (when extract-version=true)
+    value: ${{ steps.extract-version.outputs.app_version }}
+  backend-version:
+    description: Version parsed from backend Cargo.toml (when extract-backend-version=true)
+    value: ${{ steps.extract-version.outputs.backend_version }}
+runs:
+  using: composite
+  steps:
+    - name: Ensure cargo bin on PATH
+      shell: bash
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: ${{ inputs.flutter-channel }}
+        cache: true
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ inputs.cache-key-suffix }}-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache pub
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.pub-cache
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+
+    - name: Cache Gradle
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+    - id: extract-version
+      if: ${{ inputs.extract-version == 'true' || inputs.extract-backend-version == 'true' }}
+      name: Extract versions
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "${{ inputs.extract-version }}" == "true" ]]; then
+          ver=$(grep -m1 '^version:' "${{ inputs.working-dir }}"/pubspec.yaml | awk '{print $2}')
+          echo "app_version=$ver" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$ver" >> "$GITHUB_ENV"
+        fi
+        if [[ "${{ inputs.extract-backend-version }}" == "true" ]]; then
+          cargo_toml="${{ inputs.working-dir }}/${{ inputs.backend-dir }}/Cargo.toml"
+          be_ver=$(awk -F '"' '/^version\s*=\s*"/ {print $2; exit}' "$cargo_toml")
+          echo "backend_version=$be_ver" >> "$GITHUB_OUTPUT"
+          echo "BACKEND_VERSION=$be_ver" >> "$GITHUB_ENV"
+        fi
+
+    - name: Add Rust targets
+      if: ${{ inputs.rust-targets != '' }}
+      shell: bash
+      run: rustup target add ${{ inputs.rust-targets }}
+
+    - name: Install wasm-bindgen-cli
+      if: ${{ inputs.install-wasm-bindgen == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        desired="${{ inputs.wasm-bindgen-version }}"
+        if command -v wasm-bindgen >/dev/null 2>&1; then
+          have=$(wasm-bindgen --version | grep -oE '[0-9]+(\.[0-9]+)*' | head -n1 || true)
+          if [[ "$have" == "$desired" ]]; then
+            echo "wasm-bindgen $have already installed; skipping"
+          else
+            echo "wasm-bindgen $have != $desired; reinstalling"
+            cargo install wasm-bindgen-cli --locked --version "$desired" --force
+          fi
+        else
+          cargo install wasm-bindgen-cli --locked --version "$desired" --force
+        fi
+
+    - name: Install flutter_rust_bridge_codegen
+      if: ${{ inputs.install-frb-codegen == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        desired="${{ inputs.frb-codegen-version }}"
+        if command -v flutter_rust_bridge_codegen >/dev/null 2>&1; then
+          have=$(flutter_rust_bridge_codegen --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)*' | head -n1 || true)
+          if [[ "$have" == "$desired" ]]; then
+            echo "flutter_rust_bridge_codegen $have already installed; skipping"
+          else
+            echo "flutter_rust_bridge_codegen $have != $desired; reinstalling"
+            cargo install flutter_rust_bridge_codegen --locked --version "$desired" --force
+          fi
+        else
+          cargo install flutter_rust_bridge_codegen --locked --version "$desired" --force
+        fi
+
+    - name: Install cargo-ndk
+      if: ${{ inputs.install-cargo-ndk == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v cargo-ndk >/dev/null 2>&1; then
+          echo "cargo-ndk already installed; skipping"
+        else
+          if [[ -n "${{ inputs.cargo-ndk-version }}" ]]; then
+            cargo install cargo-ndk --locked --version "${{ inputs.cargo-ndk-version }}" --force
+          else
+            cargo install cargo-ndk --locked --force || true
+          fi
+        fi
+
+    - name: Install cargo-expand
+      if: ${{ inputs.install-cargo-expand == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        rustup toolchain install nightly --profile minimal
+        if command -v cargo-expand >/dev/null 2>&1; then
+          echo "cargo-expand already installed; skipping"
+        else
+          if [[ -n "${{ inputs.cargo-expand-version }}" ]]; then
+            cargo +nightly install cargo-expand --locked --version "${{ inputs.cargo-expand-version }}" --force
+          else
+            cargo +nightly install cargo-expand --locked --force || true
+          fi
+        fi
+
+    - name: Extra commands
+      if: ${{ inputs.extra-commands != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        ${INPUT_EXTRA_COMMANDS}
+      env:
+        INPUT_EXTRA_COMMANDS: ${{ inputs.extra-commands }}

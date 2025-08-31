@@ -86,7 +86,7 @@ function build_android() {
 
 case "$PLATFORM" in
   macos) maybe_codegen; build_macos ;;
-  ios) maybe_codegen; echo "iOS: Codegen done. Xcode will build XCFramework via build phase." ;;
+  ios) maybe_codegen; echo "==> Building iOS XCFramework"; bash ios/Runner/build_rust_ios.sh ;;
   android) maybe_codegen; build_android ;;
   linux) maybe_codegen; build_linux ;;
   windows) maybe_codegen; build_windows ;;

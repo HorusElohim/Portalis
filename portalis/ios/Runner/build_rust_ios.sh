@@ -11,6 +11,9 @@ OUT_DIR="$IOS_DIR/Frameworks"
 
 mkdir -p "$OUT_DIR"
 
+# Ensure cargo is available when invoked from Xcode environment
+export PATH="$HOME/.cargo/bin:$PATH"
+
 # Ensure required Rust targets (install if FRB_BOOTSTRAP=1)
 function ensure_target() {
   local tgt="$1"

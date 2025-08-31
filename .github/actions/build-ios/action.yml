@@ -1,0 +1,42 @@
+name: Build iOS (Portalis)
+description: Build iOS Runner.app (device, unsigned) and upload artifact
+inputs:
+  working-dir:
+    description: Path to Flutter project
+    required: false
+    default: portalis
+runs:
+  using: composite
+  steps:
+    - name: Compute metadata
+      id: meta
+      shell: bash
+      run: |
+        echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        echo "run_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+    - name: Toolchains
+      id: setup
+      uses: ./.github/actions/setup-flutter-rust
+      with:
+        rust-targets: aarch64-apple-ios aarch64-apple-ios-sim
+        extract-version: 'true'
+        extract-backend-version: 'true'
+        working-dir: ${{ inputs.working-dir }}
+        backend-dir: rust/backend
+
+    - name: Prebuild Rust XCFramework
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: bash ios/Runner/build_rust_ios.sh
+
+    - name: Flutter build iOS (device, no codesign)
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: flutter build ios --release --no-codesign
+
+    - name: Upload Runner.app (device build unsigned)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Portalis-${{ steps.setup.outputs.backend-version }}-iOS-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release-unsigned
+        path: ${{ inputs.working-dir }}/build/ios/iphoneos/Runner.app
+        retention-days: 7
