@@ -45,9 +45,35 @@
   - Gradle hooks run `android/build_rust_android.sh` before each variant to produce `libbackend.so` for ABIs and copy them to `android/app/src/main/jniLibs/**`.
   - FRB loads `libbackend.so` automatically.
 
-## Windows – TODO
-- Build `backend.dll` (`cargo build --release` for MSVC triplet) and ensure the DLL is next to the app exe at runtime.
-- Optionally add a CMake/custom step to copy `backend.dll` into the bundle. Wire into the Windows CMakeLists if needed.
+## Windows (Desktop)
+
+Prerequisites
+- Run `setup/wizard_windows.ps1` in an elevated PowerShell to install Flutter, VS Build Tools (C++), Rust, Android SDK, etc.
+- Ensure `flutter doctor` is green. The wizard prints the expected final output for reference.
+
+Dev run (recommended)
+- From repo root `portalis/` in PowerShell:
+  - `./tool/build_windows.ps1`  # regenerates FRB (if available), builds Rust DLL, runs Flutter on Windows
+
+Manual steps (equivalent)
+- Build Rust DLL (release, required by FRB loader at runtime):
+  - `cargo build --release --manifest-path rust/backend/Cargo.toml`
+- Run Flutter on Windows:
+  - `flutter pub get`
+  - `flutter run -d windows`
+
+Release build (packaged app)
+- Build Rust DLL:
+  - `cargo build --release --manifest-path rust/backend/Cargo.toml`
+- Build Flutter bundle:
+  - `flutter build windows --release`
+- Copy the Rust DLL next to the runner exe so the loader can find it:
+  - Copy `rust/backend/target/release/backend.dll` to `build/windows/x64/runner/Release/`
+  - The final folder contains `portalis.exe`, Flutter DLLs, assets, and `backend.dll`.
+
+Notes
+- FRB’s generated config expects the DLL at `rust/backend/target/release/backend.dll` during `flutter run`; keep using `--release` for the Rust build.
+- To update bindings after Rust API changes, install the codegen: `cargo install flutter_rust_bridge_codegen`, then re-run `./tool/build_windows.ps1`.
 
 ## Linux – TODO
 - Build `libbackend.so` and copy into the app bundle’s `lib/` directory.
