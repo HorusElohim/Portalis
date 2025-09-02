@@ -1,16 +1,16 @@
-# portalis
+# Portalis
 
-A new Flutter project.
+Single Rust backend + single Flutter/Dart frontend for all platforms.
 
-## Getting Started
+Targets
+- Windows, macOS, Linux (desktop)
+- Android, iOS (mobile)
+- Web (WASM)
 
-This project is a starting point for a Flutter application.
+Highlights
+- One backend: Rust core compiled to native libs/WASM
+- One frontend: Flutter UI reused across every target
+- Seamless bridge: flutter_rust_bridge for Dart ↔ Rust FFI
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Build & Run
+- Setup, build, and packaging steps: see `../doc/build.md`
