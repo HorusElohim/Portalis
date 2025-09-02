@@ -1,0 +1,26 @@
+# Normalize line endings to avoid churn on generated platform files
+# Default: respect platform, but detect text
+* text=auto
+# Use LF for cross-platform source files
+*.dart   text eol=lf
+*.rs     text eol=lf
+*.swift  text eol=lf
+*.cmake  text eol=lf
+*.cc     text eol=lf
+*.cpp    text eol=lf
+*.c      text eol=lf
+*.h      text eol=lf
+*.hpp    text eol=lf
+*.m      text eol=lf
+*.mm     text eol=lf
+*.kt     text eol=lf
+*.kts    text eol=lf
+*.gradle text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.json   text eol=lf
+CMakeLists.txt text eol=lf
+# Keep Windows scripts CRLF
+*.ps1 eol=crlf
+*.bat eol=crlf
+*.cmd eol=crlf
