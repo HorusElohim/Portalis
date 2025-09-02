@@ -1,0 +1,59 @@
+name: Build Windows (Portalis)
+description: Build Windows app + Rust DLL and upload artifact
+inputs:
+  working-dir:
+    description: Path to Flutter project
+    required: false
+    default: portalis
+runs:
+  using: composite
+  steps:
+    - name: Compute metadata
+      id: meta
+      shell: bash
+      run: |
+        echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        echo "run_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+    - name: Toolchains
+      id: setup
+      uses: ./.github/actions/setup-flutter-rust
+      with:
+        extract-version: 'true'
+        extract-backend-version: 'true'
+        working-dir: ${{ inputs.working-dir }}
+        backend-dir: rust/backend
+
+    - name: Build Rust (backend.dll)
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        set -euo pipefail
+        cargo build --release --manifest-path rust/backend/Cargo.toml
+
+    - name: Flutter build windows
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: flutter build windows --release
+
+    - name: Copy backend.dll next to runner
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        set -euo pipefail
+        dll="rust/backend/target/release/backend.dll"
+        outdir="build/windows/x64/runner/Release"
+        if [[ -f "$dll" ]]; then
+          cp -f "$dll" "$outdir/"
+        else
+          echo "backend.dll not found at $dll" >&2
+          exit 1
+        fi
+
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Portalis-${{ steps.setup.outputs.backend-version }}-Windows-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
+        path: ${{ inputs.working-dir }}/build/windows/x64/runner/Release
+        retention-days: 7
+
