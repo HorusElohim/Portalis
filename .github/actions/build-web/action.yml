@@ -20,7 +20,7 @@ runs:
       with:
         rust-targets: wasm32-unknown-unknown
         install-wasm-bindgen: 'true'
-        wasm-bindgen-version: '0.2.100'
+        wasm-bindgen-version: '0.2.103'
         install-frb-codegen: 'true'
         frb-codegen-version: '2.11.1'
         install-cargo-expand: 'true'
