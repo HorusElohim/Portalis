@@ -125,7 +125,7 @@ runs:
         fi
         if [[ "${{ inputs.extract-backend-version }}" == "true" ]]; then
           cargo_toml="${{ inputs.working-dir }}/${{ inputs.backend-dir }}/Cargo.toml"
-          be_ver=$(awk -F '"' '/^version\s*=\s*"/ {print $2; exit}' "$cargo_toml")
+          be_ver=$(awk -F '"' '/^version[[:space:]]*=[[:space:]]*"/ {print $2; exit}' "$cargo_toml")
           echo "backend_version=$be_ver" >> "$GITHUB_OUTPUT"
           echo "BACKEND_VERSION=$be_ver" >> "$GITHUB_ENV"
         fi
