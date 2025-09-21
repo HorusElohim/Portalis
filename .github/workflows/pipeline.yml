@@ -38,61 +38,61 @@ jobs:
         run: flutter test --no-pub
 
   web:
-    name: Build Web
+    name: 🕸️ Web
     runs-on: ubuntu-latest
     needs: analyze
     steps:
       - uses: actions/checkout@v4
-      - name: Build Web
+      - name: 🕸️ Web
         uses: ./.github/actions/build-web
 
   android:
-    name: Build Android
+    name: 🤖 Android
     runs-on: ubuntu-latest
     needs: analyze
     steps:
       - uses: actions/checkout@v4
-      - name: Build Android
+      - name: 🤖 Android
         uses: ./.github/actions/build-android
 
   linux:
-    name: Build Linux
+    name: 🐧 Linux
     runs-on: ubuntu-latest
     needs: analyze
     steps:
       - uses: actions/checkout@v4
-      - name: Build Linux
+      - name: 🐧 Linux
         uses: ./.github/actions/build-linux
 
   macos:
-    name: Build macOS
+    name: 🍎 macOS
     runs-on: macos-latest
     needs: analyze
     steps:
       - uses: actions/checkout@v4
-      - name: Build macOS
+      - name: 🍎 macOS
         uses: ./.github/actions/build-macos
 
   ios:
-    name: Build iOS (simulator)
+    name: 📱 iOS (simulator)
     runs-on: macos-latest
     needs: analyze
     steps:
       - uses: actions/checkout@v4
-      - name: Build iOS
+      - name: 📱 iOS
         uses: ./.github/actions/build-ios
 
   windows:
-    name: Build Windows
+    name: 🪟 Windows
     runs-on: windows-latest
     needs: analyze
     steps:
       - uses: actions/checkout@v4
-      - name: Build Windows
+      - name: 🪟 Windows
         uses: ./.github/actions/build-windows
 
   summary:
-    name: Build Summary
+    name: 🧾 Summary
     runs-on: ubuntu-latest
     needs: [web, android, linux, macos, ios, windows]
     permissions:
