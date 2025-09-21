@@ -1,0 +1,70 @@
+name: Build Linux (Portalis)
+description: Build Linux app + Rust shared library and upload artifact
+inputs:
+  working-dir:
+    description: Path to Flutter project
+    required: false
+    default: portalis
+runs:
+  using: composite
+  steps:
+    - name: Compute metadata
+      id: meta
+      shell: bash
+      run: |
+        echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        echo "run_date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+    - name: Install Linux dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update -y
+        sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libglu1-mesa mesa-utils
+
+    - name: Toolchains
+      id: setup
+      uses: ./.github/actions/setup-flutter-rust
+      with:
+        extract-version: 'true'
+        extract-backend-version: 'true'
+        cache-key-suffix: linux
+        working-dir: ${{ inputs.working-dir }}
+        backend-dir: rust/backend
+
+    - name: Enable linux desktop
+      shell: bash
+      run: flutter config --enable-linux-desktop
+
+    - name: Build Rust (libbackend.so)
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        set -euo pipefail
+        cargo build --release --manifest-path rust/backend/Cargo.toml
+
+    - name: Flutter build linux
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: flutter build linux --release
+
+    - name: Copy libbackend.so into bundle
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        set -euo pipefail
+        so="rust/backend/target/release/libbackend.so"
+        outdir="build/linux/x64/release/bundle/lib"
+        if [[ ! -f "$so" ]]; then
+          echo "libbackend.so not found at $so" >&2
+          exit 1
+        fi
+        mkdir -p "$outdir"
+        cp -f "$so" "$outdir/"
+
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Portalis-${{ steps.setup.outputs.backend-version }}-Linux-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
+        path: ${{ inputs.working-dir }}/build/linux/x64/release/bundle
+        retention-days: 7
