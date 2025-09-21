@@ -22,7 +22,6 @@ runs:
         extract-version: 'true'
         extract-backend-version: 'true'
         working-dir: ${{ inputs.working-dir }}
-        backend-dir: rust/backend
 
     - name: Prebuild Rust XCFramework
       shell: bash
@@ -39,4 +38,4 @@ runs:
       with:
         name: Portalis-${{ steps.setup.outputs.backend-version }}-iOS-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release-unsigned
         path: ${{ inputs.working-dir }}/build/ios/iphoneos/Runner.app
-        retention-days: 7
+        retention-days: 1

@@ -31,7 +31,6 @@ runs:
         extract-version: 'true'
         extract-backend-version: 'true'
         working-dir: ${{ inputs.working-dir }}
-        backend-dir: rust/backend
 
     - name: Build Rust JNI libs (release)
       shell: bash
@@ -48,4 +47,4 @@ runs:
       with:
         name: Portalis-${{ steps.setup.outputs.backend-version }}-Android-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
         path: ${{ inputs.working-dir }}/build/app/outputs/flutter-apk/app-release.apk
-        retention-days: 7
+        retention-days: 1

@@ -20,7 +20,6 @@ runs:
       with:
         rust-targets: wasm32-unknown-unknown
         install-wasm-bindgen: 'true'
-        wasm-bindgen-version: '0.2.103'
         install-frb-codegen: 'true'
         frb-codegen-version: '2.11.1'
         install-cargo-expand: 'true'
@@ -28,7 +27,6 @@ runs:
         extract-version: 'true'
         extract-backend-version: 'true'
         working-dir: ${{ inputs.working-dir }}
-        backend-dir: rust/backend
 
     - name: Build FRB (web)
       shell: bash
@@ -45,4 +43,4 @@ runs:
       with:
         name: Portalis-${{ steps.setup.outputs.backend-version }}-Web-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
         path: ${{ inputs.working-dir }}/build/web
-        retention-days: 7
+        retention-days: 1
