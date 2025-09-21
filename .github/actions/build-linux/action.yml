@@ -30,7 +30,6 @@ runs:
         extract-backend-version: 'true'
         cache-key-suffix: linux
         working-dir: ${{ inputs.working-dir }}
-        backend-dir: rust/backend
 
     - name: Enable linux desktop
       shell: bash
@@ -67,4 +66,4 @@ runs:
       with:
         name: Portalis-${{ steps.setup.outputs.backend-version }}-Linux-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
         path: ${{ inputs.working-dir }}/build/linux/x64/release/bundle
-        retention-days: 7
+        retention-days: 1

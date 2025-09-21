@@ -22,7 +22,6 @@ runs:
         extract-version: 'true'
         extract-backend-version: 'true'
         working-dir: ${{ inputs.working-dir }}
-        backend-dir: rust/backend
 
     - name: Build Rust (backend.dll)
       shell: bash
@@ -55,5 +54,5 @@ runs:
       with:
         name: Portalis-${{ steps.setup.outputs.backend-version }}-Windows-${{ steps.setup.outputs.app-version }}-${{ steps.meta.outputs.short_sha }}-release
         path: ${{ inputs.working-dir }}/build/windows/x64/runner/Release
-        retention-days: 7
+        retention-days: 1
 
