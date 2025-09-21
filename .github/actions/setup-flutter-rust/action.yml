@@ -24,7 +24,7 @@ inputs:
   wasm-bindgen-version:
     description: Version of wasm-bindgen-cli to install
     required: false
-    default: '0.2.100'
+    default: '0.2.103'
   install-frb-codegen:
     description: Install flutter_rust_bridge_codegen (pinned version)
     required: false
