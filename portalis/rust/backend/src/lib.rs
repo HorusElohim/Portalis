@@ -6,5 +6,15 @@ use flutter_rust_bridge::frb;
 // FRB will generate a sync binding that avoids web worker/threadpool usage.
 #[frb(sync)]
 pub fn get_version() -> String {
-    "0.0.1".to_string()
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_version_matches_crate_metadata() {
+        assert_eq!(get_version(), env!("CARGO_PKG_VERSION"));
+    }
 }

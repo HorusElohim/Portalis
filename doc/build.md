@@ -11,6 +11,11 @@
 - Run once in `portalis/`: `flutter pub get`.
 - Optional but recommended to sync codegen: `./tool/frb_build.sh <platform>`.
 
+## Testing
+- `./tests/backend.sh` – runs Rust unit tests (`cargo test`).
+- `./tests/frontend.sh` – runs Flutter checks (`flutter pub get`, `flutter analyze`, `flutter test --no-pub`).
+- `./tests/all.sh` – convenience wrapper that runs backend then frontend suites.
+
 ## macOS (Desktop)
 - Just run: `flutter run -d macos`.
 - The Xcode project has a build phase (`macos/Runner/build_backend.sh`) that builds and embeds the Rust dylib per Debug/Release.
