@@ -2,7 +2,7 @@
 
 ## Overview
 - This app integrates Rust into Flutter via flutter_rust_bridge (FRB) 2.11.1.
-- Desktop, Web, iOS and Android work; Windows/Linux TODOs are below.
+- Desktop, Web, iOS and Android work; see platform sections below for Windows and Linux notes.
 - Generated bindings live under `lib/bridge_generated` (Dart) and `rust/backend/src/api.rs` (Rust).
 
 ## Global prerequisites
@@ -75,9 +75,29 @@ Notes
 - FRB’s generated config expects the DLL at `rust/backend/target/release/backend.dll` during `flutter run`; keep using `--release` for the Rust build.
 - To update bindings after Rust API changes, install the codegen: `cargo install flutter_rust_bridge_codegen`, then re-run `./tool/build_windows.ps1`.
 
-## Linux – TODO
-- Build `libbackend.so` and copy into the app bundle’s `lib/` directory.
-- Optionally extend `linux/CMakeLists.txt` to copy the `.so` from `rust/backend/target/<profile>` into the bundle.
+## Linux (Desktop)
+
+Prerequisites
+- Run `setup/wizard_linux.sh` (shell) to install Flutter, Android SDK bits, Rust, clang, ninja, GTK dev libs, etc.
+- Ensure `flutter doctor` is green, especially the Linux desktop toolchain checks.
+
+Dev run (recommended)
+- From repo root `portalis/` in a shell:
+  - `cargo build --release --manifest-path rust/backend/Cargo.toml`  # produces `libbackend.so` in `rust/backend/target/release/`
+  - `flutter pub get`
+  - `flutter run -d linux`
+
+Release build (packaged app)
+- Build Rust shared library:
+  - `cargo build --release --manifest-path rust/backend/Cargo.toml`
+- Build Flutter bundle:
+  - `flutter build linux --release`
+- Copy the Rust library into the bundle so the loader can find it:
+  - Copy `rust/backend/target/release/libbackend.so` to `build/linux/x64/release/bundle/lib/`
+
+Notes
+- The flutter_rust_bridge loader looks in `rust/backend/target/release/` during `flutter run`; keep the Rust build in `--release` mode for parity with other platforms.
+- If you change Rust APIs, rebuild bindings via `cargo install flutter_rust_bridge_codegen` (once) and rerun `./tool/frb_build.sh <platform>`.
 
 ## Regenerating FRB bindings
 - One-shot codegen (and platform builds where relevant):
