@@ -8,6 +8,12 @@ crate-type = ["cdylib", "staticlib"]  # for all targets
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-flutter_rust_bridge = "=2.11.1"           
+flutter_rust_bridge = "=2.11.1"
 tokio = { version = "1", features = ["rt"] }
 anyhow = "1.0"
+
+# librqbit (BitTorrent engine) needs real OS sockets (via tokio/mio), which
+# don't exist on wasm32 — Web is a viewer, not a swarm participant, so it's
+# excluded there rather than gated behind a feature no wasm code path uses.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+librqbit = { version = "8.1.1", default-features = false, features = ["rust-tls"] }
