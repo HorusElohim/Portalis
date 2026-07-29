@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'bridge.dart';
+import 'collab.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'device.dart';
@@ -70,7 +71,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -490503337;
+  int get rustContentHash => 466830;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -81,11 +82,19 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  Future<CollabCollectionInfo> crateCollabAddMediaToCollabCollection(
+      {required String collectionId,
+      required String label,
+      required List<NewFile> files});
+
   Future<TorrentInfo> crateTorrentAddTorrentFromFileBytes(
       {required List<int> bytes});
 
   Future<TorrentInfo> crateTorrentAddTorrentFromMagnet(
       {required String magnetOrHash});
+
+  Future<CollabCollectionInfo> crateCollabCreateCollabCollection(
+      {required String name});
 
   Future<TorrentInfo> crateTorrentCreateCollection(
       {required String name, required List<NewFile> files});
@@ -93,6 +102,11 @@ abstract class RustLibApi extends BaseApi {
   Future<DeviceIdentityInfo> crateDeviceDeviceIdentity();
 
   String crateBridgeGetVersion();
+
+  Future<CollabCollectionInfo> crateCollabJoinCollabCollection(
+      {required String inviteCode, required String displayName});
+
+  Future<List<CollabCollectionInfo>> crateCollabListCollabCollections();
 
   Future<List<TorrentInfo>> crateTorrentListTorrents();
 
@@ -114,6 +128,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  Future<CollabCollectionInfo> crateCollabAddMediaToCollabCollection(
+      {required String collectionId,
+      required String label,
+      required List<NewFile> files}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(collectionId, serializer);
+        sse_encode_String(label, serializer);
+        sse_encode_list_new_file(files, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 1, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_collab_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollabAddMediaToCollabCollectionConstMeta,
+      argValues: [collectionId, label, files],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollabAddMediaToCollabCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_media_to_collab_collection",
+        argNames: ["collectionId", "label", "files"],
+      );
+
+  @override
   Future<TorrentInfo> crateTorrentAddTorrentFromFileBytes(
       {required List<int> bytes}) {
     return handler.executeNormal(NormalTask(
@@ -121,7 +165,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_prim_u_8_loose(bytes, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 1, port: port_);
+            funcId: 2, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_torrent_info,
@@ -147,7 +191,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(magnetOrHash, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 2, port: port_);
+            funcId: 3, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_torrent_info,
@@ -166,6 +210,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<CollabCollectionInfo> crateCollabCreateCollabCollection(
+      {required String name}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(name, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 4, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_collab_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollabCreateCollabCollectionConstMeta,
+      argValues: [name],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollabCreateCollabCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_collab_collection",
+        argNames: ["name"],
+      );
+
+  @override
   Future<TorrentInfo> crateTorrentCreateCollection(
       {required String name, required List<NewFile> files}) {
     return handler.executeNormal(NormalTask(
@@ -174,7 +244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(name, serializer);
         sse_encode_list_new_file(files, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 3, port: port_);
+            funcId: 5, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_torrent_info,
@@ -198,7 +268,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 4, port: port_);
+            funcId: 6, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_device_identity_info,
@@ -220,7 +290,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -238,12 +308,63 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<CollabCollectionInfo> crateCollabJoinCollabCollection(
+      {required String inviteCode, required String displayName}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(inviteCode, serializer);
+        sse_encode_String(displayName, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 8, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_collab_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollabJoinCollabCollectionConstMeta,
+      argValues: [inviteCode, displayName],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollabJoinCollabCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "join_collab_collection",
+        argNames: ["inviteCode", "displayName"],
+      );
+
+  @override
+  Future<List<CollabCollectionInfo>> crateCollabListCollabCollections() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 9, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_collab_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollabListCollabCollectionsConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollabListCollabCollectionsConstMeta =>
+      const TaskConstMeta(
+        debugName: "list_collab_collections",
+        argNames: [],
+      );
+
+  @override
   Future<List<TorrentInfo>> crateTorrentListTorrents() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 6, port: port_);
+            funcId: 10, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_torrent_info,
@@ -266,7 +387,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 7, port: port_);
+            funcId: 11, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -291,7 +412,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(nickname, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 8, port: port_);
+            funcId: 12, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_device_identity_info,
@@ -315,7 +436,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_opt_box_autoadd_u_32(bytesPerSec, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 9, port: port_);
+            funcId: 13, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -339,7 +460,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 10, port: port_);
+            funcId: 14, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -382,6 +503,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CollabCollectionInfo dco_decode_collab_collection_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return CollabCollectionInfo(
+      id: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      inviteCode: dco_decode_String(arr[2]),
+      collaborators: dco_decode_list_collaborator_info(arr[3]),
+      media: dco_decode_list_manifest_entry_info(arr[4]),
+    );
+  }
+
+  @protected
+  CollaboratorInfo dco_decode_collaborator_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return CollaboratorInfo(
+      deviceId: dco_decode_String(arr[0]),
+      displayName: dco_decode_String(arr[1]),
+      isAdmin: dco_decode_bool(arr[2]),
+    );
+  }
+
+  @protected
   DeviceIdentityInfo dco_decode_device_identity_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -397,6 +546,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeI64(raw);
+  }
+
+  @protected
+  List<CollabCollectionInfo> dco_decode_list_collab_collection_info(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_collab_collection_info)
+        .toList();
+  }
+
+  @protected
+  List<CollaboratorInfo> dco_decode_list_collaborator_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_collaborator_info).toList();
+  }
+
+  @protected
+  List<ManifestEntryInfo> dco_decode_list_manifest_entry_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_manifest_entry_info).toList();
   }
 
   @protected
@@ -427,6 +603,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<TorrentInfo> dco_decode_list_torrent_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_torrent_info).toList();
+  }
+
+  @protected
+  ManifestEntryInfo dco_decode_manifest_entry_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return ManifestEntryInfo(
+      infoHash: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      addedBy: dco_decode_String(arr[2]),
+      addedAtUnixMs: dco_decode_i_64(arr[3]),
+    );
   }
 
   @protected
@@ -547,6 +737,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CollabCollectionInfo sse_decode_collab_collection_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_inviteCode = sse_decode_String(deserializer);
+    var var_collaborators = sse_decode_list_collaborator_info(deserializer);
+    var var_media = sse_decode_list_manifest_entry_info(deserializer);
+    return CollabCollectionInfo(
+        id: var_id,
+        name: var_name,
+        inviteCode: var_inviteCode,
+        collaborators: var_collaborators,
+        media: var_media);
+  }
+
+  @protected
+  CollaboratorInfo sse_decode_collaborator_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_deviceId = sse_decode_String(deserializer);
+    var var_displayName = sse_decode_String(deserializer);
+    var var_isAdmin = sse_decode_bool(deserializer);
+    return CollaboratorInfo(
+        deviceId: var_deviceId,
+        displayName: var_displayName,
+        isAdmin: var_isAdmin);
+  }
+
+  @protected
   DeviceIdentityInfo sse_decode_device_identity_info(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -559,6 +778,51 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getPlatformInt64();
+  }
+
+  @protected
+  List<CollabCollectionInfo> sse_decode_list_collab_collection_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CollabCollectionInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_collab_collection_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<CollaboratorInfo> sse_decode_list_collaborator_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CollaboratorInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_collaborator_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<ManifestEntryInfo> sse_decode_list_manifest_entry_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ManifestEntryInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_manifest_entry_info(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -609,6 +873,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_torrent_info(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  ManifestEntryInfo sse_decode_manifest_entry_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_infoHash = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_addedBy = sse_decode_String(deserializer);
+    var var_addedAtUnixMs = sse_decode_i_64(deserializer);
+    return ManifestEntryInfo(
+        infoHash: var_infoHash,
+        name: var_name,
+        addedBy: var_addedBy,
+        addedAtUnixMs: var_addedAtUnixMs);
   }
 
   @protected
@@ -748,6 +1027,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_collab_collection_info(
+      CollabCollectionInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.inviteCode, serializer);
+    sse_encode_list_collaborator_info(self.collaborators, serializer);
+    sse_encode_list_manifest_entry_info(self.media, serializer);
+  }
+
+  @protected
+  void sse_encode_collaborator_info(
+      CollaboratorInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.deviceId, serializer);
+    sse_encode_String(self.displayName, serializer);
+    sse_encode_bool(self.isAdmin, serializer);
+  }
+
+  @protected
   void sse_encode_device_identity_info(
       DeviceIdentityInfo self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -759,6 +1058,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putPlatformInt64(self);
+  }
+
+  @protected
+  void sse_encode_list_collab_collection_info(
+      List<CollabCollectionInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_collab_collection_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_collaborator_info(
+      List<CollaboratorInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_collaborator_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_manifest_entry_info(
+      List<ManifestEntryInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_manifest_entry_info(item, serializer);
+    }
   }
 
   @protected
@@ -805,6 +1140,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_torrent_info(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_manifest_entry_info(
+      ManifestEntryInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.infoHash, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.addedBy, serializer);
+    sse_encode_i_64(self.addedAtUnixMs, serializer);
   }
 
   @protected

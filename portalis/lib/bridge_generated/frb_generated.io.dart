@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'bridge.dart';
+import 'collab.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -33,10 +34,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
+  CollabCollectionInfo dco_decode_collab_collection_info(dynamic raw);
+
+  @protected
+  CollaboratorInfo dco_decode_collaborator_info(dynamic raw);
+
+  @protected
   DeviceIdentityInfo dco_decode_device_identity_info(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
+  List<CollabCollectionInfo> dco_decode_list_collab_collection_info(
+      dynamic raw);
+
+  @protected
+  List<CollaboratorInfo> dco_decode_list_collaborator_info(dynamic raw);
+
+  @protected
+  List<ManifestEntryInfo> dco_decode_list_manifest_entry_info(dynamic raw);
 
   @protected
   List<NewFile> dco_decode_list_new_file(dynamic raw);
@@ -52,6 +72,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TorrentInfo> dco_decode_list_torrent_info(dynamic raw);
+
+  @protected
+  ManifestEntryInfo dco_decode_manifest_entry_info(dynamic raw);
 
   @protected
   NewFile dco_decode_new_file(dynamic raw);
@@ -96,11 +119,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
+  CollabCollectionInfo sse_decode_collab_collection_info(
+      SseDeserializer deserializer);
+
+  @protected
+  CollaboratorInfo sse_decode_collaborator_info(SseDeserializer deserializer);
+
+  @protected
   DeviceIdentityInfo sse_decode_device_identity_info(
       SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
+  List<CollabCollectionInfo> sse_decode_list_collab_collection_info(
+      SseDeserializer deserializer);
+
+  @protected
+  List<CollaboratorInfo> sse_decode_list_collaborator_info(
+      SseDeserializer deserializer);
+
+  @protected
+  List<ManifestEntryInfo> sse_decode_list_manifest_entry_info(
+      SseDeserializer deserializer);
 
   @protected
   List<NewFile> sse_decode_list_new_file(SseDeserializer deserializer);
@@ -116,6 +161,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TorrentInfo> sse_decode_list_torrent_info(SseDeserializer deserializer);
+
+  @protected
+  ManifestEntryInfo sse_decode_manifest_entry_info(
+      SseDeserializer deserializer);
 
   @protected
   NewFile sse_decode_new_file(SseDeserializer deserializer);
@@ -164,11 +213,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_collab_collection_info(
+      CollabCollectionInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_collaborator_info(
+      CollaboratorInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_device_identity_info(
       DeviceIdentityInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_collab_collection_info(
+      List<CollabCollectionInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_collaborator_info(
+      List<CollaboratorInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_manifest_entry_info(
+      List<ManifestEntryInfo> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_new_file(List<NewFile> self, SseSerializer serializer);
@@ -187,6 +259,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_torrent_info(
       List<TorrentInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_manifest_entry_info(
+      ManifestEntryInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_new_file(NewFile self, SseSerializer serializer);

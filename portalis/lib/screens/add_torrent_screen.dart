@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../media_convert.dart';
+import '../services/collab_collections.dart';
 import '../services/torrent_collections.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -27,6 +28,8 @@ class AddTorrentScreen extends StatefulWidget {
 class _AddTorrentScreenState extends State<AddTorrentScreen> {
   final _nameController = TextEditingController();
   final _magnetController = TextEditingController();
+  final _inviteCodeController = TextEditingController();
+  final _displayNameController = TextEditingController();
   List<_PickedFile> _pickedFiles = [];
   bool _busy = false;
   String? _error;
@@ -35,6 +38,8 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
   void dispose() {
     _nameController.dispose();
     _magnetController.dispose();
+    _inviteCodeController.dispose();
+    _displayNameController.dispose();
     super.dispose();
   }
 
@@ -130,6 +135,31 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       }
     } catch (e) {
       setState(() => _error = 'Couldn\'t add .torrent file: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Phase 1 of the "Add Collab" plan: joins a real, invite-based collab
+  /// collection by code. No manifest-sync yet, so the joined collection
+  /// starts out empty on this device until a later phase's sync protocol
+  /// exists — this only proves the invite/join data model end to end.
+  Future<void> _joinCollabCollection() async {
+    final inviteCode = _inviteCodeController.text.trim();
+    final displayName = _displayNameController.text.trim();
+    if (inviteCode.isEmpty || displayName.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await CollabCollections.instance.joinCollection(inviteCode, displayName);
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      setState(() => _error = 'Couldn\'t join collection: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -307,6 +337,87 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                     dim: true,
                     onTap: _busy ? null : _addFromTorrentFile,
                   ),
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: AppColors.border)),
+                  ),
+                ),
+              ),
+
+              // ── Join a collection (experimental) ──────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SectionLabel('JOIN A COLLECTION · EXPERIMENTAL'),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: TextField(
+                  key: const Key('collabInviteCodeField'),
+                  controller: _inviteCodeController,
+                  style: const TextStyle(color: AppColors.text, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Invite code',
+                    hintStyle: const TextStyle(color: AppColors.neutral500),
+                    filled: true,
+                    fillColor: AppColors.surface,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.borderStrong),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.borderStrong),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const Key('collabDisplayNameField'),
+                        controller: _displayNameController,
+                        style: const TextStyle(color: AppColors.text, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Your name',
+                          hintStyle: const TextStyle(color: AppColors.neutral500),
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 11),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                const BorderSide(color: AppColors.borderStrong),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                const BorderSide(color: AppColors.borderStrong),
+                          ),
+                        ),
+                        onSubmitted: (_) => _joinCollabCollection(),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    PillButton(
+                      key: const Key('joinCollabButton'),
+                      label: 'Join',
+                      onTap: _busy ? null : _joinCollabCollection,
+                    ),
+                  ],
                 ),
               ),
 

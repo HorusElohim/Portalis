@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -490503337;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 466830;
 
 // Section: executor
 
@@ -45,6 +45,49 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__collab__add_media_to_collab_collection_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "add_media_to_collab_collection",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_collection_id = <String>::sse_decode(&mut deserializer);
+            let api_label = <String>::sse_decode(&mut deserializer);
+            let api_files = <Vec<crate::torrent::NewFile>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::collab::add_media_to_collab_collection(
+                            api_collection_id,
+                            api_label,
+                            api_files,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__torrent__add_torrent_from_file_bytes_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -111,6 +154,42 @@ fn wire__crate__torrent__add_torrent_from_magnet_impl(
                     (move || async move {
                         let output_ok =
                             crate::torrent::add_torrent_from_magnet(api_magnet_or_hash).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__collab__create_collab_collection_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "create_collab_collection",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::collab::create_collab_collection(api_name).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -217,6 +296,82 @@ fn wire__crate__bridge__get_version_impl(
                 let output_ok = Result::<_, ()>::Ok(crate::bridge::get_version())?;
                 Ok(output_ok)
             })())
+        },
+    )
+}
+fn wire__crate__collab__join_collab_collection_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "join_collab_collection",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_invite_code = <String>::sse_decode(&mut deserializer);
+            let api_display_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::collab::join_collab_collection(
+                            api_invite_code,
+                            api_display_name,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__collab__list_collab_collections_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "list_collab_collections",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::collab::list_collab_collections().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
         },
     )
 }
@@ -422,6 +577,39 @@ impl SseDecode for bool {
     }
 }
 
+impl SseDecode for crate::collab::CollabCollectionInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_inviteCode = <String>::sse_decode(deserializer);
+        let mut var_collaborators =
+            <Vec<crate::collab::CollaboratorInfo>>::sse_decode(deserializer);
+        let mut var_media = <Vec<crate::collab::ManifestEntryInfo>>::sse_decode(deserializer);
+        return crate::collab::CollabCollectionInfo {
+            id: var_id,
+            name: var_name,
+            invite_code: var_inviteCode,
+            collaborators: var_collaborators,
+            media: var_media,
+        };
+    }
+}
+
+impl SseDecode for crate::collab::CollaboratorInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_deviceId = <String>::sse_decode(deserializer);
+        let mut var_displayName = <String>::sse_decode(deserializer);
+        let mut var_isAdmin = <bool>::sse_decode(deserializer);
+        return crate::collab::CollaboratorInfo {
+            device_id: var_deviceId,
+            display_name: var_displayName,
+            is_admin: var_isAdmin,
+        };
+    }
+}
+
 impl SseDecode for crate::device::DeviceIdentityInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -438,6 +626,51 @@ impl SseDecode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_f64::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for i64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i64::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for Vec<crate::collab::CollabCollectionInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::collab::CollabCollectionInfo>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::collab::CollaboratorInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::collab::CollaboratorInfo>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::collab::ManifestEntryInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::collab::ManifestEntryInfo>::sse_decode(deserializer));
+        }
+        return ans_;
     }
 }
 
@@ -486,6 +719,22 @@ impl SseDecode for Vec<crate::torrent::TorrentInfo> {
             ans_.push(<crate::torrent::TorrentInfo>::sse_decode(deserializer));
         }
         return ans_;
+    }
+}
+
+impl SseDecode for crate::collab::ManifestEntryInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_infoHash = <String>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_addedBy = <String>::sse_decode(deserializer);
+        let mut var_addedAtUnixMs = <i64>::sse_decode(deserializer);
+        return crate::collab::ManifestEntryInfo {
+            info_hash: var_infoHash,
+            name: var_name,
+            added_by: var_addedBy,
+            added_at_unix_ms: var_addedAtUnixMs,
+        };
     }
 }
 
@@ -622,20 +871,29 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__torrent__add_torrent_from_file_bytes_impl(
+        1 => wire__crate__collab__add_media_to_collab_collection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        2 => wire__crate__torrent__add_torrent_from_magnet_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__torrent__create_collection_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__device__device_identity_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__torrent__set_upload_limit_bps_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__torrent__add_torrent_from_file_bytes_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        3 => wire__crate__torrent__add_torrent_from_magnet_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__collab__create_collab_collection_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__torrent__create_collection_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__device__device_identity_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__collab__join_collab_collection_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__collab__list_collab_collections_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__torrent__set_upload_limit_bps_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -648,13 +906,59 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        5 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
 
 // Section: rust2dart
 
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::collab::CollabCollectionInfo {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.name.into_into_dart().into_dart(),
+            self.invite_code.into_into_dart().into_dart(),
+            self.collaborators.into_into_dart().into_dart(),
+            self.media.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::collab::CollabCollectionInfo
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::collab::CollabCollectionInfo>
+    for crate::collab::CollabCollectionInfo
+{
+    fn into_into_dart(self) -> crate::collab::CollabCollectionInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::collab::CollaboratorInfo {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.device_id.into_into_dart().into_dart(),
+            self.display_name.into_into_dart().into_dart(),
+            self.is_admin.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::collab::CollaboratorInfo
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::collab::CollaboratorInfo>
+    for crate::collab::CollaboratorInfo
+{
+    fn into_into_dart(self) -> crate::collab::CollaboratorInfo {
+        self
+    }
+}
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::device::DeviceIdentityInfo {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -673,6 +977,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::device::DeviceIdentityInfo>
     for crate::device::DeviceIdentityInfo
 {
     fn into_into_dart(self) -> crate::device::DeviceIdentityInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::collab::ManifestEntryInfo {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.info_hash.into_into_dart().into_dart(),
+            self.name.into_into_dart().into_dart(),
+            self.added_by.into_into_dart().into_dart(),
+            self.added_at_unix_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::collab::ManifestEntryInfo
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::collab::ManifestEntryInfo>
+    for crate::collab::ManifestEntryInfo
+{
+    fn into_into_dart(self) -> crate::collab::ManifestEntryInfo {
         self
     }
 }
@@ -763,6 +1090,26 @@ impl SseEncode for bool {
     }
 }
 
+impl SseEncode for crate::collab::CollabCollectionInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.invite_code, serializer);
+        <Vec<crate::collab::CollaboratorInfo>>::sse_encode(self.collaborators, serializer);
+        <Vec<crate::collab::ManifestEntryInfo>>::sse_encode(self.media, serializer);
+    }
+}
+
+impl SseEncode for crate::collab::CollaboratorInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.device_id, serializer);
+        <String>::sse_encode(self.display_name, serializer);
+        <bool>::sse_encode(self.is_admin, serializer);
+    }
+}
+
 impl SseEncode for crate::device::DeviceIdentityInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -775,6 +1122,43 @@ impl SseEncode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_f64::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for i64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i64::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for Vec<crate::collab::CollabCollectionInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::collab::CollabCollectionInfo>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::collab::CollaboratorInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::collab::CollaboratorInfo>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::collab::ManifestEntryInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::collab::ManifestEntryInfo>::sse_encode(item, serializer);
+        }
     }
 }
 
@@ -815,6 +1199,16 @@ impl SseEncode for Vec<crate::torrent::TorrentInfo> {
         for item in self {
             <crate::torrent::TorrentInfo>::sse_encode(item, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::collab::ManifestEntryInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.info_hash, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.added_by, serializer);
+        <i64>::sse_encode(self.added_at_unix_ms, serializer);
     }
 }
 

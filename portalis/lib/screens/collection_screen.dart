@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import '../models.dart';
+import '../services/collab_collections.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'media_viewer_screen.dart';
@@ -8,6 +11,77 @@ class CollectionScreen extends StatelessWidget {
   const CollectionScreen({super.key, required this.collection});
 
   final Collection collection;
+
+  /// Phase 1 of the "Add Collab" plan: creates a real, invite-based collab
+  /// collection and shows its invite code to share. Not yet linked back to
+  /// *this* torrent-backed [Collection] — each tap mints a fresh collab
+  /// collection, since there's no stored mapping between the two concepts
+  /// yet (that unification is a later phase, once manifest-sync actually
+  /// works end to end). This still exercises the real domain layer
+  /// end-to-end: a real signed identity, a real persisted invite secret.
+  Future<void> _showAddCollabDialog(BuildContext context) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    String? inviteCode;
+    String? error;
+    try {
+      final info = await CollabCollections.instance.createCollection(collection.name);
+      inviteCode = info.inviteCode;
+    } catch (e) {
+      error = '$e';
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).pop(); // dismiss the loading dialog
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Invite a collaborator'),
+        content: error != null
+            ? Text(
+                'Couldn\'t create invite: $error',
+                style: const TextStyle(color: Color(0xFFEB5757), fontSize: 12),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Share this code — anyone who enters it can join and add media.',
+                    style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+                  ),
+                  const SizedBox(height: 10),
+                  SelectableText(
+                    inviteCode!,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ],
+              ),
+        actions: [
+          if (inviteCode != null)
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: inviteCode!));
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('Invite code copied')),
+                );
+              },
+              child: const Text('Copy'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +280,7 @@ class CollectionScreen extends StatelessWidget {
                     label: 'Add collab',
                     icon: const Icon(Icons.people_alt_outlined,
                         size: 16, color: AppColors.accent300),
-                    onTap: () {},
+                    onTap: () => _showAddCollabDialog(context),
                   ),
                   PillButton(label: '＋ Add media', dim: true, onTap: () {}),
                 ],
