@@ -107,37 +107,48 @@ pub async fn list_collab_collections() -> anyhow::Result<Vec<CollabCollectionInf
     }
 }
 
+/// Starts this device's manifest-sync listener (idempotent) and returns
+/// the `ip:port` another device on the same network can sync with. Phase 2
+/// scaffolding — Phase 3's DHT rendezvous removes the need to ever show or
+/// type an address (see `collab_sync.rs`).
+pub async fn collab_sync_address() -> anyhow::Result<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::collab_sync_address().await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        native::unsupported_on_web()
+    }
+}
+
+/// One full manifest sync with the peer at `peer_addr`: exchange signed
+/// manifest entries + collaborator lists for this collection and CRDT-merge
+/// both ways. Returns the collection's updated state.
+pub async fn sync_collab_collection(
+    collection_id: String,
+    peer_addr: String,
+) -> anyhow::Result<CollabCollectionInfo> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::sync_collab_collection(collection_id, peer_addr).await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (collection_id, peer_addr);
+        native::unsupported_on_web()
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
-    use std::sync::Mutex;
-
+    use crate::collab_store::with_store;
     use crate::domain::collaborator::{Collaborator, Role};
     use crate::domain::collection::{Collection, CollectionId};
     use crate::domain::invite::InviteSecret;
     use crate::domain::manifest::{InfoHash, ManifestEntry};
 
     use super::{CollabCollectionInfo, CollaboratorInfo, ManifestEntryInfo};
-
-    static STORE: Mutex<Option<Vec<Collection>>> = Mutex::new(None);
-
-    /// Locks the in-memory store (lazily loaded from disk on first use via
-    /// `collab_store::load`), runs `f`, then persists via
-    /// `collab_store::save`. `f` must be synchronous — any `.await` (e.g.
-    /// creating a torrent) has to happen *before* calling this, never
-    /// inside it, since a `std::sync::MutexGuard` can't be held across an
-    /// await point.
-    fn with_store<R>(
-        f: impl FnOnce(&mut Vec<Collection>) -> anyhow::Result<R>,
-    ) -> anyhow::Result<R> {
-        let mut guard = STORE.lock().unwrap();
-        if guard.is_none() {
-            *guard = Some(crate::collab_store::load()?);
-        }
-        let collections = guard.as_mut().unwrap();
-        let result = f(collections)?;
-        crate::collab_store::save(collections)?;
-        Ok(result)
-    }
 
     fn to_info(collection: &Collection) -> CollabCollectionInfo {
         CollabCollectionInfo {
@@ -255,6 +266,36 @@ mod native {
 
     pub(super) async fn list_collab_collections() -> anyhow::Result<Vec<CollabCollectionInfo>> {
         with_store(|collections| Ok(collections.iter().map(to_info).collect()))
+    }
+
+    pub(super) async fn collab_sync_address() -> anyhow::Result<String> {
+        let addr = crate::collab_sync::ensure_listener().await?;
+        Ok(format!("{}:{}", crate::collab_sync::lan_ip(), addr.port()))
+    }
+
+    pub(super) async fn sync_collab_collection(
+        collection_id: String,
+        peer_addr: String,
+    ) -> anyhow::Result<CollabCollectionInfo> {
+        let id = CollectionId::from_string(&collection_id)?;
+        let rendezvous_key_hex = with_store(|collections| {
+            collections
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.rendezvous_key().to_hex())
+                .ok_or_else(|| anyhow::anyhow!("no such collab collection"))
+        })?;
+        // Make sure our own listener is up before reaching out, so the
+        // peer's user can immediately sync back the other way too.
+        let _ = crate::collab_sync::ensure_listener().await?;
+        crate::collab_sync::sync_with(&rendezvous_key_hex, &peer_addr).await?;
+        with_store(|collections| {
+            collections
+                .iter()
+                .find(|c| c.id == id)
+                .map(to_info)
+                .ok_or_else(|| anyhow::anyhow!("collection vanished during sync"))
+        })
     }
 
     #[cfg(test)]

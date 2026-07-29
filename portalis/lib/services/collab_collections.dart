@@ -3,13 +3,13 @@ import 'package:flutter/foundation.dart';
 import '../bridge_generated/collab.dart' as bridge;
 import '../bridge_generated/torrent.dart' as torrent_bridge;
 
-/// Real, growable, invite-based Collections — Phase 1 of the "Add Collab"
-/// plan (see `rust/backend/README.md`). Deliberately parallel to, not
-/// merged with, [TorrentCollections]: this is a separate concept for now
-/// (single-device only, no manifest-sync networking yet — a joined
-/// collection stays empty until a later phase), so it doesn't touch the
-/// already-working torrent flow while this is being built out. Unifying
-/// the two is a later phase once sync actually works end to end.
+/// Real, growable, invite-based Collections — Phases 1–2 of the "Add
+/// Collab" plan (see `rust/backend/README.md`). Deliberately parallel to,
+/// not merged with, [TorrentCollections] — unifying the two is a later
+/// phase. As of Phase 2, two devices holding the same invite can really
+/// exchange manifests over the LAN ([sync]), using a manually-entered
+/// peer address ([syncAddress]) — Phase 3's DHT rendezvous removes the
+/// manual-address step.
 class CollabCollections extends ChangeNotifier {
   CollabCollections._();
   static final instance = CollabCollections._();
@@ -62,5 +62,39 @@ class CollabCollections extends ChangeNotifier {
     );
     await refresh();
     return info;
+  }
+
+  /// This device's `ip:port` for incoming syncs — calling this is also what
+  /// starts the listener, so the screen showing it makes the device
+  /// reachable.
+  Future<String> syncAddress() => bridge.collabSyncAddress();
+
+  /// One full manifest exchange with the device at [peerAddr] (its
+  /// [syncAddress] value). Both sides end up with the union of entries and
+  /// collaborators.
+  Future<bridge.CollabCollectionInfo> sync(
+    String collectionId,
+    String peerAddr,
+  ) async {
+    final info = await bridge.syncCollabCollection(
+      collectionId: collectionId,
+      peerAddr: peerAddr,
+    );
+    await refresh();
+    return info;
+  }
+
+  /// Starts downloading every media item in a synced collection over
+  /// ordinary BitTorrent — each manifest entry's info-hash is a valid
+  /// magnet identifier, and whoever added it is seeding it. Returns how
+  /// many downloads were started (items already added just re-resolve to
+  /// the same torrent).
+  Future<int> fetchAllMedia(bridge.CollabCollectionInfo collection) async {
+    var started = 0;
+    for (final media in collection.media) {
+      await torrent_bridge.addTorrentFromMagnet(magnetOrHash: media.infoHash);
+      started += 1;
+    }
+    return started;
   }
 }

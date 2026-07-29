@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 466830;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1235616158;
 
 // Section: executor
 
@@ -154,6 +154,41 @@ fn wire__crate__torrent__add_torrent_from_magnet_impl(
                     (move || async move {
                         let output_ok =
                             crate::torrent::add_torrent_from_magnet(api_magnet_or_hash).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__collab__collab_sync_address_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "collab_sync_address",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::collab::collab_sync_address().await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -551,6 +586,45 @@ fn wire__crate__torrent__storage_usage_bytes_impl(
         },
     )
 }
+fn wire__crate__collab__sync_collab_collection_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_collab_collection",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_collection_id = <String>::sse_decode(&mut deserializer);
+            let api_peer_addr = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::collab::sync_collab_collection(api_collection_id, api_peer_addr)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -884,16 +958,18 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         3 => wire__crate__torrent__add_torrent_from_magnet_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__collab__create_collab_collection_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__torrent__create_collection_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__device__device_identity_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__collab__join_collab_collection_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__collab__list_collab_collections_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__torrent__set_upload_limit_bps_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__collab__collab_sync_address_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__collab__create_collab_collection_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__torrent__create_collection_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__device__device_identity_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__collab__join_collab_collection_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__collab__list_collab_collections_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__torrent__set_upload_limit_bps_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__collab__sync_collab_collection_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -906,7 +982,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        7 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

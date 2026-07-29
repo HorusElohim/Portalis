@@ -4,6 +4,9 @@ mod domain;
 // Private and NOT part of tool/frb_build.sh's --rust-input, same reason as
 // `domain` — see collab_store.rs's own module doc.
 mod collab_store;
+// Real sockets — native targets only, like librqbit.
+#[cfg(not(target_arch = "wasm32"))]
+mod collab_sync;
 pub mod bridge;
 // Unconditional on every target — see torrent.rs's module doc for why
 // (flutter_rust_bridge's generated glue references this module regardless

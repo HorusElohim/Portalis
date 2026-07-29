@@ -28,6 +28,10 @@ uuid = { version = "1", features = ["v4"] }
 librqbit = { version = "8.1.1", default-features = false, features = ["rust-tls"] }
 dirs = "6"
 serde_json = "1.0"
+# The manifest-sync mini-protocol (collab_sync.rs) needs real sockets and
+# timeouts on top of the base `rt` feature — native targets only, same
+# no-sockets-on-wasm32 reasoning as librqbit above.
+tokio = { version = "1", features = ["rt", "net", "io-util", "time", "macros"] }
 
 # The domain layer's randomness (device keygen, invite secrets, collection
 # ids) has no OS RNG to call into on wasm32 — route it through the browser's

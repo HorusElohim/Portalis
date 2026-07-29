@@ -41,6 +41,21 @@ Future<CollabCollectionInfo> addMediaToCollabCollection(
 Future<List<CollabCollectionInfo>> listCollabCollections() =>
     RustLib.instance.api.crateCollabListCollabCollections();
 
+/// Starts this device's manifest-sync listener (idempotent) and returns
+/// the `ip:port` another device on the same network can sync with. Phase 2
+/// scaffolding — Phase 3's DHT rendezvous removes the need to ever show or
+/// type an address (see `collab_sync.rs`).
+Future<String> collabSyncAddress() =>
+    RustLib.instance.api.crateCollabCollabSyncAddress();
+
+/// One full manifest sync with the peer at `peer_addr`: exchange signed
+/// manifest entries + collaborator lists for this collection and CRDT-merge
+/// both ways. Returns the collection's updated state.
+Future<CollabCollectionInfo> syncCollabCollection(
+        {required String collectionId, required String peerAddr}) =>
+    RustLib.instance.api.crateCollabSyncCollabCollection(
+        collectionId: collectionId, peerAddr: peerAddr);
+
 class CollabCollectionInfo {
   final String id;
   final String name;

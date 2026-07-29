@@ -153,10 +153,34 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       _error = null;
     });
     try {
-      await CollabCollections.instance.joinCollection(inviteCode, displayName);
+      final info =
+          await CollabCollections.instance.joinCollection(inviteCode, displayName);
       if (mounted) {
         FocusScope.of(context).unfocus();
-        Navigator.of(context).pop();
+        // Explicit confirmation, not just a silent pop — otherwise a
+        // successful join and a silently-swallowed failure look identical
+        // (this was confusing enough in testing to be worth a dedicated
+        // dialog rather than a SnackBar that might be missed).
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: const Text('Joined'),
+            content: Text(
+              'Joined "${info.name}" as $displayName. '
+              'No media yet — nothing syncs between devices until a later '
+              'phase\'s sync protocol exists (see the backend README).',
+              style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        if (mounted) Navigator.of(context).pop();
       }
     } catch (e) {
       setState(() => _error = 'Couldn\'t join collection: $e');

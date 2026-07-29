@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../bridge_generated/collab.dart' as collab_bridge;
 import '../bridge_generated/device.dart' as bridge;
+import '../services/collab_collections.dart';
 import '../services/torrent_collections.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -22,11 +26,13 @@ class UserScreen extends StatefulWidget {
 class _UserScreenState extends State<UserScreen> {
   bridge.DeviceIdentityInfo? _identity;
   String? _error;
+  String? _syncAddress;
 
   @override
   void initState() {
     super.initState();
     _load();
+    CollabCollections.instance.refresh();
   }
 
   Future<void> _load() async {
@@ -35,6 +41,81 @@ class _UserScreenState extends State<UserScreen> {
       if (mounted) setState(() => _identity = identity);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
+    }
+    // Separately from identity: fetching the sync address is what starts
+    // the sync listener, making this device reachable by collaborators for
+    // as long as the app runs.
+    try {
+      final addr = await CollabCollections.instance.syncAddress();
+      if (mounted) setState(() => _syncAddress = addr);
+    } catch (_) {
+      // Backend unavailable (e.g. widget tests) — the row just stays
+      // hidden.
+    }
+  }
+
+  Future<void> _syncCollection(collab_bridge.CollabCollectionInfo c) async {
+    final controller = TextEditingController();
+    final peerAddr = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Sync "${c.name}"'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(
+              color: AppColors.text, fontSize: 13, fontFamily: 'monospace'),
+          decoration: const InputDecoration(
+            hintText: '192.168.1.23:54321',
+            hintStyle: TextStyle(color: AppColors.neutral500),
+            helperText: 'The other device\'s sync address (shown on its User screen)',
+            helperStyle: TextStyle(fontSize: 10.5, color: AppColors.neutral400),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Sync'),
+          ),
+        ],
+      ),
+    );
+    if (peerAddr == null || peerAddr.isEmpty || !mounted) return;
+
+    try {
+      final updated = await CollabCollections.instance.sync(c.id, peerAddr);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'Synced "${updated.name}" — ${updated.media.length} media, ${updated.collaborators.length} collaborators'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _fetchCollectionMedia(collab_bridge.CollabCollectionInfo c) async {
+    try {
+      final started = await CollabCollections.instance.fetchAllMedia(c);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(started == 0
+            ? 'No media in "${c.name}" yet — sync with a collaborator first'
+            : 'Fetching $started item${started == 1 ? '' : 's'} — they\'ll appear on Home as they download'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fetch failed: $e')),
+      );
     }
   }
 
@@ -168,6 +249,113 @@ class _UserScreenState extends State<UserScreen> {
                       ],
                     );
                   },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SectionLabel('COLLAB COLLECTIONS · EXPERIMENTAL'),
+                    const SizedBox(height: 8),
+                    if (_syncAddress != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Sync address: ',
+                              style: TextStyle(
+                                  fontSize: 11, color: AppColors.neutral400),
+                            ),
+                            Flexible(
+                              child: Text(
+                                _syncAddress!,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  color: AppColors.accent300,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () {
+                                Clipboard.setData(
+                                    ClipboardData(text: _syncAddress!));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Sync address copied')),
+                                );
+                              },
+                              child: const Icon(Icons.copy,
+                                  size: 13, color: AppColors.neutral400),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ListenableBuilder(
+                      listenable: CollabCollections.instance,
+                      builder: (context, _) {
+                        final collabCollections = CollabCollections.instance.collections;
+                        if (collabCollections.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              'None yet — create or join one from the Add screen.',
+                              style: TextStyle(fontSize: 11, color: AppColors.neutral500),
+                            ),
+                          );
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final c in collabCollections)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        c.name,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 12.5),
+                                      ),
+                                    ),
+                                    Text(
+                                      '${c.collaborators.length} collab · ${c.media.length} media',
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontFamily: 'monospace',
+                                        color: AppColors.neutral400,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    InkWell(
+                                      onTap: () => _syncCollection(c),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(3),
+                                        child: Icon(Icons.sync,
+                                            size: 15, color: AppColors.accent300),
+                                      ),
+                                    ),
+                                    InkWell(
+                                      onTap: () => _fetchCollectionMedia(c),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(3),
+                                        child: Icon(Icons.download_outlined,
+                                            size: 15, color: AppColors.accent300),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
               Padding(
