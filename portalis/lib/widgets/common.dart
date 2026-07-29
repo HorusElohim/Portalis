@@ -212,16 +212,22 @@ class PieceStrip extends StatelessWidget {
   }
 }
 
-/// Placeholder tile standing in for real thumbnails/covers/media.
+/// Placeholder tile standing in for real thumbnails/covers/media — shown
+/// for anything not downloaded yet, and for any file type real thumbnails
+/// don't apply to (video frames aren't extracted, audio/subtitles/other
+/// files have no visual content at all). The icon communicates the file
+/// type at a glance instead of every non-image tile looking identical.
 class PlaceholderTile extends StatelessWidget {
   const PlaceholderTile({
     super.key,
     this.label,
     this.borderRadius = 0,
+    this.kind = MediaKind.other,
   });
 
   final String? label;
   final double borderRadius;
+  final MediaKind kind;
 
   @override
   Widget build(BuildContext context) {
@@ -229,18 +235,30 @@ class PlaceholderTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(borderRadius),
       child: CustomPaint(
         painter: _DiagonalStripePainter(),
-        child: Align(
-          alignment: Alignment.center,
-          child: label == null
-              ? null
-              : Text(
-                  label!,
-                  style: const TextStyle(
-                    color: AppColors.neutral500,
-                    fontSize: 10,
-                    fontFamily: 'monospace',
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(iconFor(kind), size: 26, color: AppColors.neutral400),
+              if (label != null) ...[
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    label!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.neutral500,
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -249,8 +267,10 @@ class PlaceholderTile extends StatelessWidget {
 
 /// A [MediaItem]'s thumbnail: the real downloaded image when one's ready,
 /// falling back to [PlaceholderTile] otherwise (not downloaded yet, or not
-/// an image). Used everywhere a media tile is shown — collection cards,
-/// grids, the media viewer — so real and mock media render identically.
+/// an image — video/audio/subtitle/other files get a type icon instead,
+/// since none of those have a real frame/cover to render here). Used
+/// everywhere a media tile is shown — collection cards, grids, the media
+/// viewer — so real and mock media render identically.
 class MediaThumbnail extends StatelessWidget {
   const MediaThumbnail({super.key, required this.media, this.borderRadius = 0});
 
@@ -265,12 +285,19 @@ class MediaThumbnail extends StatelessWidget {
         child: Image.file(
           File(media.localPath!),
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stack) =>
-              PlaceholderTile(label: media.label, borderRadius: borderRadius),
+          errorBuilder: (context, error, stack) => PlaceholderTile(
+            label: media.label,
+            borderRadius: borderRadius,
+            kind: kindOf(media.label),
+          ),
         ),
       );
     }
-    return PlaceholderTile(label: media.label, borderRadius: borderRadius);
+    return PlaceholderTile(
+      label: media.label,
+      borderRadius: borderRadius,
+      kind: kindOf(media.label),
+    );
   }
 }
 
@@ -296,63 +323,6 @@ class _DiagonalStripePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-enum RootTab { collections, user, settings }
-
-/// Bottom tab bar shared by Home / User / Settings.
-class RootTabBar extends StatelessWidget {
-  const RootTabBar({super.key, required this.current, required this.onSelect});
-
-  final RootTab current;
-  final ValueChanged<RootTab> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          child: Row(
-            children: [
-              _tab(RootTab.collections, Icons.grid_view_rounded, 'Collections'),
-              _tab(RootTab.user, Icons.person_rounded, 'User'),
-              _tab(RootTab.settings, Icons.settings_rounded, 'Settings'),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _tab(RootTab tab, IconData icon, String label) {
-    final active = tab == current;
-    final color = active ? AppColors.accent300 : AppColors.neutral400;
-    return Expanded(
-      child: InkWell(
-        onTap: () => onSelect(tab),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Small "SECTION HEADER" style label.
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.text, {super.key});
@@ -372,6 +342,86 @@ class SectionLabel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Traces a colored ring around [child]'s rounded-rect perimeter, clockwise
+/// from top-left, proportional to [progress]. Shared by Home's collection
+/// cards and the collection detail screen's media tiles — same download
+/// indicator wherever something has partial progress. A finished item
+/// ([progress] >= 1.0) skips painting entirely so it just keeps its normal
+/// static border underneath.
+class PerimeterProgress extends StatelessWidget {
+  const PerimeterProgress({
+    super.key,
+    required this.progress,
+    required this.color,
+    required this.borderRadius,
+    required this.child,
+  });
+
+  final double progress;
+  final Color color;
+  final BorderRadius borderRadius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (progress >= 1.0) return child;
+    return CustomPaint(
+      foregroundPainter: _PerimeterProgressPainter(
+        progress: progress,
+        color: color,
+        borderRadius: borderRadius,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _PerimeterProgressPainter extends CustomPainter {
+  _PerimeterProgressPainter({
+    required this.progress,
+    required this.color,
+    required this.borderRadius,
+  });
+
+  final double progress;
+  final Color color;
+  final BorderRadius borderRadius;
+
+  static const _strokeWidth = 2.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Stroking centers the line on the path, so a path drawn flush with the
+    // widget's own bounds would render half of it outside those bounds —
+    // inset by half the stroke width so the whole ring lands on-screen
+    // regardless of how an ancestor clips.
+    final rect = Rect.fromLTWH(
+      _strokeWidth / 2,
+      _strokeWidth / 2,
+      size.width - _strokeWidth,
+      size.height - _strokeWidth,
+    );
+    if (rect.width <= 0 || rect.height <= 0) return;
+    final rrect = borderRadius.toRRect(rect);
+    final metrics = (Path()..addRRect(rrect)).computeMetrics();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final extracted = metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
+    canvas.drawPath(
+      extracted,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _strokeWidth
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _PerimeterProgressPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
 }
 
 /// A back-chevron text button, e.g. "‹ Back".

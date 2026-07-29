@@ -47,6 +47,19 @@ dependencies:
   # video player, etc.) from the Torrent tab's detail screen.
   url_launcher: ^6.3.2
 
+  # Saves downloaded photos/videos into the system Photos/gallery app on
+  # iOS/Android, in an album named after the collection.
+  gal: ^2.3.3
+
+  # In-app video playback in the media viewer.
+  video_player: ^2.13.0
+
+  # Flutter's built-in image codecs can't decode HEIC/HEIF (the iPhone
+  # camera's default photo format) at all — pickers hand back unrenderable
+  # files otherwise. Used to transcode HEIC to JPEG at share-time.
+  flutter_image_compress: ^2.5.1
+  shared_preferences: ^2.5.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -57,6 +70,22 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # Generates platform-native app icons from assets/portalis.png — see
+  # flutter_launcher_icons.yaml for config. Run with:
+  #   dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  image_path: "assets/portalis.png"
+  android: true
+  ios: true
+  macos:
+    generate: true
+  windows:
+    generate: true
+  web:
+    generate: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -69,10 +98,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/portalis.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

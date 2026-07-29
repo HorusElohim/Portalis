@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/main.dart';
 import 'package:portalis/screens/add_torrent_screen.dart';
+import 'package:portalis/screens/settings_screen.dart';
+import 'package:portalis/screens/user_screen.dart';
 
 void main() {
   testWidgets('Renders home screen with an empty-collections state',
@@ -20,8 +22,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1100));
 
-    expect(find.text('SmartShare'), findsOneWidget);
-    expect(find.text('＋ Add torrent'), findsOneWidget);
+    expect(find.text('Portalis'), findsOneWidget);
+    expect(find.text('＋ Add'), findsOneWidget);
     expect(find.textContaining('No collections yet'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -34,16 +36,16 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
-    await tester.tap(find.text('＋ Add torrent'));
+    await tester.tap(find.text('＋ Add'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(AddTorrentScreen), findsOneWidget);
 
     await tester.enterText(
-      find.byType(TextField),
+      find.byKey(const Key('magnetField')),
       'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567',
     );
-    await tester.tap(find.text('Add'));
+    await tester.tap(find.byKey(const Key('addMagnetButton')));
     await tester.pump();
     // RustLib isn't initialized, so the add call is expected to fail — it
     // should be caught and shown as inline error text, not an uncaught
@@ -54,24 +56,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('User and Settings tabs render without overflow',
-      (tester) async {
+  testWidgets('Settings screen opens from Home\'s gear icon', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
-    await tester.tap(find.text('User'));
+    await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Maya'), findsWidgets);
-    expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Settings'));
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('User screen opens from Home\'s avatar', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('userAvatarButton')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Settings'), findsWidgets);
+
+    expect(find.byType(UserScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

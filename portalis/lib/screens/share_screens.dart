@@ -173,7 +173,7 @@ class ShareStep2Screen extends StatelessWidget {
                         children: [
                           const Expanded(
                             child: Text(
-                              'smartshare.link/x7Kq2',
+                              'portalis.link/x7Kq2',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12,

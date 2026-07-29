@@ -15,10 +15,19 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SmartShare',
+      title: 'Portalis',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
       home: const RootShell(),
+      // Without this, the keyboard stays up after navigating away from a
+      // screen with a focused TextField (e.g. Add Torrent's name/magnet
+      // fields) — nothing else ever tells it to dismiss. Tapping anywhere
+      // outside an input, on any screen, now closes it.
+      builder: (context, child) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: child,
+      ),
     );
   }
 }

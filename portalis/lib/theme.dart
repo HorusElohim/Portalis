@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Nocturne design tokens, ported from the SmartShare design exploration.
+/// Nocturne design tokens, ported from the Portalis design exploration.
 class AppColors {
   AppColors._();
 

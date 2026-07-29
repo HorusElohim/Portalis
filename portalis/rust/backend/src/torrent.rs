@@ -20,6 +20,7 @@ pub struct TorrentInfo {
     pub state: String,
     pub progress_bytes: u64,
     pub total_bytes: u64,
+    pub uploaded_bytes: u64,
     pub download_mbps: f64,
     pub upload_mbps: f64,
     pub finished: bool,
@@ -40,6 +41,37 @@ pub struct TorrentFile {
     pub absolute_path: String,
     pub length_bytes: u64,
     pub downloaded_bytes: u64,
+}
+
+/// One file to seed, as picked by Flutter (camera roll, file picker, etc.)
+/// and passed across the FFI boundary as raw bytes — the only form that's
+/// meaningfully the same file on every platform (mobile file pickers often
+/// hand back a cache copy path, not a stable one worth trusting).
+#[derive(Debug, Clone)]
+pub struct NewFile {
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Create a new collection by seeding local files: write them to disk,
+/// build a `.torrent` from them, and add it back to the session pointed at
+/// the same location — since the files are already there and match the
+/// piece hashes just computed from them, librqbit verifies them as already
+/// complete and starts seeding immediately, no download needed. This is
+/// the "share something" side of the app; `add_torrent_from_*` above is
+/// the "join a swarm" side — both produce the exact same `TorrentInfo`
+/// shape either way (see the backend README on why: it's the same
+/// protocol regardless of which side of the swarm you started on).
+pub async fn create_collection(name: String, files: Vec<NewFile>) -> anyhow::Result<TorrentInfo> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::create_collection(name, files).await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (name, files);
+        native::unsupported_on_web()
+    }
 }
 
 /// Add a torrent from a magnet link (or bare 40-char info-hash, which
@@ -100,16 +132,47 @@ pub fn output_dir() -> anyhow::Result<String> {
     }
 }
 
+/// Real disk usage of everything downloaded/shared so far — the Settings
+/// screen's storage meter. Recursive over `output_dir()`.
+pub async fn storage_usage_bytes() -> anyhow::Result<u64> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::storage_usage_bytes().await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        native::unsupported_on_web()
+    }
+}
+
+/// Caps upload speed across every torrent at once (not per-torrent) —
+/// `librqbit`'s `Session::ratelimits` is adjustable at runtime, no restart
+/// needed. `None`/0 means unlimited.
+pub async fn set_upload_limit_bps(bytes_per_sec: Option<u32>) -> anyhow::Result<()> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::set_upload_limit_bps(bytes_per_sec).await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = bytes_per_sec;
+        native::unsupported_on_web()
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::path::PathBuf;
     use std::sync::Arc;
 
+    use anyhow::Context;
     use librqbit::api::TorrentIdOrHash;
-    use librqbit::{Api, AddTorrent, AddTorrentOptions, AddTorrentResponse, Session};
+    use librqbit::{
+        Api, AddTorrent, AddTorrentOptions, AddTorrentResponse, CreateTorrentOptions, Session,
+    };
     use tokio::sync::OnceCell;
 
-    use super::{TorrentFile, TorrentInfo};
+    use super::{NewFile, TorrentFile, TorrentInfo};
 
     static SESSION: OnceCell<Arc<Session>> = OnceCell::const_new();
 
@@ -117,21 +180,34 @@ mod native {
         SESSION
             .get_or_try_init(|| async {
                 let dir = output_dir();
-                std::fs::create_dir_all(&dir)?;
-                Session::new(dir).await
+                std::fs::create_dir_all(&dir)
+                    .with_context(|| format!("creating output dir {dir:?}"))?;
+                Session::new(dir.clone())
+                    .await
+                    .with_context(|| format!("starting librqbit session in {dir:?}"))
             })
             .await
             .cloned()
     }
 
-    /// The platform Downloads folder (falling back to a temp dir if it
-    /// can't be found, e.g. some minimal Linux setups), so downloaded files
-    /// are somewhere the user can actually find in Finder/Explorer rather
-    /// than an OS temp directory.
+    /// Where downloaded files land, chosen so the user can actually find
+    /// them:
+    /// - Desktop: the platform Downloads folder (falls back to a temp dir
+    ///   if that can't be found, e.g. some minimal Linux setups).
+    /// - iOS/Android: there's no "Downloads folder" in an app's sandbox —
+    ///   that's a desktop concept. `dirs::download_dir()` on iOS resolves
+    ///   to `<sandbox>/Downloads`, a directory nothing ever exposes to the
+    ///   user; the actual user-visible location is `Documents` (surfaced in
+    ///   the Files app once `UIFileSharingEnabled` +
+    ///   `LSSupportsOpeningDocumentsInPlace` are set in Info.plist, which
+    ///   they now are).
     pub(super) fn output_dir() -> PathBuf {
-        dirs::download_dir()
-            .unwrap_or_else(std::env::temp_dir)
-            .join("SmartShare-TorrentDebug")
+        #[cfg(any(target_os = "ios", target_os = "android"))]
+        let base = dirs::document_dir().unwrap_or_else(std::env::temp_dir);
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        let base = dirs::download_dir().unwrap_or_else(std::env::temp_dir);
+
+        base.join("Portalis-TorrentDebug")
     }
 
     /// Re-adding the same torrent (e.g. re-testing) shouldn't blow up just
@@ -141,6 +217,67 @@ mod native {
             overwrite: true,
             ..Default::default()
         }
+    }
+
+    /// Strip path separators and other characters that would let a
+    /// malicious/odd filename escape the collection's own directory.
+    fn sanitize_component(name: &str) -> String {
+        let cleaned: String = name
+            .chars()
+            .map(|c| match c {
+                '/' | '\\' | '\0' => '_',
+                c => c,
+            })
+            .collect();
+        let trimmed = cleaned.trim();
+        if trimmed.is_empty() {
+            "untitled".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    pub(super) async fn create_collection(
+        name: String,
+        files: Vec<NewFile>,
+    ) -> anyhow::Result<TorrentInfo> {
+        anyhow::ensure!(!files.is_empty(), "a collection needs at least one file");
+
+        let session = session().await?;
+        let collection_name = sanitize_component(&name);
+        let dir = output_dir().join(&collection_name);
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("creating collection dir {dir:?}"))?;
+        for file in &files {
+            let path = dir.join(sanitize_component(&file.name));
+            std::fs::write(&path, &file.bytes)
+                .with_context(|| format!("writing {path:?} ({} bytes)", file.bytes.len()))?;
+        }
+
+        let created = librqbit::create_torrent(
+            &dir,
+            CreateTorrentOptions {
+                name: Some(&collection_name),
+                ..Default::default()
+            },
+        )
+        .await
+        .with_context(|| format!("building .torrent metadata from {dir:?}"))?;
+
+        let opts = AddTorrentOptions {
+            overwrite: true,
+            // Explicit, not the session default + auto subfolder — the
+            // files are already sitting exactly at `dir`, so this must
+            // match precisely or librqbit will look for them in the wrong
+            // place and try to re-download what we just wrote.
+            output_folder: Some(dir.to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+        let response = session
+            .add_torrent(AddTorrent::from_bytes(created.as_bytes()?), Some(opts))
+            .await
+            .with_context(|| format!("adding created torrent, output_folder={dir:?}"))?;
+        response_to_info(&api(session), response)
     }
 
     /// Real per-file paths, resolved via `Api::api_torrent_details` rather
@@ -190,6 +327,7 @@ mod native {
             state: format!("{:?}", stats.state),
             progress_bytes: stats.progress_bytes,
             total_bytes: stats.total_bytes,
+            uploaded_bytes: stats.uploaded_bytes,
             download_mbps,
             upload_mbps,
             finished: stats.finished,
@@ -220,7 +358,8 @@ mod native {
         let session = session().await?;
         let response = session
             .add_torrent(AddTorrent::from_url(magnet_or_hash), Some(add_opts()))
-            .await?;
+            .await
+            .context("adding torrent from magnet/URL")?;
         response_to_info(&api(session), response)
     }
 
@@ -230,7 +369,8 @@ mod native {
         let session = session().await?;
         let response = session
             .add_torrent(AddTorrent::from_bytes(bytes), Some(add_opts()))
-            .await?;
+            .await
+            .context("adding torrent from .torrent file bytes")?;
         response_to_info(&api(session), response)
     }
 
@@ -240,6 +380,41 @@ mod native {
         Ok(session.with_torrents(|iter| {
             iter.map(|(id, handle)| to_info(&api, id, handle)).collect()
         }))
+    }
+
+    pub(super) async fn storage_usage_bytes() -> anyhow::Result<u64> {
+        // Ensures output_dir() actually exists before walking it (a fresh
+        // install with nothing downloaded yet shouldn't error, just read
+        // as zero) — session() creates it as a side effect.
+        let _ = session().await?;
+        Ok(dir_size(&output_dir()))
+    }
+
+    fn dir_size(path: &std::path::Path) -> u64 {
+        let Ok(entries) = std::fs::read_dir(path) else {
+            return 0;
+        };
+        entries
+            .filter_map(|e| e.ok())
+            .map(|entry| {
+                let Ok(metadata) = entry.metadata() else {
+                    return 0;
+                };
+                if metadata.is_dir() {
+                    dir_size(&entry.path())
+                } else {
+                    metadata.len()
+                }
+            })
+            .sum()
+    }
+
+    pub(super) async fn set_upload_limit_bps(bytes_per_sec: Option<u32>) -> anyhow::Result<()> {
+        let session = session().await?;
+        session
+            .ratelimits
+            .set_upload_bps(bytes_per_sec.and_then(std::num::NonZeroU32::new));
+        Ok(())
     }
 }
 

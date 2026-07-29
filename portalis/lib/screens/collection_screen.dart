@@ -156,20 +156,35 @@ class CollectionScreen extends StatelessWidget {
                         itemCount: collection.media.length,
                         itemBuilder: (context, index) {
                           final m = collection.media[index];
-                          return Material(
-                            color: Colors.transparent,
+                          return PerimeterProgress(
+                            progress: m.progress,
+                            color: collection.hue,
                             borderRadius: BorderRadius.circular(6),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => MediaViewerScreen(
-                                    collection: collection,
-                                    media: m,
+                            child: Container(
+                              // Always-visible boundary, independent of the
+                              // progress ring above — otherwise a finished
+                              // (or not-yet-started) tile has no outline at
+                              // all, since the ring only paints while
+                              // 0 < progress < 1.
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => MediaViewerScreen(
+                                        collection: collection,
+                                        media: m,
+                                      ),
+                                    ),
                                   ),
+                                  child: MediaThumbnail(media: m, borderRadius: 6),
                                 ),
                               ),
-                              child: MediaThumbnail(media: m, borderRadius: 6),
                             ),
                           );
                         },

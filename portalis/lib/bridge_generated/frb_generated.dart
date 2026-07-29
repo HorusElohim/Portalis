@@ -6,6 +6,7 @@
 import 'bridge.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'device.dart';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
@@ -69,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1151459914;
+  int get rustContentHash => -490503337;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -86,11 +87,22 @@ abstract class RustLibApi extends BaseApi {
   Future<TorrentInfo> crateTorrentAddTorrentFromMagnet(
       {required String magnetOrHash});
 
+  Future<TorrentInfo> crateTorrentCreateCollection(
+      {required String name, required List<NewFile> files});
+
+  Future<DeviceIdentityInfo> crateDeviceDeviceIdentity();
+
   String crateBridgeGetVersion();
 
   Future<List<TorrentInfo>> crateTorrentListTorrents();
 
   Future<String> crateTorrentOutputDir();
+
+  Future<DeviceIdentityInfo> crateDeviceSetNickname({required String nickname});
+
+  Future<void> crateTorrentSetUploadLimitBps({int? bytesPerSec});
+
+  Future<BigInt> crateTorrentStorageUsageBytes();
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -154,11 +166,61 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<TorrentInfo> crateTorrentCreateCollection(
+      {required String name, required List<NewFile> files}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(name, serializer);
+        sse_encode_list_new_file(files, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 3, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_torrent_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentCreateCollectionConstMeta,
+      argValues: [name, files],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentCreateCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_collection",
+        argNames: ["name", "files"],
+      );
+
+  @override
+  Future<DeviceIdentityInfo> crateDeviceDeviceIdentity() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 4, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_device_identity_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateDeviceDeviceIdentityConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateDeviceDeviceIdentityConstMeta => const TaskConstMeta(
+        debugName: "device_identity",
+        argNames: [],
+      );
+
+  @override
   String crateBridgeGetVersion() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -181,7 +243,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 4, port: port_);
+            funcId: 6, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_torrent_info,
@@ -204,7 +266,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 5, port: port_);
+            funcId: 7, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -218,6 +280,80 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateTorrentOutputDirConstMeta => const TaskConstMeta(
         debugName: "output_dir",
+        argNames: [],
+      );
+
+  @override
+  Future<DeviceIdentityInfo> crateDeviceSetNickname(
+      {required String nickname}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nickname, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 8, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_device_identity_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateDeviceSetNicknameConstMeta,
+      argValues: [nickname],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateDeviceSetNicknameConstMeta => const TaskConstMeta(
+        debugName: "set_nickname",
+        argNames: ["nickname"],
+      );
+
+  @override
+  Future<void> crateTorrentSetUploadLimitBps({int? bytesPerSec}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_opt_box_autoadd_u_32(bytesPerSec, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 9, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentSetUploadLimitBpsConstMeta,
+      argValues: [bytesPerSec],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentSetUploadLimitBpsConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_upload_limit_bps",
+        argNames: ["bytesPerSec"],
+      );
+
+  @override
+  Future<BigInt> crateTorrentStorageUsageBytes() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 10, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentStorageUsageBytesConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentStorageUsageBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "storage_usage_bytes",
         argNames: [],
       );
 
@@ -240,9 +376,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  DeviceIdentityInfo dco_decode_device_identity_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return DeviceIdentityInfo(
+      deviceId: dco_decode_String(arr[0]),
+      nickname: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  List<NewFile> dco_decode_list_new_file(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_new_file).toList();
   }
 
   @protected
@@ -270,9 +430,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NewFile dco_decode_new_file(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return NewFile(
+      name: dco_decode_String(arr[0]),
+      bytes: dco_decode_list_prim_u_8_strict(arr[1]),
+    );
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
   }
 
   @protected
@@ -293,8 +471,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TorrentInfo dco_decode_torrent_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return TorrentInfo(
       id: dco_decode_usize(arr[0]),
       infoHash: dco_decode_String(arr[1]),
@@ -302,12 +480,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       state: dco_decode_String(arr[3]),
       progressBytes: dco_decode_u_64(arr[4]),
       totalBytes: dco_decode_u_64(arr[5]),
-      downloadMbps: dco_decode_f_64(arr[6]),
-      uploadMbps: dco_decode_f_64(arr[7]),
-      finished: dco_decode_bool(arr[8]),
-      error: dco_decode_opt_String(arr[9]),
-      files: dco_decode_list_torrent_file(arr[10]),
-      livePeers: dco_decode_u_32(arr[11]),
+      uploadedBytes: dco_decode_u_64(arr[6]),
+      downloadMbps: dco_decode_f_64(arr[7]),
+      uploadMbps: dco_decode_f_64(arr[8]),
+      finished: dco_decode_bool(arr[9]),
+      error: dco_decode_opt_String(arr[10]),
+      files: dco_decode_list_torrent_file(arr[11]),
+      livePeers: dco_decode_u_32(arr[12]),
     );
   }
 
@@ -362,9 +541,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
+  DeviceIdentityInfo sse_decode_device_identity_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_deviceId = sse_decode_String(deserializer);
+    var var_nickname = sse_decode_String(deserializer);
+    return DeviceIdentityInfo(deviceId: var_deviceId, nickname: var_nickname);
+  }
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  List<NewFile> sse_decode_list_new_file(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <NewFile>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_new_file(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -406,11 +612,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NewFile sse_decode_new_file(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_bytes = sse_decode_list_prim_u_8_strict(deserializer);
+    return NewFile(name: var_name, bytes: var_bytes);
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
     } else {
       return null;
     }
@@ -439,6 +664,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_state = sse_decode_String(deserializer);
     var var_progressBytes = sse_decode_u_64(deserializer);
     var var_totalBytes = sse_decode_u_64(deserializer);
+    var var_uploadedBytes = sse_decode_u_64(deserializer);
     var var_downloadMbps = sse_decode_f_64(deserializer);
     var var_uploadMbps = sse_decode_f_64(deserializer);
     var var_finished = sse_decode_bool(deserializer);
@@ -452,6 +678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         state: var_state,
         progressBytes: var_progressBytes,
         totalBytes: var_totalBytes,
+        uploadedBytes: var_uploadedBytes,
         downloadMbps: var_downloadMbps,
         uploadMbps: var_uploadMbps,
         finished: var_finished,
@@ -515,9 +742,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_device_identity_info(
+      DeviceIdentityInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.deviceId, serializer);
+    sse_encode_String(self.nickname, serializer);
+  }
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_list_new_file(List<NewFile> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_new_file(item, serializer);
+    }
   }
 
   @protected
@@ -558,12 +808,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_new_file(NewFile self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_list_prim_u_8_strict(self.bytes, serializer);
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
     }
   }
 
@@ -585,6 +852,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.state, serializer);
     sse_encode_u_64(self.progressBytes, serializer);
     sse_encode_u_64(self.totalBytes, serializer);
+    sse_encode_u_64(self.uploadedBytes, serializer);
     sse_encode_f_64(self.downloadMbps, serializer);
     sse_encode_f_64(self.uploadMbps, serializer);
     sse_encode_bool(self.finished, serializer);

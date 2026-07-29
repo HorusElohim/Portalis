@@ -6,7 +6,20 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
+
+/// Create a new collection by seeding local files: write them to disk,
+/// build a `.torrent` from them, and add it back to the session pointed at
+/// the same location — since the files are already there and match the
+/// piece hashes just computed from them, librqbit verifies them as already
+/// complete and starts seeding immediately, no download needed. This is
+/// the "share something" side of the app; `add_torrent_from_*` above is
+/// the "join a swarm" side — both produce the exact same `TorrentInfo`
+/// shape either way (see the backend README on why: it's the same
+/// protocol regardless of which side of the swarm you started on).
+Future<TorrentInfo> createCollection(
+        {required String name, required List<NewFile> files}) =>
+    RustLib.instance.api.crateTorrentCreateCollection(name: name, files: files);
 
 /// Add a torrent from a magnet link (or bare 40-char info-hash, which
 /// `librqbit` also accepts as a magnet-equivalent).
@@ -31,6 +44,42 @@ Future<List<TorrentInfo>> listTorrents() =>
 /// backend README) will replace this later; for this smoke test it's just
 /// the platform Downloads folder.
 Future<String> outputDir() => RustLib.instance.api.crateTorrentOutputDir();
+
+/// Real disk usage of everything downloaded/shared so far — the Settings
+/// screen's storage meter. Recursive over `output_dir()`.
+Future<BigInt> storageUsageBytes() =>
+    RustLib.instance.api.crateTorrentStorageUsageBytes();
+
+/// Caps upload speed across every torrent at once (not per-torrent) —
+/// `librqbit`'s `Session::ratelimits` is adjustable at runtime, no restart
+/// needed. `None`/0 means unlimited.
+Future<void> setUploadLimitBps({int? bytesPerSec}) => RustLib.instance.api
+    .crateTorrentSetUploadLimitBps(bytesPerSec: bytesPerSec);
+
+/// One file to seed, as picked by Flutter (camera roll, file picker, etc.)
+/// and passed across the FFI boundary as raw bytes — the only form that's
+/// meaningfully the same file on every platform (mobile file pickers often
+/// hand back a cache copy path, not a stable one worth trusting).
+class NewFile {
+  final String name;
+  final Uint8List bytes;
+
+  const NewFile({
+    required this.name,
+    required this.bytes,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ bytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NewFile &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          bytes == other.bytes;
+}
 
 /// One file inside a torrent, with its real on-disk location — resolved via
 /// `librqbit::Api` (which knows the actual per-torrent output folder,
@@ -74,6 +123,7 @@ class TorrentInfo {
   final String state;
   final BigInt progressBytes;
   final BigInt totalBytes;
+  final BigInt uploadedBytes;
   final double downloadMbps;
   final double uploadMbps;
   final bool finished;
@@ -91,6 +141,7 @@ class TorrentInfo {
     required this.state,
     required this.progressBytes,
     required this.totalBytes,
+    required this.uploadedBytes,
     required this.downloadMbps,
     required this.uploadMbps,
     required this.finished,
@@ -107,6 +158,7 @@ class TorrentInfo {
       state.hashCode ^
       progressBytes.hashCode ^
       totalBytes.hashCode ^
+      uploadedBytes.hashCode ^
       downloadMbps.hashCode ^
       uploadMbps.hashCode ^
       finished.hashCode ^
@@ -125,6 +177,7 @@ class TorrentInfo {
           state == other.state &&
           progressBytes == other.progressBytes &&
           totalBytes == other.totalBytes &&
+          uploadedBytes == other.uploadedBytes &&
           downloadMbps == other.downloadMbps &&
           uploadMbps == other.uploadMbps &&
           finished == other.finished &&

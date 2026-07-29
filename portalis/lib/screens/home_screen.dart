@@ -5,6 +5,8 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'add_torrent_screen.dart';
 import 'collection_screen.dart';
+import 'settings_screen.dart';
+import 'user_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -19,14 +21,37 @@ class HomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'SmartShare',
+                'Portalis',
                 style: TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.w500,
                   letterSpacing: -0.2,
                 ),
               ),
-              const Avatar(initials: 'M'),
+              Row(
+                children: [
+                  InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.settings_outlined,
+                          size: 20, color: AppColors.neutral400),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    key: const Key('userAvatarButton'),
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const UserScreen()),
+                    ),
+                    child: const Avatar(initials: 'M'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -79,7 +104,7 @@ class HomeScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
           child: Center(
             child: PillButton(
-              label: '＋ Add torrent',
+              label: '＋ Add',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const AddTorrentScreen()),
               ),
@@ -105,7 +130,7 @@ class _EmptyCollections extends StatelessWidget {
             const Icon(Icons.hub_outlined, size: 32, color: AppColors.neutral500),
             const SizedBox(height: 10),
             Text(
-              'No collections yet — add a magnet link or a .torrent file to get started.',
+              'No collections yet — add media or magnet link / .torrent file to get started.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.neutral400),
             ),
@@ -122,63 +147,70 @@ class _CollectionCard extends StatelessWidget {
   final Collection collection;
   final VoidCallback onTap;
 
+  static const _radius = BorderRadius.all(Radius.circular(8));
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                height: 92,
-                child: collection.media.isEmpty
-                    ? const PlaceholderTile()
-                    : MediaThumbnail(media: collection.media.first),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      collection.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      collection.subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.neutral400,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: CopiesIndicator(
-                        color: collection.hue,
-                        label: collection.copiesLabel,
-                      ),
-                    ),
-                  ],
+    return PerimeterProgress(
+      progress: collection.progress,
+      color: collection.hue,
+      borderRadius: _radius,
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: _radius,
+        child: InkWell(
+          borderRadius: _radius,
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: _radius,
+              border: Border.all(color: AppColors.border),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 92,
+                  child: collection.media.isEmpty
+                      ? const PlaceholderTile()
+                      : MediaThumbnail(media: collection.media.first),
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        collection.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        collection.subtitle,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.neutral400,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: CopiesIndicator(
+                          color: collection.hue,
+                          label: collection.copiesLabel,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

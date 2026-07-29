@@ -55,6 +55,9 @@ class Collection {
     required this.collaboratorCount,
     required this.media,
     required this.collaborators,
+    this.progress = 1.0,
+    this.downloadedBytes = 0,
+    this.uploadedBytes = 0,
   });
 
   final String name;
@@ -65,6 +68,16 @@ class Collection {
   final int collaboratorCount;
   final List<MediaItem> media;
   final List<Collaborator> collaborators;
+
+  /// Overall download progress, 0.0..=1.0. Mock collections are always
+  /// "complete"; real torrent-backed ones report actual progress — drives
+  /// Home's perimeter progress ring.
+  final double progress;
+
+  /// Real byte counters from the torrent engine, used for the User screen's
+  /// aggregate "Shared"/"Received" stats. Zero for mock data.
+  final int downloadedBytes;
+  final int uploadedBytes;
 
   Color get hue => AppColors.hueAt(hueIndex);
 }

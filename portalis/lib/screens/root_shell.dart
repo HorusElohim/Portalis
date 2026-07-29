@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/torrent_collections.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
 import 'home_screen.dart';
-import 'settings_screen.dart';
-import 'user_screen.dart';
 
-/// Root shell hosting the three bottom-tab destinations: Collections
-/// (home), User, and Settings. Adding a torrent (Home's "＋ Add torrent")
-/// is what feeds Collections — there's no separate Torrent tab; see
-/// `TorrentCollections` for why a torrent already *is* a collection.
+/// App root: just Collections (Home). User and Settings are reached via
+/// the icons in Home's top bar (avatar / gear) rather than a bottom tab
+/// bar — there's only one real destination, so a tab bar had nothing left
+/// to switch between.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
 
@@ -18,8 +15,6 @@ class RootShell extends StatefulWidget {
 }
 
 class _RootShellState extends State<RootShell> {
-  RootTab _tab = RootTab.collections;
-
   @override
   void initState() {
     super.initState();
@@ -34,22 +29,9 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: IndexedStack(
-          index: RootTab.values.indexOf(_tab),
-          children: const [
-            HomeScreen(),
-            UserScreen(),
-            SettingsScreen(),
-          ],
-        ),
-      ),
-      bottomNavigationBar: RootTabBar(
-        current: _tab,
-        onSelect: (tab) => setState(() => _tab = tab),
-      ),
+      body: SafeArea(child: HomeScreen()),
     );
   }
 }

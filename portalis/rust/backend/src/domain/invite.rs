@@ -4,7 +4,7 @@ use rand::RngCore;
 /// Domain separation tag for rendezvous-key derivation, so this hash can
 /// never collide with a hash computed for some other purpose elsewhere in
 /// the codebase, even given the same input bytes.
-const RENDEZVOUS_DOMAIN: &[u8] = b"smartshare.rendezvous.v1";
+const RENDEZVOUS_DOMAIN: &[u8] = b"portalis.rendezvous.v1";
 
 /// A random secret minted when a collection is created, encoded into the
 /// invite link/QR. Knowing it is what makes you a collaborator. It never

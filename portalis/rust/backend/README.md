@@ -9,7 +9,7 @@ built.
 
 ## Why BitTorrent at all
 
-SmartShare's pitch is "media never touches a server." BitTorrent already
+Portalis's pitch is "media never touches a server." BitTorrent already
 solves the hard parts of that — chunked transfer, swarm-wide piece
 availability, and (via its Mainline DHT) serverless peer discovery that
 survives IP changes. Re-implementing that from scratch would mean
@@ -369,7 +369,7 @@ have fundamentally different storage models:
 
 - **Desktop** — an ordinary filesystem. Rust can have `librqbit` write
   torrent pieces directly to their final destination
-  (`~/Downloads/SmartShare/<collection name>/`, via the `dirs` crate for
+  (`~/Downloads/Portalis/<collection name>/`, via the `dirs` crate for
   the platform-correct Downloads path) and be done. No Flutter involvement.
 - **Mobile** — there is no "just write a file" for photos/videos. iOS
   sandboxes the filesystem and requires going through **PhotoKit**

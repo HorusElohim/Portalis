@@ -7,3 +7,4 @@ pub mod bridge;
 // of any #[cfg] on its own declaration). librqbit itself is still gated to
 // non-wasm32 in Cargo.toml; torrent.rs's internals mirror that.
 pub mod torrent;
+pub mod device;
