@@ -59,6 +59,7 @@ dependencies:
   # files otherwise. Used to transcode HEIC to JPEG at share-time.
   flutter_image_compress: ^2.5.1
   shared_preferences: ^2.5.5
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:

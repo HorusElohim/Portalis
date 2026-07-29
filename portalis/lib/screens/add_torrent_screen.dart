@@ -1,10 +1,15 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../media_convert.dart';
 import '../services/torrent_collections.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+
+typedef _PickedFile = ({String name, Uint8List bytes});
 
 /// Entry point for adding a new collection, either side of the swarm:
 /// **share** your own files (a new collection, seeded immediately) or
@@ -22,7 +27,7 @@ class AddTorrentScreen extends StatefulWidget {
 class _AddTorrentScreenState extends State<AddTorrentScreen> {
   final _nameController = TextEditingController();
   final _magnetController = TextEditingController();
-  List<PlatformFile> _pickedFiles = [];
+  List<_PickedFile> _pickedFiles = [];
   bool _busy = false;
   String? _error;
 
@@ -33,6 +38,20 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
     super.dispose();
   }
 
+  /// Native Photos/gallery picker (PHPickerViewController on iOS, the
+  /// system photo picker on Android) — lets someone share straight from
+  /// their Camera Roll instead of having to export to Files first.
+  Future<void> _pickFromPhotos() async {
+    final xfiles = await ImagePicker().pickMultipleMedia();
+    if (xfiles.isEmpty) return;
+    final picked = await Future.wait(
+      xfiles.map((f) async => (name: f.name, bytes: await f.readAsBytes())),
+    );
+    setState(() => _pickedFiles = [..._pickedFiles, ...picked]);
+  }
+
+  /// Generic file picker — for anything not in Photos (audio, documents,
+  /// files synced via iCloud Drive/Files, etc).
   Future<void> _pickFilesToShare() async {
     final result = await FilePicker.pickFiles(
       withData: true,
@@ -40,10 +59,14 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       type: FileType.any,
     );
     if (result == null) return;
-    setState(() => _pickedFiles = result.files);
+    final picked = result.files
+        .where((f) => f.bytes != null)
+        .map((f) => (name: f.name, bytes: f.bytes!))
+        .toList();
+    setState(() => _pickedFiles = [..._pickedFiles, ...picked]);
   }
 
-  void _removePickedFile(PlatformFile file) {
+  void _removePickedFile(_PickedFile file) {
     setState(() => _pickedFiles = _pickedFiles.where((f) => f != file).toList());
   }
 
@@ -56,9 +79,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
     });
     try {
       final normalized = await Future.wait(
-        _pickedFiles
-            .where((f) => f.bytes != null)
-            .map((f) => normalizeForSharing(name: f.name, bytes: f.bytes!)),
+        _pickedFiles.map((f) => normalizeForSharing(name: f.name, bytes: f.bytes)),
       );
       await TorrentCollections.instance.createCollection(name, normalized);
       if (mounted) {
@@ -173,13 +194,21 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: PillButton(
-                    label: '🖼️ Pick photos, videos, audio, or files',
-                    dim: true,
-                    onTap: _busy ? null : _pickFilesToShare,
-                  ),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    PillButton(
+                      label: '📷 Pick from Photos',
+                      dim: true,
+                      onTap: _busy ? null : _pickFromPhotos,
+                    ),
+                    PillButton(
+                      label: '📁 Pick other files',
+                      dim: true,
+                      onTap: _busy ? null : _pickFilesToShare,
+                    ),
+                  ],
                 ),
               ),
               if (_pickedFiles.isNotEmpty)
@@ -324,7 +353,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
 class _PickedFileChip extends StatelessWidget {
   const _PickedFileChip({required this.file, required this.onRemove});
 
-  final PlatformFile file;
+  final _PickedFile file;
   final VoidCallback onRemove;
 
   @override
