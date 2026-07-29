@@ -58,18 +58,33 @@ function build_web() {
       return 1
     fi
   fi
-  if ! command -v wasm-bindgen >/dev/null 2>&1; then
+  echo "Compiling Rust to wasm..."
+  (cd "$CRATE" && cargo build --release --target wasm32-unknown-unknown)
+
+  # The wasm-bindgen crate version pulled in by the build (recorded in
+  # Cargo.lock) must exactly match the wasm-bindgen-cli binary used to
+  # generate the JS/WASM glue below. Cargo.lock for this crate isn't
+  # committed (see .gitignore), so the resolved version can drift between
+  # machines/CI runs; always align the CLI to whatever was actually built.
+  WBG_VERSION=$(grep -A1 '^name = "wasm-bindgen"$' "$CRATE/Cargo.lock" | grep '^version' | head -1 | sed -E 's/version = "(.*)"/\1/')
+  if [[ -z "$WBG_VERSION" ]]; then
+    echo "(error) Could not determine wasm-bindgen version from $CRATE/Cargo.lock"
+    return 1
+  fi
+  INSTALLED_WBG_VERSION=""
+  if command -v wasm-bindgen >/dev/null 2>&1; then
+    INSTALLED_WBG_VERSION=$(wasm-bindgen --version 2>/dev/null | awk '{print $2}')
+  fi
+  if [[ "$INSTALLED_WBG_VERSION" != "$WBG_VERSION" ]]; then
     if [[ "${FRB_BOOTSTRAP:-0}" == "1" ]]; then
-      echo "Installing wasm-bindgen CLI ..."
-      cargo install wasm-bindgen-cli
+      echo "Installing wasm-bindgen-cli $WBG_VERSION (found: ${INSTALLED_WBG_VERSION:-none}) ..."
+      cargo install wasm-bindgen-cli --version "$WBG_VERSION" --force
     else
-      echo "(error) wasm-bindgen CLI not found."
-      echo "        Install with: cargo install wasm-bindgen-cli"
+      echo "(error) wasm-bindgen-cli version mismatch: need $WBG_VERSION, found ${INSTALLED_WBG_VERSION:-none}."
+      echo "        Install with: cargo install wasm-bindgen-cli --version $WBG_VERSION --force"
       return 1
     fi
   fi
-  echo "Compiling Rust to wasm..."
-  (cd "$CRATE" && cargo build --release --target wasm32-unknown-unknown)
   mkdir -p web/pkg
   echo "Generating JS/WASM glue into web/pkg ..."
   wasm-bindgen \
