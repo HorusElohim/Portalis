@@ -16,7 +16,7 @@ class SwarmScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final heatmap = MockData.aggregatePieceHeatmap(collection);
+    final heatmap = SwarmVisuals.aggregatePieceHeatmap(collection);
     final collaborators = collection.collaborators;
     final shown = collaborators.take(8).toList();
     final remaining = collaborators.length - shown.length;
@@ -156,7 +156,7 @@ class SwarmScreen extends StatelessWidget {
                             ],
                             Expanded(
                               child: PieceStrip(
-                                colors: MockData.pieceStrip(cb),
+                                colors: SwarmVisuals.pieceStrip(cb),
                                 height: 8,
                               ),
                             ),

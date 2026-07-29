@@ -5,7 +5,7 @@ use super::invite::{InviteSecret, RendezvousKey};
 use super::manifest::{Manifest, ManifestEntry};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct CollectionId(Uuid);
+pub(crate) struct CollectionId(Uuid);
 
 impl CollectionId {
     pub fn new() -> Self {
@@ -22,7 +22,7 @@ impl std::fmt::Display for CollectionId {
 /// A named, growable album: an invite secret, a set of collaborators, and a
 /// [`Manifest`] of media items. See the backend README for why this is
 /// *not* a single BitTorrent torrent.
-pub struct Collection {
+pub(crate) struct Collection {
     pub id: CollectionId,
     pub name: String,
     invite_secret: InviteSecret,

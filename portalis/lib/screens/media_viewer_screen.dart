@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -14,8 +16,23 @@ class MediaViewerScreen extends StatelessWidget {
   final Collection collection;
   final MediaItem media;
 
+  Future<void> _open(BuildContext context) async {
+    final path = media.localPath;
+    if (path == null) return;
+    final ok = await launchUrl(Uri.file(path));
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Couldn\'t open ${media.label}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final peerLabel = collection.collaboratorCount == 1
+        ? '1 peer'
+        : '${collection.collaboratorCount} peers';
+
     return Scaffold(
       backgroundColor: AppColors.viewerBg,
       body: SafeArea(
@@ -56,19 +73,33 @@ class MediaViewerScreen extends StatelessWidget {
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              const PlaceholderTile(borderRadius: 8),
-                              Container(
-                                width: 62,
-                                height: 62,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppColors.bg.withValues(alpha: 0.85),
-                                  border: Border.all(color: AppColors.accent600),
-                                ),
-                                child: const Icon(
-                                  Icons.play_arrow_rounded,
-                                  color: AppColors.accent300,
-                                  size: 28,
+                              MediaThumbnail(media: media, borderRadius: 8),
+                              GestureDetector(
+                                onTap: media.isReady ? () => _open(context) : null,
+                                child: Container(
+                                  width: 62,
+                                  height: 62,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppColors.bg.withValues(alpha: 0.85),
+                                    border: Border.all(color: AppColors.accent600),
+                                  ),
+                                  child: media.isReady
+                                      ? const Icon(
+                                          Icons.open_in_new_rounded,
+                                          color: AppColors.accent300,
+                                          size: 24,
+                                        )
+                                      : Center(
+                                          child: Text(
+                                            '${(media.progress * 100).toStringAsFixed(0)}%',
+                                            style: const TextStyle(
+                                              color: AppColors.accent300,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
                                 ),
                               ),
                             ],
@@ -86,7 +117,9 @@ class MediaViewerScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${collection.name} · streams from 6 peers',
+                      media.isReady
+                          ? '${collection.name} · streams from $peerLabel'
+                          : '${collection.name} · downloading, $peerLabel connected',
                       style: const TextStyle(
                         fontSize: 11.5,
                         color: AppColors.neutral400,

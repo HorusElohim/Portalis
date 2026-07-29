@@ -2,9 +2,23 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 
 class MediaItem {
-  const MediaItem({required this.label});
+  const MediaItem({
+    required this.label,
+    this.localPath,
+    this.progress = 1.0,
+  });
 
   final String label;
+
+  /// Absolute path once fully downloaded — null for mock data or while
+  /// still in progress. Set by [TorrentCollections] for real torrents.
+  final String? localPath;
+
+  /// 0.0..=1.0. Mock media is always "complete" since there's nothing
+  /// downloading; real torrent-backed media reports its actual progress.
+  final double progress;
+
+  bool get isReady => localPath != null && progress >= 1.0;
 }
 
 class Collaborator {
@@ -55,78 +69,10 @@ class Collection {
   Color get hue => AppColors.hueAt(hueIndex);
 }
 
-/// In-memory mock data standing in for a real swarm/collection backend.
-class MockData {
-  MockData._();
-
-  static final collections = <Collection>[
-    Collection(
-      name: 'Iceland 2024',
-      subtitle: '212 photos · 4 videos',
-      categories: const ['📷 216', '📍 Iceland', '🗓 Jun 2024'],
-      hueIndex: 0,
-      copiesLabel: '6 copies alive',
-      collaboratorCount: 100,
-      media: List.generate(9, (i) => MediaItem(label: 'IMG_${1000 + i}')),
-      collaborators: _mockCollaborators(),
-    ),
-    Collection(
-      name: 'Family Reunion',
-      subtitle: '84 photos · 12 videos',
-      categories: const ['📷 96', '📍 Home', '🗓 Dec 2024'],
-      hueIndex: 1,
-      copiesLabel: '4 copies alive',
-      collaboratorCount: 18,
-      media: List.generate(6, (i) => MediaItem(label: 'DSC_${2000 + i}')),
-      collaborators: _mockCollaborators(count: 18),
-    ),
-    Collection(
-      name: 'Band Practice',
-      subtitle: '3 videos',
-      categories: const ['🎥 3', '🗓 Jan 2025'],
-      hueIndex: 2,
-      copiesLabel: '2 copies alive',
-      collaboratorCount: 5,
-      media: List.generate(3, (i) => MediaItem(label: 'CLIP_${i + 1}')),
-      collaborators: _mockCollaborators(count: 5),
-    ),
-    Collection(
-      name: 'Studio Shoot',
-      subtitle: '540 photos',
-      categories: const ['📷 540', '🗓 Mar 2025'],
-      hueIndex: 3,
-      copiesLabel: '9 copies alive',
-      collaboratorCount: 34,
-      media: List.generate(9, (i) => MediaItem(label: 'RAW_${3000 + i}')),
-      collaborators: _mockCollaborators(count: 34),
-    ),
-  ];
-
-  static List<Collaborator> _mockCollaborators({int count = 100}) {
-    const names = [
-      'Maya',
-      'Theo',
-      'Priya',
-      'Sam',
-      'Nora',
-      'Kenji',
-      'Ilse',
-      'Milo',
-    ];
-    return List.generate(names.length.clamp(0, count), (i) {
-      final name = names[i % names.length];
-      return Collaborator(
-        initials: name[0],
-        name: name,
-        isAdmin: i == 0,
-        device: i.isEven ? 'iPhone' : 'MacBook',
-        upSpeed: '${(i + 1) * 120}KB/s',
-        downSpeed: '${(i + 2) * 80}KB/s',
-        percentComplete: (30 + i * 7) % 100,
-        piecesHeld: List.generate(24, (p) => (p + i) % 3 != 0),
-      );
-    });
-  }
+/// Rendering helpers shared by the swarm/peer screens — generic over any
+/// [Collection]/[Collaborator], real or mock.
+class SwarmVisuals {
+  SwarmVisuals._();
 
   /// Aggregate piece availability heatmap for a media item's swarm.
   static List<Color> aggregatePieceHeatmap(Collection collection) {

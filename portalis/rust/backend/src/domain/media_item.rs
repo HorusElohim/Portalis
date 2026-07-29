@@ -4,7 +4,7 @@ use super::manifest::InfoHash;
 /// live by a `SwarmEngine` adapter (see the backend README) — this type
 /// itself is a pure snapshot, no I/O.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DownloadState {
+pub(crate) enum DownloadState {
     NotStarted,
     Downloading,
     Complete,
@@ -12,7 +12,7 @@ pub enum DownloadState {
 }
 
 #[derive(Clone, Debug)]
-pub struct MediaItem {
+pub(crate) struct MediaItem {
     pub info_hash: InfoHash,
     pub state: DownloadState,
     /// 0.0..=1.0

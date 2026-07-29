@@ -12,7 +12,7 @@ const RENDEZVOUS_DOMAIN: &[u8] = b"smartshare.rendezvous.v1";
 /// the (public) DHT never sees anything an outside observer could invert
 /// back into the secret.
 #[derive(Clone, PartialEq, Eq)]
-pub struct InviteSecret([u8; 32]);
+pub(crate) struct InviteSecret([u8; 32]);
 
 impl InviteSecret {
     pub fn generate() -> Self {
@@ -47,7 +47,7 @@ impl InviteSecret {
 /// The public, DHT-visible key peers announce/look-up under for a given
 /// collection. See [`InviteSecret::derive_rendezvous_key`].
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RendezvousKey([u8; 32]);
+pub(crate) struct RendezvousKey([u8; 32]);
 
 impl std::fmt::Debug for RendezvousKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

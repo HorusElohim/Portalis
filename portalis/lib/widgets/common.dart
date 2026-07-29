@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import '../media_kind.dart';
+import '../models.dart';
 import '../theme.dart';
 
 /// Circular avatar with initials, matching the accent-800/600 avatar style.
@@ -240,6 +244,33 @@ class PlaceholderTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// A [MediaItem]'s thumbnail: the real downloaded image when one's ready,
+/// falling back to [PlaceholderTile] otherwise (not downloaded yet, or not
+/// an image). Used everywhere a media tile is shown — collection cards,
+/// grids, the media viewer — so real and mock media render identically.
+class MediaThumbnail extends StatelessWidget {
+  const MediaThumbnail({super.key, required this.media, this.borderRadius = 0});
+
+  final MediaItem media;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    if (media.isReady && isImage(media.label)) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: Image.file(
+          File(media.localPath!),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) =>
+              PlaceholderTile(label: media.label, borderRadius: borderRadius),
+        ),
+      );
+    }
+    return PlaceholderTile(label: media.label, borderRadius: borderRadius);
   }
 }
 

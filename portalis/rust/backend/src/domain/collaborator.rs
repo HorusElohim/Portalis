@@ -4,13 +4,13 @@ use super::identity::DeviceId;
 /// cryptographically enforced yet — see the backend README's "moderation
 /// semantics" open question. For now it's locally-tracked metadata.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Role {
+pub(crate) enum Role {
     Admin,
     Member,
 }
 
 #[derive(Clone, Debug)]
-pub struct Collaborator {
+pub(crate) struct Collaborator {
     pub device_id: DeviceId,
     pub display_name: String,
     pub role: Role,

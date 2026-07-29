@@ -18,9 +18,15 @@ function maybe_codegen() {
   fi
   echo "==> Regenerating flutter_rust_bridge bindings"
   # Use new CLI (2.x): rust_input expects crate paths, and rust_root points to the crate dir.
+  # IMPORTANT: list every bridged module explicitly (never the bare "crate"
+  # wildcard) — flutter_rust_bridge_codegen's crate-wide scan walks every
+  # `mod` declaration regardless of visibility (pub/pub(crate)/private all
+  # look the same to it), so a bare "crate" sweeps up internal-only modules
+  # like `domain` too and fails to compile (private fields it assumes are
+  # bridgeable). See rust/backend/README.md's "Flutter boundary API".
   flutter_rust_bridge_codegen generate \
     --rust-root "$CRATE" \
-    --rust-input crate \
+    --rust-input crate::bridge,crate::torrent \
     --dart-output "lib/bridge_generated" \
     --rust-output "$CRATE/src/api.rs"
 }

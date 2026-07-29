@@ -39,6 +39,14 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Cross-platform file picker, used by the Torrent tab to pick a .torrent
+  # file (magnet links are just a text field).
+  file_picker: ^11.0.2
+
+  # Opens a downloaded torrent file with the OS default app (image viewer,
+  # video player, etc.) from the Torrent tab's detail screen.
+  url_launcher: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

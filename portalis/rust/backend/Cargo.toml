@@ -26,6 +26,7 @@ uuid = { version = "1", features = ["v4"] }
 # excluded there rather than gated behind a feature no wasm code path uses.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 librqbit = { version = "8.1.1", default-features = false, features = ["rust-tls"] }
+dirs = "6"
 
 # The domain layer's randomness (device keygen, invite secrets, collection
 # ids) has no OS RNG to call into on wasm32 — route it through the browser's

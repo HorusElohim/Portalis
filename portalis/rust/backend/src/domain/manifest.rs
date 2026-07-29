@@ -8,7 +8,7 @@ use super::identity::{DeviceId, DeviceIdentity};
 /// the BitTorrent spec — 20 bytes, distinct from the 32-byte blake3 hashes
 /// used elsewhere in this crate for rendezvous keys and thumbnails).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct InfoHash([u8; 20]);
+pub(crate) struct InfoHash([u8; 20]);
 
 impl InfoHash {
     pub fn from_bytes(bytes: [u8; 20]) -> Self {
@@ -33,7 +33,7 @@ impl std::fmt::Debug for InfoHash {
 /// One media item, added to a collection by a specific device and signed
 /// by it. Immutable once created — see [`Manifest`] for why.
 #[derive(Clone)]
-pub struct ManifestEntry {
+pub(crate) struct ManifestEntry {
     pub info_hash: InfoHash,
     pub name: String,
     pub thumbnail_hash: Option<[u8; 32]>,
@@ -113,7 +113,7 @@ impl ManifestEntry {
 /// Removal/moderation isn't modeled yet — see the backend README's open
 /// questions; a grow-only set has no native "take something out."
 #[derive(Clone, Default)]
-pub struct Manifest {
+pub(crate) struct Manifest {
     entries: BTreeMap<InfoHash, ManifestEntry>,
 }
 

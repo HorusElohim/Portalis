@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models.dart';
+import '../services/torrent_collections.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'add_torrent_screen.dart';
 import 'collection_screen.dart';
-import 'share_screens.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final collections = MockData.collections;
     return Column(
       children: [
         Padding(
@@ -44,24 +44,33 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 0.78,
-            ),
-            itemCount: collections.length,
-            itemBuilder: (context, index) {
-              final c = collections[index];
-              return _CollectionCard(
-                collection: c,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CollectionScreen(collection: c),
-                  ),
+          child: ListenableBuilder(
+            listenable: TorrentCollections.instance,
+            builder: (context, _) {
+              final collections = TorrentCollections.instance.collections;
+              if (collections.isEmpty) {
+                return const _EmptyCollections();
+              }
+              return GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 0.78,
                 ),
+                itemCount: collections.length,
+                itemBuilder: (context, index) {
+                  final c = collections[index];
+                  return _CollectionCard(
+                    collection: c,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CollectionScreen(collection: c),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -70,14 +79,39 @@ class HomeScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
           child: Center(
             child: PillButton(
-              label: '＋ Share something',
+              label: '＋ Add torrent',
               onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ShareStep1Screen()),
+                MaterialPageRoute(builder: (_) => const AddTorrentScreen()),
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _EmptyCollections extends StatelessWidget {
+  const _EmptyCollections();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.hub_outlined, size: 32, color: AppColors.neutral500),
+            const SizedBox(height: 10),
+            Text(
+              'No collections yet — add a magnet link or a .torrent file to get started.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -107,7 +141,9 @@ class _CollectionCard extends StatelessWidget {
             children: [
               SizedBox(
                 height: 92,
-                child: PlaceholderTile(label: collection.media.first.label),
+                child: collection.media.isEmpty
+                    ? const PlaceholderTile()
+                    : MediaThumbnail(media: collection.media.first),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -116,6 +152,7 @@ class _CollectionCard extends StatelessWidget {
                   children: [
                     Text(
                       collection.name,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w500,

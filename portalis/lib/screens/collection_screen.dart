@@ -169,10 +169,7 @@ class CollectionScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              child: PlaceholderTile(
-                                label: m.label,
-                                borderRadius: 6,
-                              ),
+                              child: MediaThumbnail(media: m, borderRadius: 6),
                             ),
                           );
                         },
