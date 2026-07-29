@@ -7,7 +7,7 @@
 ## Highlights
 - **Rust-powered core** – Shared business logic compiled to native libraries or WebAssembly.
 - **Flutter UI** – A single Dart codebase that renders on Android, iOS, macOS, Windows, Linux, and the web.
-- **First-class tooling** – One-line setup wizards (`setup/wizard_linux.sh`, `setup/wizard_windows.ps1`), consolidated test scripts, and reproducible builds.
+- **First-class tooling** – One-line setup wizards (`setup/wizard_linux.sh`, `setup/wizard_darwin.sh`, `setup/wizard_windows.ps1`), consolidated test scripts, and reproducible builds.
 - **Ready-to-run CI** – GitHub Actions pipeline that tests Rust and Flutter code, then builds platform artifacts.
 - **Template friendly** – Automated migration assistant rewrites names, CI defaults, and docs for your next project.
 
@@ -18,7 +18,7 @@
 │   ├── lib/              # Flutter widgets and FRB-generated API surface
 │   ├── rust/backend/     # Rust crate compiled into native libs / wasm
 │   └── tool/             # Platform-specific build helpers
-├── setup/                # Environment bootstrap scripts for Linux & Windows
+├── setup/                # Environment bootstrap scripts for Linux, macOS & Windows
 ├── tests/                # Shell helpers to run Rust/Flutter test suites
 ├── scripts/              # Utility scripts (e.g., project migration)
 └── .github/              # GitHub Actions workflow and composite actions
@@ -36,6 +36,7 @@ Install the toolchains listed below before working on the project:
 To accelerate setup on fresh machines, run the platform wizard that matches your OS:
 
 - Linux: `./setup/wizard_linux.sh`
+- macOS: `./setup/wizard_darwin.sh`
 - Windows: `powershell -ExecutionPolicy Bypass -File .\setup\wizard_windows.ps1`
 
 Each wizard installs common dependencies, configures environment variables, and validates with `flutter doctor` plus `rustc`/`cargo` checks. Re-running is safe and idempotent.
@@ -78,7 +79,7 @@ The GitHub Actions workflow (`.github/workflows/pipeline.yml`) executes the foll
 Composite actions in `.github/actions/` encapsulate platform-specific build steps so they can be reused or adapted in other workflows.
 
 ## Tooling & Scripts
-- `setup/wizard_linux.sh` / `setup/wizard_windows.ps1` – System bootstrap.
+- `setup/wizard_linux.sh` / `setup/wizard_darwin.sh` / `setup/wizard_windows.ps1` – System bootstrap.
 - `tests/*.sh` – Test runners used locally and in CI.
 - `scripts/project_migration.py` – Migration Assistant (see below).
 - `portalis/tool/frb_build.sh` – Runs `flutter_rust_bridge` code generation for specific targets.
