@@ -183,35 +183,6 @@ class PillButton extends StatelessWidget {
   }
 }
 
-/// A thin horizontal strip of colored segments (piece heatmap / availability).
-class PieceStrip extends StatelessWidget {
-  const PieceStrip({super.key, required this.colors, this.height = 14});
-
-  final List<Color> colors;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(3),
-      child: SizedBox(
-        height: height,
-        child: Row(
-          children: [
-            for (final c in colors)
-              Expanded(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 0.75),
-                  color: c,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Placeholder tile standing in for real thumbnails/covers/media — shown
 /// for anything not downloaded yet, and for any file type real thumbnails
 /// don't apply to (video frames aren't extracted, audio/subtitles/other
@@ -405,9 +376,13 @@ class _PerimeterProgressPainter extends CustomPainter {
     );
     if (rect.width <= 0 || rect.height <= 0) return;
     final rrect = borderRadius.toRRect(rect);
-    final metrics = (Path()..addRRect(rrect)).computeMetrics();
-    if (metrics.isEmpty) return;
-    final metric = metrics.first;
+    // PathMetrics is single-use (backed by a native iterator) — checking
+    // `.isEmpty` and then reading `.first` are two separate traversals, and
+    // the first one silently consumes the only metric, leaving `.first` to
+    // find nothing and throw. Pull the iterator once instead.
+    final iterator = (Path()..addRRect(rrect)).computeMetrics().iterator;
+    if (!iterator.moveNext()) return;
+    final metric = iterator.current;
     final extracted = metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
     canvas.drawPath(
       extracted,

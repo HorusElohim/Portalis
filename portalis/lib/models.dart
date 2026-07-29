@@ -6,6 +6,8 @@ class MediaItem {
     required this.label,
     this.localPath,
     this.progress = 1.0,
+    this.sizeBytes = 0,
+    this.downloadedBytes = 0,
   });
 
   final String label;
@@ -18,6 +20,11 @@ class MediaItem {
   /// downloading; real torrent-backed media reports its actual progress.
   final double progress;
 
+  /// Real byte counts from the torrent engine, for the details panel's
+  /// "X of Y downloaded" display. Zero for mock data.
+  final int sizeBytes;
+  final int downloadedBytes;
+
   bool get isReady => localPath != null && progress >= 1.0;
 }
 
@@ -26,23 +33,11 @@ class Collaborator {
     required this.initials,
     required this.name,
     this.isAdmin = false,
-    this.device = 'iPhone',
-    this.upSpeed = '0 KB/s',
-    this.downSpeed = '0 KB/s',
-    this.percentComplete = 0,
-    this.piecesHeld = const <bool>[],
   });
 
   final String initials;
   final String name;
   final bool isAdmin;
-  final String device;
-  final String upSpeed;
-  final String downSpeed;
-  final int percentComplete;
-
-  /// Which pieces (of the currently-open media item) this peer holds.
-  final List<bool> piecesHeld;
 }
 
 class Collection {
@@ -58,6 +53,10 @@ class Collection {
     this.progress = 1.0,
     this.downloadedBytes = 0,
     this.uploadedBytes = 0,
+    this.downloadMbps = 0.0,
+    this.uploadMbps = 0.0,
+    this.state = '',
+    this.infoHash = '',
   });
 
   final String name;
@@ -79,28 +78,12 @@ class Collection {
   final int downloadedBytes;
   final int uploadedBytes;
 
+  /// Real live transfer rates and torrent state, for the media details
+  /// panel. Zero/empty for mock data.
+  final double downloadMbps;
+  final double uploadMbps;
+  final String state;
+  final String infoHash;
+
   Color get hue => AppColors.hueAt(hueIndex);
-}
-
-/// Rendering helpers shared by the swarm/peer screens — generic over any
-/// [Collection]/[Collaborator], real or mock.
-class SwarmVisuals {
-  SwarmVisuals._();
-
-  /// Aggregate piece availability heatmap for a media item's swarm.
-  static List<Color> aggregatePieceHeatmap(Collection collection) {
-    return List.generate(30, (i) {
-      final copies = 1 + ((i * 7 + collection.hueIndex) % 6);
-      final opacity = (0.35 + (copies / 6) * 0.65).clamp(0.0, 1.0);
-      return collection.hue.withValues(alpha: opacity);
-    });
-  }
-
-  static List<Color> pieceStrip(Collaborator c) {
-    return c.piecesHeld
-        .map((held) => held
-            ? AppColors.accent
-            : AppColors.borderStrong)
-        .toList();
-  }
 }

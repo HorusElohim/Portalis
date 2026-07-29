@@ -170,6 +170,8 @@ class TorrentCollections extends ChangeNotifier {
         label: f.name,
         localPath: fileProgress >= 1.0 ? f.absolutePath : null,
         progress: fileProgress,
+        sizeBytes: f.lengthBytes.toInt(),
+        downloadedBytes: f.downloadedBytes.toInt(),
       );
     }).toList();
 
@@ -192,6 +194,10 @@ class TorrentCollections extends ChangeNotifier {
       progress: progress,
       downloadedBytes: info.progressBytes.toInt(),
       uploadedBytes: info.uploadedBytes.toInt(),
+      downloadMbps: info.downloadMbps,
+      uploadMbps: info.uploadMbps,
+      state: info.state,
+      infoHash: info.infoHash,
     );
   }
 }

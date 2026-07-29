@@ -8,7 +8,7 @@ import '../media_kind.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
-import 'swarm_screen.dart';
+import 'media_details_screen.dart';
 
 class MediaViewerScreen extends StatefulWidget {
   const MediaViewerScreen({
@@ -114,7 +114,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                         label: 'Details',
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => SwarmScreen(
+                            builder: (_) => MediaDetailsScreen(
                               collection: collection,
                               media: media,
                             ),
