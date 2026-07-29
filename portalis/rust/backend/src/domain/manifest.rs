@@ -101,6 +101,35 @@ impl ManifestEntry {
         );
         self.added_by.verify(&payload, &self.signature)
     }
+
+    /// Reconstructs an already-signed entry — for loading one back from
+    /// persisted storage, or receiving one from a peer during manifest
+    /// sync. Unlike `new_signed`, this does not compute a fresh signature;
+    /// call `.verify()` afterward if the signature's authenticity still
+    /// needs checking (always true for anything arriving from a peer).
+    pub fn from_signed_parts(
+        info_hash: InfoHash,
+        name: String,
+        thumbnail_hash: Option<[u8; 32]>,
+        added_by: DeviceId,
+        added_at_unix_ms: i64,
+        signature: Signature,
+    ) -> Self {
+        Self {
+            info_hash,
+            name,
+            thumbnail_hash,
+            added_by,
+            added_at_unix_ms,
+            signature,
+        }
+    }
+
+    /// The raw signature bytes — the counterpart to `from_signed_parts`,
+    /// for persisting/transmitting an entry as-is.
+    pub fn signature_bytes(&self) -> [u8; 64] {
+        self.signature.to_bytes()
+    }
 }
 
 /// A collection's set of media items: add-only, mergeable from any peer, no
@@ -250,6 +279,24 @@ mod tests {
         a.merge(&b);
 
         assert_eq!(a.len(), 1);
+    }
+
+    #[test]
+    fn from_signed_parts_round_trips_and_still_verifies() {
+        let identity = DeviceIdentity::generate();
+        let original = entry(&identity, 1);
+
+        let reconstructed = ManifestEntry::from_signed_parts(
+            original.info_hash,
+            original.name.clone(),
+            original.thumbnail_hash,
+            original.added_by,
+            original.added_at_unix_ms,
+            Signature::from_bytes(&original.signature_bytes()),
+        );
+
+        assert!(reconstructed.verify());
+        assert_eq!(reconstructed.info_hash, original.info_hash);
     }
 
     #[test]

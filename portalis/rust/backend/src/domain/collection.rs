@@ -11,6 +11,13 @@ impl CollectionId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
+
+    /// Parses an id previously produced by `Display` — for reloading a
+    /// persisted collection back with its *same* id, unlike `join`'s fresh
+    /// `CollectionId::new()` (see `from_parts`).
+    pub fn from_string(s: &str) -> anyhow::Result<Self> {
+        Ok(Self(Uuid::parse_str(s)?))
+    }
 }
 
 impl std::fmt::Display for CollectionId {
@@ -50,6 +57,27 @@ impl Collection {
             invite_secret,
             collaborators: Vec::new(),
             manifest: Manifest::new(),
+        }
+    }
+
+    /// Reconstructs a collection from persisted state — the counterpart to
+    /// `new`/`join`, used when loading `collections.json` back in after an
+    /// app restart. Unlike `join`, this restores the *exact same*
+    /// `CollectionId` rather than minting a fresh local handle, since this
+    /// really is continuing the same local record, not creating a new one.
+    pub fn from_parts(
+        id: CollectionId,
+        name: String,
+        invite_secret: InviteSecret,
+        collaborators: Vec<Collaborator>,
+        manifest: Manifest,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            invite_secret,
+            collaborators,
+            manifest,
         }
     }
 
@@ -106,6 +134,43 @@ mod tests {
         // Joining locally creates a distinct CollectionId — it's a
         // different device's local record of the same shared collection.
         assert_ne!(original.id, joined.id);
+    }
+
+    #[test]
+    fn collection_id_round_trips_through_string() {
+        let id = CollectionId::new();
+
+        assert_eq!(CollectionId::from_string(&id.to_string()).unwrap(), id);
+    }
+
+    #[test]
+    fn from_parts_reconstructs_the_exact_same_id_and_manifest() {
+        let identity = DeviceIdentity::generate();
+        let original = Collection::new("Studio Shoot".into());
+        let secret = InviteSecret::from_hex(&original.invite_secret_hex()).unwrap();
+        let mut manifest = Manifest::new();
+        manifest.add(ManifestEntry::new_signed(
+            InfoHash::from_bytes([9; 20]),
+            "RAW_9000".into(),
+            None,
+            &identity,
+            7,
+        ));
+
+        let reloaded = Collection::from_parts(
+            original.id,
+            original.name.clone(),
+            secret,
+            Vec::new(),
+            manifest,
+        );
+
+        assert_eq!(reloaded.id, original.id);
+        assert_eq!(reloaded.manifest().len(), 1);
+        assert_eq!(
+            reloaded.rendezvous_key().to_hex(),
+            original.rendezvous_key().to_hex()
+        );
     }
 
     #[test]

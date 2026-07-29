@@ -8,3 +8,4 @@ pub mod bridge;
 // non-wasm32 in Cargo.toml; torrent.rs's internals mirror that.
 pub mod torrent;
 pub mod device;
+pub mod collab;

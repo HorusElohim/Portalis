@@ -40,6 +40,20 @@ pub fn set_nickname(nickname: String) -> anyhow::Result<DeviceIdentityInfo> {
     }
 }
 
+/// The actual signing keypair — for other backend modules that need to
+/// sign something themselves (e.g. `collab.rs` signing manifest entries),
+/// never exposed to Flutter directly the way `device_identity()`'s DTO is.
+pub(crate) fn current_identity() -> anyhow::Result<crate::domain::identity::DeviceIdentity> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::load_or_create().map(|(identity, _nickname)| identity)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        anyhow::bail!("Device identity isn't available on Web yet.")
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::path::PathBuf;
@@ -68,7 +82,7 @@ mod native {
         base.join("Portalis").join("identity.json")
     }
 
-    fn load_or_create() -> anyhow::Result<(DeviceIdentity, String)> {
+    pub(super) fn load_or_create() -> anyhow::Result<(DeviceIdentity, String)> {
         let path = identity_file();
         if let Ok(bytes) = std::fs::read(&path) {
             let persisted: PersistedIdentity =
