@@ -12,8 +12,24 @@ flutter_rust_bridge = "=2.11.1"
 tokio = { version = "1", features = ["rt"] }
 anyhow = "1.0"
 
+# Domain layer: device identity (signing) and content-addressing (rendezvous
+# keys, manifest entry ids). Pure Rust, no OS-specific bits — safe on every
+# target including wasm32.
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+blake3 = "1"
+hex = "0.4"
+uuid = { version = "1", features = ["v4"] }
+
 # librqbit (BitTorrent engine) needs real OS sockets (via tokio/mio), which
 # don't exist on wasm32 — Web is a viewer, not a swarm participant, so it's
 # excluded there rather than gated behind a feature no wasm code path uses.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 librqbit = { version = "8.1.1", default-features = false, features = ["rust-tls"] }
+
+# The domain layer's randomness (device keygen, invite secrets, collection
+# ids) has no OS RNG to call into on wasm32 — route it through the browser's
+# crypto API instead so the domain layer really is usable on every target.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+uuid = { version = "1", features = ["v4", "js"] }
