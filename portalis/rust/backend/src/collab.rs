@@ -53,15 +53,7 @@ pub struct ManifestEntryInfo {
 /// open moderation-semantics question for why this isn't enforced beyond
 /// local display).
 pub async fn create_collab_collection(name: String) -> anyhow::Result<CollabCollectionInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::create_collab_collection(name).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = name;
-        native::unsupported_on_web()
-    }
+    native::create_collab_collection(name).await
 }
 
 /// Joins a collection from an invite code someone else shared. Adds this
@@ -72,15 +64,7 @@ pub async fn join_collab_collection(
     invite_code: String,
     display_name: String,
 ) -> anyhow::Result<CollabCollectionInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::join_collab_collection(invite_code, display_name).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = (invite_code, display_name);
-        native::unsupported_on_web()
-    }
+    native::join_collab_collection(invite_code, display_name).await
 }
 
 /// Adds a new batch of local files as one new signed manifest entry —
@@ -93,27 +77,12 @@ pub async fn add_media_to_collab_collection(
     label: String,
     files: Vec<crate::torrent::NewFile>,
 ) -> anyhow::Result<CollabCollectionInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::add_media_to_collab_collection(collection_id, label, files).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = (collection_id, label, files);
-        native::unsupported_on_web()
-    }
+    native::add_media_to_collab_collection(collection_id, label, files).await
 }
 
 /// Every collab collection this device knows about (created or joined).
 pub async fn list_collab_collections() -> anyhow::Result<Vec<CollabCollectionInfo>> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::list_collab_collections().await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        native::unsupported_on_web()
-    }
+    native::list_collab_collections().await
 }
 
 /// Starts this device's manifest-sync listener (idempotent) and returns
@@ -122,14 +91,7 @@ pub async fn list_collab_collections() -> anyhow::Result<Vec<CollabCollectionInf
 /// rendezvous removes the need to ever show or type an address (see
 /// `collab_sync.rs`).
 pub async fn collab_sync_address() -> anyhow::Result<String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::collab_sync_address().await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        native::unsupported_on_web()
-    }
+    native::collab_sync_address().await
 }
 
 /// Starts downloading every media item in this collection over ordinary
@@ -137,15 +99,7 @@ pub async fn collab_sync_address() -> anyhow::Result<String> {
 /// direct connection hints (no DHT wait on a LAN). Returns how many items
 /// were added.
 pub async fn fetch_collab_collection_media(collection_id: String) -> anyhow::Result<u32> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::fetch_collab_collection_media(collection_id).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = collection_id;
-        native::unsupported_on_web()
-    }
+    native::fetch_collab_collection_media(collection_id).await
 }
 
 /// One full manifest sync with the peer at `peer_addr`: exchange signed
@@ -155,15 +109,7 @@ pub async fn sync_collab_collection(
     collection_id: String,
     peer_addr: String,
 ) -> anyhow::Result<CollabCollectionInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::sync_collab_collection(collection_id, peer_addr).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = (collection_id, peer_addr);
-        native::unsupported_on_web()
-    }
+    native::sync_collab_collection(collection_id, peer_addr).await
 }
 
 /// Forgets this collab collection on this device — removes it from
@@ -172,18 +118,9 @@ pub async fn sync_collab_collection(
 /// "delete for everyone" in a grow-only-manifest design, and this doesn't
 /// attempt one.
 pub async fn delete_collab_collection(collection_id: String) -> anyhow::Result<()> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::delete_collab_collection(collection_id).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = collection_id;
-        native::unsupported_on_web()
-    }
+    native::delete_collab_collection(collection_id).await
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 mod native {
     use anyhow::Context;
     use crate::collab_store::with_store;
@@ -614,13 +551,3 @@ mod native {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-mod native {
-    pub(super) fn unsupported_on_web<T>() -> anyhow::Result<T> {
-        anyhow::bail!(
-            "Collaborative collections need real OS sockets, which aren't \
-             available on Web. Run this on macOS, Android, iOS, Linux, or \
-             Windows instead."
-        )
-    }
-}

@@ -63,57 +63,26 @@ pub struct NewFile {
 /// shape either way (see the backend README on why: it's the same
 /// protocol regardless of which side of the swarm you started on).
 pub async fn create_collection(name: String, files: Vec<NewFile>) -> anyhow::Result<TorrentInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::create_collection(name, files).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = (name, files);
-        native::unsupported_on_web()
-    }
+    native::create_collection(name, files).await
 }
 
 /// Add a torrent from a magnet link (or bare 40-char info-hash, which
 /// `librqbit` also accepts as a magnet-equivalent).
 pub async fn add_torrent_from_magnet(magnet_or_hash: String) -> anyhow::Result<TorrentInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::add_torrent_from_magnet(magnet_or_hash).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = magnet_or_hash;
-        native::unsupported_on_web()
-    }
+    native::add_torrent_from_magnet(magnet_or_hash).await
 }
 
 /// Add a torrent from the raw bytes of a `.torrent` file (as picked by
 /// Flutter's file picker and passed across the FFI boundary).
 pub async fn add_torrent_from_file_bytes(bytes: Vec<u8>) -> anyhow::Result<TorrentInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::add_torrent_from_file_bytes(bytes).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = bytes;
-        native::unsupported_on_web()
-    }
+    native::add_torrent_from_file_bytes(bytes).await
 }
 
 /// Snapshot of every torrent currently managed by the debug session. The
 /// Flutter side polls this on a timer — this is a smoke test, not the
 /// push-based `watch_*` design the real Collections API will use.
 pub async fn list_torrents() -> anyhow::Result<Vec<TorrentInfo>> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::list_torrents().await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        native::unsupported_on_web()
-    }
+    native::list_torrents().await
 }
 
 /// Where downloaded files actually land, so the UI can show the user a real
@@ -122,49 +91,26 @@ pub async fn list_torrents() -> anyhow::Result<Vec<TorrentInfo>> {
 /// backend README) will replace this later; for this smoke test it's just
 /// the platform Downloads folder.
 pub fn output_dir() -> anyhow::Result<String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        Ok(native::output_dir().display().to_string())
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        native::unsupported_on_web()
-    }
+    Ok(native::output_dir().display().to_string())
 }
 
 /// Real disk usage of everything downloaded/shared so far — the Settings
 /// screen's storage meter. Recursive over `output_dir()`.
 pub async fn storage_usage_bytes() -> anyhow::Result<u64> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::storage_usage_bytes().await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        native::unsupported_on_web()
-    }
+    native::storage_usage_bytes().await
 }
 
 /// Caps upload speed across every torrent at once (not per-torrent) —
 /// `librqbit`'s `Session::ratelimits` is adjustable at runtime, no restart
 /// needed. `None`/0 means unlimited.
 pub async fn set_upload_limit_bps(bytes_per_sec: Option<u32>) -> anyhow::Result<()> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::set_upload_limit_bps(bytes_per_sec).await
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = bytes_per_sec;
-        native::unsupported_on_web()
-    }
+    native::set_upload_limit_bps(bytes_per_sec).await
 }
 
 /// The BitTorrent session's own listen port — for `collab_sync.rs` to
 /// advertise in sync messages (so peers can fetch our seeded media
 /// directly). Internal, never bridged (`pub(crate)` is invisible to FRB's
 /// scan, same as `device::current_identity`).
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn bt_listen_port() -> anyhow::Result<Option<u16>> {
     native::bt_listen_port().await
 }
@@ -173,7 +119,6 @@ pub(crate) async fn bt_listen_port() -> anyhow::Result<Option<u16>> {
 /// `collab_sync.rs`'s learned "who has this collection's media" addresses
 /// go straight to librqbit as `initial_peers`, so a LAN fetch connects to
 /// the seeder immediately instead of waiting on DHT discovery.
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn add_info_hash_with_peers(
     info_hash_hex: &str,
     peers: Vec<std::net::SocketAddr>,
@@ -181,7 +126,6 @@ pub(crate) async fn add_info_hash_with_peers(
     native::add_info_hash_with_peers(info_hash_hex, peers).await
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -477,12 +421,3 @@ mod native {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-mod native {
-    pub(super) fn unsupported_on_web<T>() -> anyhow::Result<T> {
-        anyhow::bail!(
-            "Torrent features need real OS sockets, which aren't available on Web. \
-             Run this on macOS, Android, iOS, Linux, or Windows instead."
-        )
-    }
-}

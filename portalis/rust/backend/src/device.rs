@@ -16,45 +16,22 @@ pub struct DeviceIdentityInfo {
 
 /// Loads the persisted identity, generating and saving one on first call.
 pub fn device_identity() -> anyhow::Result<DeviceIdentityInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::device_identity()
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        native::unsupported_on_web()
-    }
+    native::device_identity()
 }
 
 /// Renames this device's identity (display name only — the keypair itself
 /// never changes).
 pub fn set_nickname(nickname: String) -> anyhow::Result<DeviceIdentityInfo> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::set_nickname(nickname)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = nickname;
-        native::unsupported_on_web()
-    }
+    native::set_nickname(nickname)
 }
 
 /// The actual signing keypair — for other backend modules that need to
 /// sign something themselves (e.g. `collab.rs` signing manifest entries),
 /// never exposed to Flutter directly the way `device_identity()`'s DTO is.
 pub(crate) fn current_identity() -> anyhow::Result<crate::domain::identity::DeviceIdentity> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        native::load_or_create().map(|(identity, _nickname)| identity)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        anyhow::bail!("Device identity isn't available on Web yet.")
-    }
+    native::load_or_create().map(|(identity, _nickname)| identity)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::path::PathBuf;
     use std::sync::Mutex;
@@ -152,9 +129,3 @@ mod native {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-mod native {
-    pub(super) fn unsupported_on_web<T>() -> anyhow::Result<T> {
-        anyhow::bail!("Device identity isn't available on Web yet.")
-    }
-}
