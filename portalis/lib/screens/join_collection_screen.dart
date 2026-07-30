@@ -115,15 +115,20 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
       _error = null;
     });
     try {
+      // Returns as soon as the local join record exists — any sync with
+      // the addresses embedded in the code happens in the background
+      // (see collab.rs::join_collab_collection), so `info.media` here is
+      // always the pre-sync snapshot, not a verdict on whether it worked.
       final info = await CollabCollections.instance
           .joinCollection(_codeController.text.trim(), _nickname);
       if (mounted) {
         FocusScope.of(context).unfocus();
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(info.media.isEmpty
-              ? 'Joined "${info.name}" — no media synced yet'
-              : 'Joined "${info.name}" — ${info.media.length} media synced'),
+          content: Text(
+            'Joined "${info.name}" — syncing in the background, check the '
+            'User screen shortly',
+          ),
         ));
       }
     } catch (e) {

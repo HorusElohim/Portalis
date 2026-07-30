@@ -329,7 +329,7 @@ mod native {
             &rendezvous_key_hex[..8.min(rendezvous_key_hex.len())],
         );
 
-        let (id, mut info) = with_store(|collections| {
+        let (id, info) = with_store(|collections| {
             let mut collection = Collection::join(name.to_string(), secret);
             collection.collaborators.push(Collaborator::new(
                 identity.device_id(),
@@ -344,35 +344,30 @@ mod native {
         })?;
         clog!("collab", "join: local record created, id={id}");
 
-        // Best-effort immediate sync with the inviter, via the addresses
-        // embedded in the code — this is what makes joining feel like
-        // "the collection appears", not an empty shell. Failure is fine
-        // (inviter offline, different network): the join itself stands and
-        // a manual sync can happen later.
+        // Best-effort sync with the inviter, via the addresses embedded in
+        // the code — run in the *background*, not awaited here. Either
+        // address can take up to ~15s to time out (and there can be two),
+        // which made a plain `.await` here look like the app had hung on
+        // join; the join itself must stand immediately regardless of
+        // whether those addresses turn out to be reachable. Whoever's
+        // looking at the collection (User screen, or the manual sync
+        // button) picks up the result once/if this finishes — there's
+        // deliberately no signal back to the caller of *this* function.
         if peer_addrs.is_empty() {
             clog!("collab", "join: invite carried no addresses, skipping auto-sync");
-        }
-        let sync_result = if peer_addrs.is_empty() {
-            None
         } else {
-            Some(crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs).await)
-        };
-        if let Some(Err(e)) = &sync_result {
-            clog!("collab", "join: auto-sync failed: {e:?}");
-        }
-        if matches!(sync_result, Some(Ok(()))) {
-            clog!("collab", "join: auto-sync succeeded");
-            info = with_store(|collections| {
-                collections
-                    .iter()
-                    .find(|c| c.id == id)
-                    .map(|c| to_info(c, &own_addrs))
-                    .ok_or_else(|| anyhow::anyhow!("collection vanished during join sync"))
-            })?;
+            let rendezvous_key_hex = rendezvous_key_hex.clone();
+            tokio::spawn(async move {
+                match crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs).await {
+                    Ok(()) => clog!("collab", "join: background auto-sync succeeded"),
+                    Err(e) => clog!("collab", "join: background auto-sync failed: {e:?}"),
+                }
+            });
         }
         clog!(
             "collab",
-            "join_collab_collection: done, media={} collaborators={}",
+            "join_collab_collection: done (returning immediately, sync continues in background), \
+             media={} collaborators={}",
             info.media.len(),
             info.collaborators.len()
         );
