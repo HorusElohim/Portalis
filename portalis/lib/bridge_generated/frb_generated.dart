@@ -765,17 +765,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MediaInfo dco_decode_media_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return MediaInfo(
       name: dco_decode_String(arr[0]),
-      infoHash: dco_decode_String(arr[1]),
-      absolutePath: dco_decode_opt_String(arr[2]),
-      lengthBytes: dco_decode_u_64(arr[3]),
-      downloadedBytes: dco_decode_u_64(arr[4]),
-      progress: dco_decode_f_64(arr[5]),
-      fetched: dco_decode_bool(arr[6]),
-      addedBy: dco_decode_opt_String(arr[7]),
+      entryName: dco_decode_String(arr[1]),
+      infoHash: dco_decode_String(arr[2]),
+      absolutePath: dco_decode_opt_String(arr[3]),
+      lengthBytes: dco_decode_u_64(arr[4]),
+      downloadedBytes: dco_decode_u_64(arr[5]),
+      progress: dco_decode_f_64(arr[6]),
+      fetched: dco_decode_bool(arr[7]),
+      addedBy: dco_decode_opt_String(arr[8]),
     );
   }
 
@@ -1064,6 +1065,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MediaInfo sse_decode_media_info(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
+    var var_entryName = sse_decode_String(deserializer);
     var var_infoHash = sse_decode_String(deserializer);
     var var_absolutePath = sse_decode_opt_String(deserializer);
     var var_lengthBytes = sse_decode_u_64(deserializer);
@@ -1073,6 +1075,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_addedBy = sse_decode_opt_String(deserializer);
     return MediaInfo(
         name: var_name,
+        entryName: var_entryName,
         infoHash: var_infoHash,
         absolutePath: var_absolutePath,
         lengthBytes: var_lengthBytes,
@@ -1349,6 +1352,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_media_info(MediaInfo self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
+    sse_encode_String(self.entryName, serializer);
     sse_encode_String(self.infoHash, serializer);
     sse_encode_opt_String(self.absolutePath, serializer);
     sse_encode_u_64(self.lengthBytes, serializer);

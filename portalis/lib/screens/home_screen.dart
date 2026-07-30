@@ -76,8 +76,14 @@ class HomeScreen extends StatelessWidget {
             listenable: Collections.instance,
             builder: (context, _) {
               final collections = Collections.instance.collections;
+              final error = Collections.instance.lastError;
               if (collections.isEmpty) {
-                return const _EmptyCollections();
+                // A backend that failed to answer must not look identical to
+                // a backend that answered "nothing" — that ambiguity is what
+                // made earlier failures so hard to spot.
+                return error != null
+                    ? _CollectionsError(message: error)
+                    : const _EmptyCollections();
               }
               return ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -158,6 +164,47 @@ class _UserAvatarState extends State<_UserAvatar> {
 
   @override
   Widget build(BuildContext context) => Avatar(initials: _initials, size: 36);
+}
+
+/// Shown instead of the empty state when the backend itself failed, so the
+/// two are distinguishable. The raw message is included deliberately — it's
+/// the only place a Rust-side error reaches the user.
+class _CollectionsError extends StatelessWidget {
+  const _CollectionsError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 40, color: Color(0xFFEB5757)),
+            const SizedBox(height: 14),
+            const Text(
+              'Couldn\'t load your collections.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.5, height: 1.5),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 10.5,
+                height: 1.4,
+                fontFamily: 'monospace',
+                color: AppColors.neutral400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _EmptyCollections extends StatelessWidget {

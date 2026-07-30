@@ -132,7 +132,7 @@ async fn read_frame<R: AsyncReadExt + Unpin>(r: &mut R) -> anyhow::Result<WireFr
     anyhow::ensure!(len <= MAX_FRAME_BYTES, "peer sent an oversized frame");
     let mut bytes = vec![0u8; len as usize];
     r.read_exact(&mut bytes).await.context("reading frame body")?;
-    Ok(serde_json::from_slice(&bytes).context("parsing frame")?)
+    serde_json::from_slice(&bytes).context("parsing frame")
 }
 
 /// Snapshot of our local state for the collection with this rendezvous
@@ -531,9 +531,13 @@ pub(crate) fn lan_ips() -> Vec<String> {
             .then(b.has_broadcast.cmp(&a.has_broadcast))
             .then(b.is_private.cmp(&a.is_private))
     });
-    candidates.dedup_by(|a, b| a.ip == b.ip);
+    // Not `dedup_by`, which only collapses *adjacent* equals: the same
+    // address can appear on two interfaces whose ranking flags differ, which
+    // sorts them apart and would advertise it twice.
+    let mut seen = std::collections::HashSet::new();
+    candidates.retain(|c| seen.insert(c.ip));
 
-    if candidates.is_empty() {
+    if candidates.is_empty() { 
         clog!("collab_sync", "lan_ips: no usable interface addresses — falling back to \
              127.0.0.1, which only works for syncing with yourself");
         return vec!["127.0.0.1".to_string()];

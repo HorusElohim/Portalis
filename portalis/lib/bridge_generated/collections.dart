@@ -209,6 +209,15 @@ enum CollectionKind {
 class MediaInfo {
   final String name;
 
+  /// The label of the *manifest entry* this file belongs to, as signed by
+  /// whoever added it — the batch name, not this file's name. Several files
+  /// share one. For a plain torrent it's the torrent's own name.
+  ///
+  /// Carried explicitly because flattening a collection's entries into a
+  /// file list otherwise loses it entirely, leaving the UI to guess an
+  /// entry's label from its first file.
+  final String entryName;
+
   /// The info-hash of the torrent (i.e. the manifest entry) this file
   /// belongs to — several files can share one.
   final String infoHash;
@@ -229,6 +238,7 @@ class MediaInfo {
 
   const MediaInfo({
     required this.name,
+    required this.entryName,
     required this.infoHash,
     this.absolutePath,
     required this.lengthBytes,
@@ -241,6 +251,7 @@ class MediaInfo {
   @override
   int get hashCode =>
       name.hashCode ^
+      entryName.hashCode ^
       infoHash.hashCode ^
       absolutePath.hashCode ^
       lengthBytes.hashCode ^
@@ -255,6 +266,7 @@ class MediaInfo {
       other is MediaInfo &&
           runtimeType == other.runtimeType &&
           name == other.name &&
+          entryName == other.entryName &&
           infoHash == other.infoHash &&
           absolutePath == other.absolutePath &&
           lengthBytes == other.lengthBytes &&

@@ -159,22 +159,30 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
     if (source == null || !mounted) return;
 
+    // Picking has to be guarded too, not just the upload that follows it: a
+    // denied photo-library permission throws out of the picker, and an
+    // unhandled throw here would surface as nothing happening at all.
     List<({String name, Uint8List bytes})> picked = [];
-    if (source == 'photos') {
-      final xfiles = await ImagePicker().pickMultipleMedia();
-      picked = await Future.wait(
-        xfiles.map((f) async => (name: f.name, bytes: await f.readAsBytes())),
-      );
-    } else {
-      final result = await FilePicker.pickFiles(
-        withData: true,
-        allowMultiple: true,
-        type: FileType.any,
-      );
-      picked = (result?.files ?? [])
-          .where((f) => f.bytes != null)
-          .map((f) => (name: f.name, bytes: f.bytes!))
-          .toList();
+    try {
+      if (source == 'photos') {
+        final xfiles = await ImagePicker().pickMultipleMedia();
+        picked = await Future.wait(
+          xfiles.map((f) async => (name: f.name, bytes: await f.readAsBytes())),
+        );
+      } else {
+        final result = await FilePicker.pickFiles(
+          withData: true,
+          allowMultiple: true,
+          type: FileType.any,
+        );
+        picked = (result?.files ?? [])
+            .where((f) => f.bytes != null)
+            .map((f) => (name: f.name, bytes: f.bytes!))
+            .toList();
+      }
+    } catch (e) {
+      _toast('Couldn\'t read those files: $e');
+      return;
     }
     if (picked.isEmpty || !mounted) return;
 
@@ -257,8 +265,17 @@ class _CollectionScreenState extends State<CollectionScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await Collections.instance.delete(_collection.id);
-    if (mounted) Navigator.of(context).pop();
+    // Not fire-and-forget: deleting genuinely fails (a torrent that isn't in
+    // the session, a store write that can't land), and without this the
+    // dialog would just close with nothing happening and no error shown.
+    setState(() => _busy = true);
+    try {
+      await Collections.instance.delete(_collection.id);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      _toast('Couldn\'t remove this collection: $e');
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override

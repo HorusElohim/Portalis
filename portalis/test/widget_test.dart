@@ -11,11 +11,16 @@ import 'package:portalis/screens/share_screen.dart';
 import 'package:portalis/screens/user_screen.dart';
 
 void main() {
-  testWidgets('Renders home screen with an empty-collections state',
+  testWidgets('Home distinguishes a failed backend from an empty one',
       (tester) async {
-    // RustLib isn't initialized in a widget test (no real native library
-    // loaded), so there are no real torrents/collections — Home should show
-    // its empty state plus the three Add-flow actions.
+    // RustLib isn't initialized in a widget test (no native library loaded),
+    // so listCollections genuinely *fails* here — Home must say so rather
+    // than showing the empty state.
+    //
+    // This assertion used to read "Nothing here yet", which passed only
+    // because the failure was being swallowed: a backend that errored looked
+    // exactly like one holding no collections. That ambiguity is precisely
+    // what made real failures so hard to spot on device.
     await tester.pumpWidget(const MyApp());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1100));
@@ -24,7 +29,8 @@ void main() {
     expect(find.text('Share something'), findsOneWidget);
     expect(find.text('Join a collection'), findsOneWidget);
     expect(find.text('Torrent'), findsOneWidget);
-    expect(find.textContaining('Nothing here yet'), findsOneWidget);
+    expect(find.textContaining('Couldn\'t load your collections'), findsOneWidget);
+    expect(find.textContaining('Nothing here yet'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -195,9 +201,9 @@ void main() {
       kind: CollectionKind.shared,
       collaborators: [],
       media: [
-        MediaItem(label: 'a.mp4', infoHash: 'aa', sizeBytes: 100, downloadedBytes: 100, addedBy: 'dev1'),
-        MediaItem(label: 'b.mp4', infoHash: 'aa', sizeBytes: 100, downloadedBytes: 50, addedBy: 'dev1'),
-        MediaItem(label: 'later', infoHash: 'bb', fetched: false, addedBy: 'dev2'),
+        MediaItem(label: 'a.mp4', entryLabel: 'Beach day', infoHash: 'aa', sizeBytes: 100, downloadedBytes: 100, addedBy: 'dev1'),
+        MediaItem(label: 'b.mp4', entryLabel: 'Beach day', infoHash: 'aa', sizeBytes: 100, downloadedBytes: 50, addedBy: 'dev1'),
+        MediaItem(label: 'later', entryLabel: 'later', infoHash: 'bb', fetched: false, addedBy: 'dev2'),
       ],
       state: 'downloading',
     );
@@ -205,6 +211,9 @@ void main() {
     final entries = collection.entries;
 
     expect(entries.length, 2);
+    // The entry's own signed label, not its first file's name — a multi-file
+    // batch would otherwise be labelled "a.mp4" in the details screen.
+    expect(entries.first.label, 'Beach day');
     expect(entries.first.infoHash, 'aa');
     expect(entries.first.media.length, 2);
     expect(entries.first.addedBy, 'dev1');

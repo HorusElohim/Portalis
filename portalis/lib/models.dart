@@ -18,16 +18,18 @@ class MediaItem {
   const MediaItem({
     required this.label,
     required this.infoHash,
+    String? entryLabel,
     this.localPath,
     this.progress = 0.0,
     this.sizeBytes = 0,
     this.downloadedBytes = 0,
     this.fetched = true,
     this.addedBy,
-  });
+  }) : _entryLabel = entryLabel;
 
   factory MediaItem.fromInfo(bridge.MediaInfo m) => MediaItem(
         label: m.name,
+        entryLabel: m.entryName,
         infoHash: m.infoHash,
         localPath: m.absolutePath,
         progress: m.progress,
@@ -38,6 +40,13 @@ class MediaItem {
       );
 
   final String label;
+
+  /// The signed label of the manifest entry this file belongs to — the batch
+  /// it was added as, not this file's own name. Defaults to [label] only for
+  /// hand-built instances in tests.
+  final String? _entryLabel;
+
+  String get entryLabel => _entryLabel ?? label;
 
   /// The torrent (manifest entry) this file belongs to. Several files in a
   /// collection can share one.
@@ -228,8 +237,7 @@ class CollectionEntry {
   double get progress =>
       totalBytes == 0 ? 0.0 : (downloadedBytes / totalBytes).clamp(0.0, 1.0);
 
-  /// The entry's own label. A fetched entry has real per-file names, so the
-  /// torrent's own label isn't carried separately — fall back to the first
-  /// file, which for a single-file entry is the same thing.
-  String get label => media.isEmpty ? infoHash : media.first.label;
+  /// The entry's own signed label — the batch it was added as. Every file in
+  /// the entry carries it, so any of them will do.
+  String get label => media.isEmpty ? infoHash : media.first.entryLabel;
 }

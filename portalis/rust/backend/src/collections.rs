@@ -90,6 +90,14 @@ pub struct CollaboratorInfo {
 #[derive(Debug, Clone)]
 pub struct MediaInfo {
     pub name: String,
+    /// The label of the *manifest entry* this file belongs to, as signed by
+    /// whoever added it — the batch name, not this file's name. Several files
+    /// share one. For a plain torrent it's the torrent's own name.
+    ///
+    /// Carried explicitly because flattening a collection's entries into a
+    /// file list otherwise loses it entirely, leaving the UI to guess an
+    /// entry's label from its first file.
+    pub entry_name: String,
     /// The info-hash of the torrent (i.e. the manifest entry) this file
     /// belongs to — several files can share one.
     pub info_hash: String,
@@ -299,9 +307,12 @@ mod native {
         info_hash.to_lowercase()
     }
 
+    /// `entry_name` is the manifest entry's signed label; callers pass the
+    /// torrent's own name for a plain torrent, which has no manifest entry.
     fn media_from_torrent(
         torrent: &TorrentInfo,
         added_by: Option<String>,
+        entry_name: &str,
     ) -> Vec<MediaInfo> {
         torrent
             .files
@@ -314,6 +325,7 @@ mod native {
                 };
                 MediaInfo {
                     name: f.name.clone(),
+                    entry_name: entry_name.to_string(),
                     info_hash: norm(&torrent.info_hash),
                     // Only expose a path once the file is actually complete —
                     // a partially-written file will not open or decode.
@@ -415,6 +427,7 @@ mod native {
                             media.extend(media_from_torrent(
                                 torrent,
                                 Some(entry.added_by.to_hex()),
+                                &entry.name,
                             ));
                         }
                         None => {
@@ -424,6 +437,7 @@ mod native {
                             pending_media += 1;
                             media.push(MediaInfo {
                                 name: entry.name.clone(),
+                                entry_name: entry.name.clone(),
                                 info_hash: hash,
                                 absolute_path: None,
                                 length_bytes: 0,
@@ -465,7 +479,8 @@ mod native {
             }
             let mut totals = Totals::new();
             totals.add(torrent);
-            let media = media_from_torrent(torrent, None);
+            // A plain torrent has no manifest entry, so it stands as its own.
+            let media = media_from_torrent(torrent, None, &torrent.name);
             result.push(CollectionInfo {
                 id: norm(&torrent.info_hash),
                 name: torrent.name.clone(),
@@ -535,7 +550,26 @@ mod native {
             files.len()
         );
         let created = create_collection(name.clone()).await?;
-        add_media_to_collection(created.id, name, files).await
+        match add_media_to_collection(created.id.clone(), name, files).await {
+            Ok(info) => Ok(info),
+            Err(e) => {
+                // Roll back, or a failure here leaves a persisted empty
+                // collection behind on top of the error the user already
+                // sees — the same silent accumulation that produced piles of
+                // indistinguishable duplicates before.
+                clog!(
+                    "collections",
+                    "create_collection_with_media: adding media failed ({e:#}), \
+                     removing the empty collection {}",
+                    created.id
+                );
+                if let Err(cleanup) = delete_collection(created.id).await {
+                    clog!("collections", "create_collection_with_media: rollback also \
+                         failed ({cleanup:#}) — an empty collection may remain");
+                }
+                Err(e)
+            }
+        }
     }
 
     pub(super) async fn join_collection(
@@ -651,15 +685,31 @@ mod native {
                     .collect::<Vec<_>>(),
             ))
         })?;
+        // Only entries the session doesn't already hold. Re-adding a fetched
+        // torrent is harmless (`overwrite: true`) but pointless, and counting
+        // it made the returned number disagree with the "Fetch N" the user
+        // pressed — N counts *pending* entries.
+        let already_present: HashSet<String> = crate::torrent::list_torrents()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .map(|t| norm(&t.info_hash))
+            .collect();
+        let pending: Vec<&String> = info_hashes
+            .iter()
+            .filter(|h| !already_present.contains(&norm(h)))
+            .collect();
+
         let peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
         clog!(
             "collections",
-            "fetch_collection_media: {} entries, {} learned peer(s)={peers:?}",
+            "fetch_collection_media: {} entries, {} still to fetch, {} learned peer(s)={peers:?}",
             info_hashes.len(),
+            pending.len(),
             peers.len()
         );
         let mut added = 0u32;
-        for info_hash in &info_hashes {
+        for info_hash in pending {
             crate::torrent::add_info_hash_with_peers(info_hash, peers.clone()).await?;
             added += 1;
         }
@@ -794,7 +844,7 @@ mod native {
         fn a_torrents_files_all_become_media_of_the_owning_collection() {
             let t = torrent("aa", vec![("a.mp4", 100, 100), ("b.mp4", 100, 50)]);
 
-            let media = media_from_torrent(&t, Some("device".into()));
+            let media = media_from_torrent(&t, Some("device".into()), "batch label");
 
             assert_eq!(media.len(), 2);
             assert!(media.iter().all(|m| m.fetched));
@@ -852,9 +902,14 @@ mod native {
             let media = media_from_torrent(
                 &torrent(&entry.info_hash.to_hex(), vec![("x.mp4", 10, 10)]),
                 Some(entry.added_by.to_hex()),
+                &entry.name,
             );
 
             assert_eq!(media[0].added_by.as_deref(), Some(identity.device_id().to_hex().as_str()));
+            // The entry's signed label survives the flattening into files —
+            // the file is "x.mp4" but it belongs to the "RAW_3000" batch.
+            assert_eq!(media[0].name, "x.mp4");
+            assert_eq!(media[0].entry_name, "RAW_3000");
         }
     }
 }
