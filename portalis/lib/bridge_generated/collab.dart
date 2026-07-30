@@ -69,12 +69,17 @@ class CollabCollectionInfo {
   final String id;
   final String name;
 
-  /// Paste-able invite: `<secret hex>:<name>[@addr1,addr2,...]` — the
-  /// secret and name are what joining needs; the optional trailing
-  /// addresses are *this device's* current sync endpoints (LAN, and
-  /// public IP when discoverable), so the joiner can sync immediately
-  /// instead of typing an address by hand. Addresses are hints tied to
-  /// the moment the invite was generated, not durable state.
+  /// Paste-able invite: hex encoding of `<secret hex>:<name>[@addr1,addr2,...]`
+  /// (the secret and name are what joining needs; the optional trailing
+  /// addresses are *this device's* current sync endpoints — LAN, and
+  /// public IP when discoverable — so the joiner can sync immediately
+  /// instead of typing an address by hand; hints tied to the moment the
+  /// invite was generated, not durable state). The outer hex layer isn't
+  /// encryption — the code itself is already the join credential, so
+  /// there's no key that could gate it without also gating legitimate
+  /// use. It exists so a screenshot or clipboard-history leak doesn't
+  /// casually expose your LAN/public IP and collection name in plain
+  /// text; decoding is deliberate, not accidental.
   final String inviteCode;
   final List<CollaboratorInfo> collaborators;
   final List<ManifestEntryInfo> media;

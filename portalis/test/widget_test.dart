@@ -1,17 +1,12 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/main.dart';
 import 'package:portalis/models.dart';
 import 'package:portalis/screens/add_torrent_screen.dart';
 import 'package:portalis/screens/collection_screen.dart';
+import 'package:portalis/screens/join_collection_screen.dart';
 import 'package:portalis/screens/settings_screen.dart';
+import 'package:portalis/screens/share_screen.dart';
 import 'package:portalis/screens/user_screen.dart';
 
 void main() {
@@ -19,18 +14,20 @@ void main() {
       (tester) async {
     // RustLib isn't initialized in a widget test (no real native library
     // loaded), so there are no real torrents/collections — Home should show
-    // its empty state rather than mock data.
+    // its empty state plus the three Add-flow actions.
     await tester.pumpWidget(const MyApp());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1100));
 
     expect(find.text('Portalis'), findsOneWidget);
-    expect(find.text('＋ Add'), findsOneWidget);
-    expect(find.textContaining('No collections yet'), findsOneWidget);
+    expect(find.text('Share something'), findsOneWidget);
+    expect(find.text('Join a collection'), findsOneWidget);
+    expect(find.text('Torrent'), findsOneWidget);
+    expect(find.textContaining('Nothing here yet'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Add torrent screen renders and surfaces backend errors',
+  testWidgets('Torrent screen validates input and surfaces backend errors',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -38,7 +35,7 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
-    await tester.tap(find.text('＋ Add'));
+    await tester.tap(find.text('Torrent'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(AddTorrentScreen), findsOneWidget);
@@ -47,6 +44,10 @@ void main() {
       find.byKey(const Key('magnetField')),
       'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567',
     );
+    await tester.pump();
+    // A valid magnet shows the parsed preview card.
+    expect(find.text('READY TO ADD'), findsOneWidget);
+
     await tester.tap(find.byKey(const Key('addMagnetButton')));
     await tester.pump();
     // RustLib isn't initialized, so the add call is expected to fail — it
@@ -55,6 +56,65 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byType(AddTorrentScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Share screen requires a name and files before creating',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+
+    await tester.tap(find.text('Share something'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(ShareScreen), findsOneWidget);
+    expect(find.text('Nothing added yet'), findsOneWidget);
+
+    // With no files picked, Create & share stays disabled even with a name.
+    await tester.enterText(
+        find.byKey(const Key('collectionNameField')), 'Trip to Lisbon');
+    await tester.pump();
+    final button = tester.widget<FilledButton>(
+        find.byKey(const Key('createShareButton')));
+    expect(button.onPressed, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Join screen recognises a valid code and surfaces backend errors',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+
+    await tester.tap(find.text('Join a collection'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(JoinCollectionScreen), findsOneWidget);
+
+    // Invite codes are hex-wrapped (see collab.rs::to_info) so the name/
+    // address aren't visible in plain text — encode the same way here.
+    final plain = '${'ab' * 32}:Test Collection@192.168.1.9:5321';
+    final code = plain.codeUnits
+        .map((c) => c.toRadixString(16).padLeft(2, '0'))
+        .join();
+    await tester.enterText(find.byKey(const Key('inviteCodeField')), code);
+    await tester.pump();
+    // The preview card parses the name and address count from the code.
+    expect(find.text('Test Collection'), findsOneWidget);
+    expect(find.textContaining('1 address'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('joinCollectionButton')));
+    await tester.pump();
+    // RustLib isn't initialized, so the join is expected to fail — inline
+    // error, screen stays open, no uncaught exception.
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(JoinCollectionScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -85,36 +145,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byType(UserScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('Join a collection surfaces backend errors', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(const MyApp());
-    await tester.pump();
-
-    await tester.tap(find.text('＋ Add'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    await tester.enterText(
-      find.byKey(const Key('collabInviteCodeField')),
-      'deadbeef:Test Collection',
-    );
-    await tester.enterText(
-      find.byKey(const Key('collabDisplayNameField')),
-      'Tester',
-    );
-    await tester.tap(find.byKey(const Key('joinCollabButton')));
-    await tester.pump();
-    // RustLib isn't initialized, so the join call is expected to fail — it
-    // should be caught and shown as inline error text, not an uncaught
-    // exception (and the screen must stay open, not pop, on failure).
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.byType(AddTorrentScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

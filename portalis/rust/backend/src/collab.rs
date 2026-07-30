@@ -17,12 +17,17 @@
 pub struct CollabCollectionInfo {
     pub id: String,
     pub name: String,
-    /// Paste-able invite: `<secret hex>:<name>[@addr1,addr2,...]` — the
-    /// secret and name are what joining needs; the optional trailing
-    /// addresses are *this device's* current sync endpoints (LAN, and
-    /// public IP when discoverable), so the joiner can sync immediately
-    /// instead of typing an address by hand. Addresses are hints tied to
-    /// the moment the invite was generated, not durable state.
+    /// Paste-able invite: hex encoding of `<secret hex>:<name>[@addr1,addr2,...]`
+    /// (the secret and name are what joining needs; the optional trailing
+    /// addresses are *this device's* current sync endpoints — LAN, and
+    /// public IP when discoverable — so the joiner can sync immediately
+    /// instead of typing an address by hand; hints tied to the moment the
+    /// invite was generated, not durable state). The outer hex layer isn't
+    /// encryption — the code itself is already the join credential, so
+    /// there's no key that could gate it without also gating legitimate
+    /// use. It exists so a screenshot or clipboard-history leak doesn't
+    /// casually expose your LAN/public IP and collection name in plain
+    /// text; decoding is deliberate, not accidental.
     pub invite_code: String,
     pub collaborators: Vec<CollaboratorInfo>,
     pub media: Vec<ManifestEntryInfo>,
@@ -163,6 +168,7 @@ pub async fn sync_collab_collection(
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
+    use anyhow::Context;
     use crate::collab_store::with_store;
     use crate::domain::collaborator::{Collaborator, Role};
     use crate::domain::collection::{Collection, CollectionId};
@@ -189,7 +195,7 @@ mod native {
     }
 
     fn to_info(collection: &Collection, sync_addrs: &[String]) -> CollabCollectionInfo {
-        let invite_code = if sync_addrs.is_empty() {
+        let plain = if sync_addrs.is_empty() {
             format!("{}:{}", collection.invite_secret_hex(), collection.name)
         } else {
             format!(
@@ -199,6 +205,12 @@ mod native {
                 sync_addrs.join(",")
             )
         };
+        // Hex-wrapped, not encrypted (see the field doc on
+        // CollabCollectionInfo::invite_code for why encryption wouldn't
+        // add anything here) — just opaque enough that a screenshot or
+        // clipboard-history leak doesn't casually show your IP/collection
+        // name in plain text.
+        let invite_code = hex::encode(plain.as_bytes());
         CollabCollectionInfo {
             id: collection.id.to_string(),
             name: collection.name.clone(),
@@ -251,11 +263,16 @@ mod native {
         })
     }
 
-    /// Splits `<secret>:<name>[@addr1,addr2]` into its parts. The address
-    /// suffix is only treated as one if every comma-separated piece looks
-    /// like `host:port` — a name that merely contains `@` stays a name.
-    fn parse_invite_code(invite_code: &str) -> anyhow::Result<(&str, &str, Vec<String>)> {
-        let (secret_hex, rest) = invite_code
+    /// Un-hexes the invite code, then splits the resulting
+    /// `<secret>:<name>[@addr1,addr2]` into its parts. The address suffix
+    /// is only treated as one if every comma-separated piece looks like
+    /// `host:port` — a name that merely contains `@` stays a name.
+    fn parse_invite_code(invite_code: &str) -> anyhow::Result<(String, String, Vec<String>)> {
+        let bytes = hex::decode(invite_code.trim())
+            .context("invite code isn't valid — check it was copied in full")?;
+        let decoded = String::from_utf8(bytes)
+            .context("invite code isn't valid — check it was copied in full")?;
+        let (secret_hex, rest) = decoded
             .split_once(':')
             .ok_or_else(|| anyhow::anyhow!("invite code is malformed"))?;
         if let Some((name, suffix)) = rest.rsplit_once('@') {
@@ -266,10 +283,10 @@ mod native {
                         .is_some_and(|(_, port)| port.parse::<u16>().is_ok())
                 });
             if all_look_like_addrs {
-                return Ok((secret_hex, name, addrs));
+                return Ok((secret_hex.to_string(), name.to_string(), addrs));
             }
         }
-        Ok((secret_hex, rest, Vec::new()))
+        Ok((secret_hex.to_string(), rest.to_string(), Vec::new()))
     }
 
     pub(super) async fn join_collab_collection(
@@ -277,7 +294,7 @@ mod native {
         display_name: String,
     ) -> anyhow::Result<CollabCollectionInfo> {
         let (secret_hex, name, peer_addrs) = parse_invite_code(&invite_code)?;
-        let secret = InviteSecret::from_hex(secret_hex)?;
+        let secret = InviteSecret::from_hex(&secret_hex)?;
         let rendezvous_key_hex = secret.derive_rendezvous_key().to_hex();
         let identity = crate::device::current_identity()?;
         let own_addrs = current_sync_addresses().await;
@@ -474,6 +491,23 @@ mod native {
             assert_eq!(secret_hex, collection.invite_secret_hex());
             assert_eq!(name, "Iceland 2024");
             assert_eq!(parsed, addrs);
+        }
+
+        #[test]
+        fn invite_code_does_not_expose_the_name_or_addresses_in_plain_text() {
+            let collection = Collection::new("Iceland 2024".into());
+            let addrs = vec!["192.168.1.5:5432".to_string()];
+
+            let info = to_info(&collection, &addrs);
+
+            // The whole point of the hex wrapper: none of the human-
+            // readable metadata should be visible without deliberately
+            // decoding it (see the invite_code field doc for why this
+            // isn't "encryption" — it's leak-resistance, not access
+            // control).
+            assert!(!info.invite_code.contains("Iceland"));
+            assert!(!info.invite_code.contains("192.168.1.5"));
+            assert!(hex::decode(&info.invite_code).is_ok());
         }
 
         #[test]

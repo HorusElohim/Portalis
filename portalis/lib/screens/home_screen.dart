@@ -5,67 +5,69 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'add_torrent_screen.dart';
 import 'collection_screen.dart';
+import 'join_collection_screen.dart';
 import 'settings_screen.dart';
+import 'share_screen.dart';
 import 'user_screen.dart';
 
+/// Home, per the "Portalis Add Flow" design: header, the collections list
+/// (or an empty state), and three full-width actions — Share something /
+/// Join a collection / Torrent — each its own screen instead of the old
+/// single combined "Add" screen.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  void _push(BuildContext context, Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Portalis',
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.2,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Portalis',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    Text(
+                      'Your collections',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.neutral400,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Row(
-                children: [
-                  InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.settings_outlined,
-                          size: 20, color: AppColors.neutral400),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  InkWell(
-                    key: const Key('userAvatarButton'),
-                    customBorder: const CircleBorder(),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const UserScreen()),
-                    ),
-                    child: const Avatar(initials: 'M'),
-                  ),
-                ],
+              InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => _push(context, const SettingsScreen()),
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(Icons.settings_outlined,
+                      size: 21, color: AppColors.neutral400),
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                key: const Key('userAvatarButton'),
+                customBorder: const CircleBorder(),
+                onTap: () => _push(context, const UserScreen()),
+                child: const Avatar(initials: 'M', size: 36),
               ),
             ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Your collections',
-              style: TextStyle(
-                fontSize: 12.5,
-                color: AppColors.neutral400,
-              ),
-            ),
           ),
         ),
         Expanded(
@@ -76,24 +78,15 @@ class HomeScreen extends StatelessWidget {
               if (collections.isEmpty) {
                 return const _EmptyCollections();
               }
-              return GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.78,
-                ),
+              return ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: collections.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final c = collections[index];
                   return _CollectionCard(
                     collection: c,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => CollectionScreen(collection: c),
-                      ),
-                    ),
+                    onTap: () => _push(context, CollectionScreen(collection: c)),
                   );
                 },
               );
@@ -101,14 +94,28 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-          child: Center(
-            child: PillButton(
-              label: '＋ Add',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AddTorrentScreen()),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+          child: Column(
+            children: [
+              _ActionButton(
+                label: 'Share something',
+                icon: Icons.upload_outlined,
+                primary: true,
+                onTap: () => _push(context, const ShareScreen()),
               ),
-            ),
+              const SizedBox(height: 10),
+              _ActionButton(
+                label: 'Join a collection',
+                icon: Icons.link,
+                onTap: () => _push(context, const JoinCollectionScreen()),
+              ),
+              const SizedBox(height: 10),
+              _ActionButton(
+                label: 'Torrent',
+                icon: Icons.download_outlined,
+                onTap: () => _push(context, const AddTorrentScreen()),
+              ),
+            ],
           ),
         ),
       ],
@@ -123,16 +130,20 @@ class _EmptyCollections extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        padding: const EdgeInsets.symmetric(horizontal: 48),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.hub_outlined, size: 32, color: AppColors.neutral500),
-            const SizedBox(height: 10),
+            const Icon(Icons.hub_outlined, size: 44, color: AppColors.neutral500),
+            const SizedBox(height: 14),
             Text(
-              'No collections yet — add media or magnet link / .torrent file to get started.',
+              'Nothing here yet. Share files of your own, join a collection, or add a torrent.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.5,
+                color: AppColors.neutral400,
+              ),
             ),
           ],
         ),
@@ -141,76 +152,136 @@ class _EmptyCollections extends StatelessWidget {
   }
 }
 
+/// List-style collection card: kicker (what this is) + percent, name,
+/// meta line, and a thin progress bar — replaces the old thumbnail grid
+/// per the Add Flow design.
 class _CollectionCard extends StatelessWidget {
   const _CollectionCard({required this.collection, required this.onTap});
 
   final Collection collection;
   final VoidCallback onTap;
 
-  static const _radius = BorderRadius.all(Radius.circular(8));
+  @override
+  Widget build(BuildContext context) {
+    final pct = (collection.progress * 100).clamp(0, 100).round();
+    final kicker = collection.progress >= 1.0 ? 'SEEDING' : 'DOWNLOADING';
+    final meta =
+        '${collection.subtitle} · ${collection.collaboratorCount} peer${collection.collaboratorCount == 1 ? '' : 's'}';
+
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    kicker,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      letterSpacing: 1.1,
+                      color: AppColors.accent300,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '$pct%',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.neutral400,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Text(
+                collection.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                meta,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11.5, color: AppColors.neutral400),
+              ),
+              const SizedBox(height: 9),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: collection.progress.clamp(0.0, 1.0),
+                  minHeight: 3,
+                  backgroundColor: AppColors.borderStrong,
+                  valueColor: AlwaysStoppedAnimation(collection.hue),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-width Add-flow action button: leading icon, label, trailing
+/// chevron. [primary] gets the filled accent treatment.
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
-    return PerimeterProgress(
-      progress: collection.progress,
-      color: collection.hue,
-      borderRadius: _radius,
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: _radius,
-        child: InkWell(
-          borderRadius: _radius,
-          onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: _radius,
-              border: Border.all(color: AppColors.border),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: 92,
-                  child: collection.media.isEmpty
-                      ? const PlaceholderTile()
-                      : MediaThumbnail(media: collection.media.first),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        collection.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        collection.subtitle,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.neutral400,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: CopiesIndicator(
-                          color: collection.hue,
-                          label: collection.copiesLabel,
-                        ),
-                      ),
-                    ],
+    final fg = primary ? AppColors.bg : AppColors.text;
+    return Material(
+      color: primary ? AppColors.accent : AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: primary ? null : Border.all(color: AppColors.borderStrong),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 19, color: fg),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w500,
+                    color: fg,
                   ),
                 ),
-              ],
-            ),
+              ),
+              Icon(Icons.chevron_right, size: 18, color: fg.withValues(alpha: 0.65)),
+            ],
           ),
         ),
       ),
