@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/collab_collections.dart';
-import '../services/torrent_collections.dart';
+import '../services/collections.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 
@@ -19,16 +18,15 @@ class _RootShellState extends State<RootShell> {
   @override
   void initState() {
     super.initState();
-    TorrentCollections.instance.start();
-    // So collab collections (created/joined in a previous session) are
-    // already loaded and ready to share/sync as soon as the app opens,
-    // rather than only appearing after visiting the User screen once.
-    CollabCollections.instance.refresh();
+    // One start() now covers everything: collections created or joined in a
+    // previous session load from disk and appear here immediately, alongside
+    // any plain torrents in the session.
+    Collections.instance.start();
   }
 
   @override
   void dispose() {
-    TorrentCollections.instance.stop();
+    Collections.instance.stop();
     super.dispose();
   }
 

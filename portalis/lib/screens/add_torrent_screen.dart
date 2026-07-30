@@ -2,7 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/torrent_collections.dart';
+import '../services/collections.dart';
 import '../theme.dart';
 
 /// "Torrent" — the join-a-swarm half of the old combined Add screen,
@@ -74,7 +74,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       _error = null;
     });
     try {
-      await TorrentCollections.instance.addFromMagnet(_magnet);
+      await Collections.instance.addFromMagnet(_magnet);
       if (mounted) {
         FocusScope.of(context).unfocus();
         Navigator.of(context).pop();
@@ -98,7 +98,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       _error = null;
     });
     try {
-      await TorrentCollections.instance.addFromFileBytes(bytes);
+      await Collections.instance.addFromFileBytes(bytes);
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(

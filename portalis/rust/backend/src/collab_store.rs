@@ -4,7 +4,7 @@
 //! the same reason `domain` isn't listed there either: FRB's codegen
 //! bridges every struct textually present within a listed module's
 //! subtree, regardless of Rust visibility. A private `PersistedCollection`
-//! struct living inside `crate::collab` would get swept up and FRB would
+//! struct living inside `crate::collections` would get swept up and FRB would
 //! try (and fail — its fields aren't `pub`) to generate bridging code for
 //! it, even though nothing outside this crate ever needs it. Keeping the
 //! persisted-DTO types in a module never named in `--rust-input`
@@ -212,7 +212,7 @@ fn save(collections: &[Collection]) -> anyhow::Result<()> {
 }
 
 /// The one shared in-memory copy of every collab collection, lazily loaded
-/// from disk on first use. Shared between `collab.rs` (the FRB commands)
+/// from disk on first use. Shared between `collections.rs` (the FRB commands)
 /// and `collab_sync.rs` (the peer-sync listener) — both mutate collections
 /// through here so a sync arriving mid-command can't clobber a half-written
 /// `collections.json`.

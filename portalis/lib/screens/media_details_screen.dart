@@ -34,9 +34,9 @@ class MediaDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final peerLabel = collection.collaboratorCount == 1
+    final peerLabel = collection.livePeers == 1
         ? '1 peer connected'
-        : '${collection.collaboratorCount} peers connected';
+        : '${collection.livePeers} peers connected';
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -112,10 +112,13 @@ class MediaDetailsScreen extends StatelessWidget {
                       value: _formatMbps(collection.uploadMbps),
                     ),
                     _InfoRow(label: 'Peers', value: peerLabel),
-                    if (collection.infoHash.isNotEmpty)
+                    // The info hash of the *torrent this file came from*.
+                    // A shared collection has one per manifest entry, so it
+                    // belongs to the media item, not the collection.
+                    if (media.infoHash.isNotEmpty)
                       _InfoRow(
                         label: 'Info hash',
-                        value: collection.infoHash,
+                        value: media.infoHash,
                         monospace: true,
                       ),
                   ],

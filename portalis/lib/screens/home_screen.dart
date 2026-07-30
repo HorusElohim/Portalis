@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../bridge_generated/device.dart' as bridge;
 import '../models.dart';
-import '../services/torrent_collections.dart';
+import '../services/collections.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'add_torrent_screen.dart';
@@ -65,16 +66,16 @@ class HomeScreen extends StatelessWidget {
                 key: const Key('userAvatarButton'),
                 customBorder: const CircleBorder(),
                 onTap: () => _push(context, const UserScreen()),
-                child: const Avatar(initials: 'M', size: 36),
+                child: const _UserAvatar(),
               ),
             ],
           ),
         ),
         Expanded(
           child: ListenableBuilder(
-            listenable: TorrentCollections.instance,
+            listenable: Collections.instance,
             builder: (context, _) {
-              final collections = TorrentCollections.instance.collections;
+              final collections = Collections.instance.collections;
               if (collections.isEmpty) {
                 return const _EmptyCollections();
               }
@@ -123,6 +124,42 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+/// Home's avatar button, showing the initial of the device's *real*
+/// persisted nickname (`device.rs`'s identity) rather than a fixed letter.
+/// Falls back to a neutral glyph until it loads, or if the backend isn't
+/// available (widget tests) — never to an invented name.
+class _UserAvatar extends StatefulWidget {
+  const _UserAvatar();
+
+  @override
+  State<_UserAvatar> createState() => _UserAvatarState();
+}
+
+class _UserAvatarState extends State<_UserAvatar> {
+  String _initials = '·';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final identity = await bridge.deviceIdentity();
+      final nickname = identity.nickname;
+      if (mounted && nickname.isNotEmpty) {
+        setState(() => _initials = nickname[0].toUpperCase());
+      }
+    } catch (_) {
+      // Backend unavailable — keep the neutral placeholder.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Avatar(initials: _initials, size: 36);
+}
+
 class _EmptyCollections extends StatelessWidget {
   const _EmptyCollections();
 
@@ -164,9 +201,14 @@ class _CollectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = (collection.progress * 100).clamp(0, 100).round();
-    final kicker = collection.progress >= 1.0 ? 'SEEDING' : 'DOWNLOADING';
-    final meta =
-        '${collection.subtitle} · ${collection.collaboratorCount} peer${collection.collaboratorCount == 1 ? '' : 's'}';
+    // State comes from Rust so both kinds of collection describe themselves
+    // the same way — and so "seeding" accounts for unfetched manifest entries,
+    // not just downloaded bytes.
+    final kicker = collection.state.toUpperCase();
+    final meta = collection.isShared
+        ? '${collection.subtitle} · ${collection.collaborators.length} collaborator'
+            '${collection.collaborators.length == 1 ? '' : 's'} · ${collection.peersLabel}'
+        : '${collection.subtitle} · ${collection.peersLabel}';
 
     return Material(
       color: AppColors.surface,

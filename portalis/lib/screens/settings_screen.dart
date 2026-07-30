@@ -6,12 +6,6 @@ import '../theme.dart';
 import '../widgets/common.dart';
 
 const _uploadLimitPresetsBps = [0, 256000, 512000, 1000000, 2000000, 5000000];
-const _storageCapPresetsBytes = [
-  5000000000,
-  10000000000,
-  20000000000,
-  50000000000,
-];
 
 String _formatBps(int bps) {
   if (bps == 0) return 'Unlimited';
@@ -21,7 +15,9 @@ String _formatBps(int bps) {
 
 String _formatBytes(int bytes) {
   const gb = 1000000000;
-  return '${(bytes / gb).toStringAsFixed(1)} GB';
+  const mb = 1000000;
+  if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(1)} GB';
+  return '${(bytes / mb).toStringAsFixed(0)} MB';
 }
 
 class SettingsScreen extends StatefulWidget {
@@ -60,12 +56,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _settings.setUploadLimitBps(next);
   }
 
-  void _cycleStorageCap() {
-    final i = _storageCapPresetsBytes.indexOf(_settings.storageCapBytes);
-    final next = _storageCapPresetsBytes[(i + 1) % _storageCapPresetsBytes.length];
-    _settings.setStorageCapBytes(next);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -89,43 +79,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
                     ),
                   ),
+                  // Only settings the Rust engine actually honours live here.
+                  // The mockup's four toggles (auto-seed on Wi-Fi, background
+                  // sharing, discoverable, metered warning) and the storage
+                  // *cap* were removed rather than kept as switches that
+                  // persisted a preference nothing ever read — the app has no
+                  // enforcement for any of them yet.
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      children: [
-                        _SettingsRow(
-                          label: 'Auto-seed on Wi-Fi only',
-                          subtitle: 'Pause uploads on cellular',
-                          value: _settings.autoSeedWifiOnly,
-                          onChanged: _settings.setAutoSeedWifiOnly,
-                          showDivider: true,
-                        ),
-                        _SettingsRow(
-                          label: 'Background sharing',
-                          subtitle: 'Keep seeding when app is closed',
-                          value: _settings.backgroundSharing,
-                          onChanged: _settings.setBackgroundSharing,
-                          showDivider: true,
-                        ),
-                        _SettingsRow(
-                          label: 'Discoverable to collaborators',
-                          subtitle: 'Show online status',
-                          value: _settings.discoverable,
-                          onChanged: _settings.setDiscoverable,
-                          showDivider: true,
-                        ),
-                        _SettingsRow(
-                          label: 'Metered connection warning',
-                          subtitle: 'Ask before large downloads',
-                          value: _settings.meteredWarning,
-                          onChanged: _settings.setMeteredWarning,
-                          showDivider: false,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -143,25 +104,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             value: _formatBps(_settings.uploadLimitBps),
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        GestureDetector(
-                          onTap: _cycleStorageCap,
-                          child: _MeterRow(
-                            label: 'Storage cap',
-                            fraction: (_settings.storageUsedBytes /
-                                    _settings.storageCapBytes)
-                                .clamp(0.0, 1.0),
-                            value:
-                                '${_formatBytes(_settings.storageUsedBytes)} / ${_formatBytes(_settings.storageCapBytes)}',
-                          ),
-                        ),
                         const Padding(
                           padding: EdgeInsets.only(top: 6),
                           child: Text(
-                            'Tap a meter to cycle presets.',
+                            'Tap to cycle presets. Applied to the running '
+                            'transfer engine immediately.',
                             style: TextStyle(
                                 fontSize: 10, color: AppColors.neutral500),
                           ),
+                        ),
+                        const SizedBox(height: 14),
+                        // Reported by the engine (torrent.rs::storage_usage_bytes),
+                        // not capped by anything — so it's shown as a plain
+                        // figure rather than a meter against an invented limit.
+                        Row(
+                          children: [
+                            const SizedBox(
+                              width: 80,
+                              child: Text(
+                                'Storage used',
+                                style: TextStyle(
+                                    fontSize: 12, color: AppColors.neutral400),
+                              ),
+                            ),
+                            Text(
+                              _formatBytes(_settings.storageUsedBytes),
+                              style: const TextStyle(
+                                  fontSize: 12, fontFamily: 'monospace'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -172,60 +143,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.label,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-    required this.showDivider,
-  });
-
-  final String label;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final bool showDivider;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      decoration: BoxDecoration(
-        border: showDivider
-            ? const Border(bottom: BorderSide(color: AppColors.border))
-            : null,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontSize: 13)),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                      fontSize: 10.5, color: AppColors.neutral400),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: AppColors.accent,
-            activeThumbColor: AppColors.text,
-            inactiveTrackColor: AppColors.borderStrong,
-            inactiveThumbColor: AppColors.text,
-          ),
-        ],
       ),
     );
   }

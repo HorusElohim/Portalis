@@ -83,9 +83,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   Widget build(BuildContext context) {
     final collection = widget.collection;
     final media = widget.media;
-    final peerLabel = collection.collaboratorCount == 1
-        ? '1 peer'
-        : '${collection.collaboratorCount} peers';
+    final peerLabel = collection.peersLabel;
 
     return Scaffold(
       backgroundColor: AppColors.viewerBg,

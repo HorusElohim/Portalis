@@ -96,8 +96,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(JoinCollectionScreen), findsOneWidget);
 
-    // Invite codes are hex-wrapped (see collab.rs::to_info) so the name/
-    // address aren't visible in plain text — encode the same way here.
+    // Invite codes are hex-wrapped (see collections.rs::invite_code_for) so
+    // the name and address aren't visible in plain text — encode the same
+    // way here.
     final plain = '${'ab' * 32}:Test Collection@192.168.1.9:5321';
     final code = plain.codeUnits
         .map((c) => c.toRadixString(16).padLeft(2, '0'))
@@ -148,39 +149,66 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Add Collab shows an error dialog when the backend call fails',
+  testWidgets('A shared collection shows its own invite code, no backend call',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final collection = Collection(
+    // The invite code now travels *with* the collection, so showing it needs
+    // no round trip — this used to mint a throwaway collection on every tap
+    // because the shared and torrent models weren't linked.
+    const collection = Collection(
+      id: 'e7b1f0aa-0000-4000-8000-000000000001',
       name: 'Test Collection',
-      subtitle: '1 file',
-      categories: const ['Downloading'],
-      hueIndex: 0,
-      copiesLabel: '0% · 0 peers',
-      collaboratorCount: 0,
-      media: const [],
-      collaborators: const [],
+      kind: CollectionKind.shared,
+      inviteCode: 'abcdef0123456789',
+      collaborators: [],
+      media: [],
+      state: 'empty',
     );
 
-    await tester.pumpWidget(MaterialApp(
+    await tester.pumpWidget(const MaterialApp(
       home: CollectionScreen(collection: collection),
     ));
     await tester.pump();
 
-    await tester.tap(find.text('Add collab'));
-    await tester.pump(); // shows the loading dialog
-    // RustLib isn't initialized, so create_collab_collection is expected
-    // to fail — the loading dialog should be replaced by an error dialog,
-    // not an uncaught exception.
+    await tester.tap(find.text('Invite'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('Invite a collaborator'), findsOneWidget);
-    expect(find.textContaining('Couldn\'t create invite'), findsOneWidget);
+    expect(find.text('abcdef0123456789'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('Done'));
     await tester.pump();
+  });
+
+  testWidgets('A plain torrent collection offers no invite or add-media',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // A torrent's contents are fixed by its info-hash and it has no invite
+    // secret, so those actions must not appear — they'd be dead buttons.
+    const collection = Collection(
+      id: '0123456789abcdef0123456789abcdef01234567',
+      name: 'Some Torrent',
+      kind: CollectionKind.torrent,
+      collaborators: [],
+      media: [],
+      state: 'downloading',
+    );
+
+    await tester.pumpWidget(const MaterialApp(
+      home: CollectionScreen(collection: collection),
+    ));
+    await tester.pump();
+
+    expect(find.text('Some Torrent'), findsOneWidget);
+    expect(find.text('Invite'), findsNothing);
+    expect(find.text('＋ Add media'), findsNothing);
+    expect(find.text('Sync'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

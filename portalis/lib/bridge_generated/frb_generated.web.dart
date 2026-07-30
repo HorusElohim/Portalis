@@ -7,7 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'bridge.dart';
-import 'collab.dart';
+import 'collections.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'device.dart';
@@ -36,10 +36,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
-  CollabCollectionInfo dco_decode_collab_collection_info(dynamic raw);
+  CollaboratorInfo dco_decode_collaborator_info(dynamic raw);
 
   @protected
-  CollaboratorInfo dco_decode_collaborator_info(dynamic raw);
+  CollectionInfo dco_decode_collection_info(dynamic raw);
+
+  @protected
+  CollectionKind dco_decode_collection_kind(dynamic raw);
 
   @protected
   DeviceIdentityInfo dco_decode_device_identity_info(dynamic raw);
@@ -48,17 +51,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
-  PlatformInt64 dco_decode_i_64(dynamic raw);
-
-  @protected
-  List<CollabCollectionInfo> dco_decode_list_collab_collection_info(
-      dynamic raw);
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   List<CollaboratorInfo> dco_decode_list_collaborator_info(dynamic raw);
 
   @protected
-  List<ManifestEntryInfo> dco_decode_list_manifest_entry_info(dynamic raw);
+  List<CollectionInfo> dco_decode_list_collection_info(dynamic raw);
+
+  @protected
+  List<MediaInfo> dco_decode_list_media_info(dynamic raw);
 
   @protected
   List<NewFile> dco_decode_list_new_file(dynamic raw);
@@ -76,7 +78,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TorrentInfo> dco_decode_list_torrent_info(dynamic raw);
 
   @protected
-  ManifestEntryInfo dco_decode_manifest_entry_info(dynamic raw);
+  MediaInfo dco_decode_media_info(dynamic raw);
 
   @protected
   NewFile dco_decode_new_file(dynamic raw);
@@ -121,11 +123,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
-  CollabCollectionInfo sse_decode_collab_collection_info(
-      SseDeserializer deserializer);
+  CollaboratorInfo sse_decode_collaborator_info(SseDeserializer deserializer);
 
   @protected
-  CollaboratorInfo sse_decode_collaborator_info(SseDeserializer deserializer);
+  CollectionInfo sse_decode_collection_info(SseDeserializer deserializer);
+
+  @protected
+  CollectionKind sse_decode_collection_kind(SseDeserializer deserializer);
 
   @protected
   DeviceIdentityInfo sse_decode_device_identity_info(
@@ -135,19 +139,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
-  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
-
-  @protected
-  List<CollabCollectionInfo> sse_decode_list_collab_collection_info(
-      SseDeserializer deserializer);
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   List<CollaboratorInfo> sse_decode_list_collaborator_info(
       SseDeserializer deserializer);
 
   @protected
-  List<ManifestEntryInfo> sse_decode_list_manifest_entry_info(
+  List<CollectionInfo> sse_decode_list_collection_info(
       SseDeserializer deserializer);
+
+  @protected
+  List<MediaInfo> sse_decode_list_media_info(SseDeserializer deserializer);
 
   @protected
   List<NewFile> sse_decode_list_new_file(SseDeserializer deserializer);
@@ -165,8 +168,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TorrentInfo> sse_decode_list_torrent_info(SseDeserializer deserializer);
 
   @protected
-  ManifestEntryInfo sse_decode_manifest_entry_info(
-      SseDeserializer deserializer);
+  MediaInfo sse_decode_media_info(SseDeserializer deserializer);
 
   @protected
   NewFile sse_decode_new_file(SseDeserializer deserializer);
@@ -199,9 +201,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_AnyhowException(
       AnyhowException self, SseSerializer serializer);
 
@@ -215,12 +214,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_collab_collection_info(
-      CollabCollectionInfo self, SseSerializer serializer);
-
-  @protected
   void sse_encode_collaborator_info(
       CollaboratorInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_collection_info(
+      CollectionInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_collection_kind(
+      CollectionKind self, SseSerializer serializer);
 
   @protected
   void sse_encode_device_identity_info(
@@ -230,19 +233,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_collab_collection_info(
-      List<CollabCollectionInfo> self, SseSerializer serializer);
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_collaborator_info(
       List<CollaboratorInfo> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_manifest_entry_info(
-      List<ManifestEntryInfo> self, SseSerializer serializer);
+  void sse_encode_list_collection_info(
+      List<CollectionInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_media_info(
+      List<MediaInfo> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_new_file(List<NewFile> self, SseSerializer serializer);
@@ -263,8 +266,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<TorrentInfo> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_manifest_entry_info(
-      ManifestEntryInfo self, SseSerializer serializer);
+  void sse_encode_media_info(MediaInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_new_file(NewFile self, SseSerializer serializer);
@@ -295,9 +297,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class

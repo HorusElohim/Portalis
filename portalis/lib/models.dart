@@ -1,89 +1,177 @@
 import 'package:flutter/material.dart';
+
+import 'bridge_generated/collections.dart' as bridge;
 import 'theme.dart';
+
+export 'bridge_generated/collections.dart' show CollectionKind;
+
+/// The UI-facing mirrors of `collections.rs`'s DTOs.
+///
+/// Every field here is populated from Rust — there is no mock or sample data
+/// path in the app. These types exist rather than using the generated DTOs
+/// directly only to add presentation-layer conveniences ([Collection.hue],
+/// [Collaborator.initials], [MediaItem.isReady]) and to keep widgets from
+/// importing generated code. The mapping is exhaustive and one-way: build
+/// them with `fromInfo`, never by hand outside tests.
 
 class MediaItem {
   const MediaItem({
     required this.label,
+    required this.infoHash,
     this.localPath,
-    this.progress = 1.0,
+    this.progress = 0.0,
     this.sizeBytes = 0,
     this.downloadedBytes = 0,
+    this.fetched = true,
+    this.addedBy,
   });
+
+  factory MediaItem.fromInfo(bridge.MediaInfo m) => MediaItem(
+        label: m.name,
+        infoHash: m.infoHash,
+        localPath: m.absolutePath,
+        progress: m.progress,
+        sizeBytes: m.lengthBytes.toInt(),
+        downloadedBytes: m.downloadedBytes.toInt(),
+        fetched: m.fetched,
+        addedBy: m.addedBy,
+      );
 
   final String label;
 
-  /// Absolute path once fully downloaded — null for mock data or while
-  /// still in progress. Set by [TorrentCollections] for real torrents.
+  /// The torrent (manifest entry) this file belongs to. Several files in a
+  /// collection can share one.
+  final String infoHash;
+
+  /// Absolute path, set only once the file is complete — a partially
+  /// written file won't open or decode.
   final String? localPath;
 
-  /// 0.0..=1.0. Mock media is always "complete" since there's nothing
-  /// downloading; real torrent-backed media reports its actual progress.
   final double progress;
-
-  /// Real byte counts from the torrent engine, for the details panel's
-  /// "X of Y downloaded" display. Zero for mock data.
   final int sizeBytes;
   final int downloadedBytes;
+
+  /// `false` when this stands for a whole manifest entry whose torrent isn't
+  /// in the session yet: known to exist because a collaborator signed it into
+  /// the manifest, but not downloaded. Tap to fetch.
+  final bool fetched;
+
+  /// Device id of the collaborator who added it — shared collections only.
+  final String? addedBy;
 
   bool get isReady => localPath != null && progress >= 1.0;
 }
 
 class Collaborator {
   const Collaborator({
-    required this.initials,
+    required this.deviceId,
     required this.name,
     this.isAdmin = false,
   });
 
-  final String initials;
+  factory Collaborator.fromInfo(bridge.CollaboratorInfo c) => Collaborator(
+        deviceId: c.deviceId,
+        name: c.displayName,
+        isAdmin: c.isAdmin,
+      );
+
+  final String deviceId;
   final String name;
   final bool isAdmin;
+
+  String get initials => name.isEmpty ? '?' : name[0].toUpperCase();
 }
 
 class Collection {
-  Collection({
+  const Collection({
+    required this.id,
     required this.name,
-    required this.subtitle,
-    required this.categories,
-    required this.hueIndex,
-    required this.copiesLabel,
-    required this.collaboratorCount,
-    required this.media,
+    required this.kind,
     required this.collaborators,
-    this.progress = 1.0,
+    required this.media,
+    this.inviteCode,
+    this.progress = 0.0,
+    this.totalBytes = 0,
     this.downloadedBytes = 0,
     this.uploadedBytes = 0,
     this.downloadMbps = 0.0,
     this.uploadMbps = 0.0,
+    this.livePeers = 0,
+    this.pendingMedia = 0,
     this.state = '',
-    this.infoHash = '',
   });
 
+  factory Collection.fromInfo(bridge.CollectionInfo c) => Collection(
+        id: c.id,
+        name: c.name,
+        kind: c.kind,
+        inviteCode: c.inviteCode,
+        collaborators: c.collaborators.map(Collaborator.fromInfo).toList(),
+        media: c.media.map(MediaItem.fromInfo).toList(),
+        progress: c.progress,
+        totalBytes: c.totalBytes.toInt(),
+        downloadedBytes: c.downloadedBytes.toInt(),
+        uploadedBytes: c.uploadedBytes.toInt(),
+        downloadMbps: c.downloadMbps,
+        uploadMbps: c.uploadMbps,
+        livePeers: c.livePeers,
+        pendingMedia: c.pendingMedia,
+        state: c.state,
+      );
+
+  /// A shared collection's id, or a plain torrent's info-hash.
+  final String id;
   final String name;
-  final String subtitle;
-  final List<String> categories;
-  final int hueIndex;
-  final String copiesLabel;
-  final int collaboratorCount;
-  final List<MediaItem> media;
+  final bridge.CollectionKind kind;
+
+  /// Present only on shared collections — a plain torrent has nothing to
+  /// invite anyone to.
+  final String? inviteCode;
+
   final List<Collaborator> collaborators;
+  final List<MediaItem> media;
 
-  /// Overall download progress, 0.0..=1.0. Mock collections are always
-  /// "complete"; real torrent-backed ones report actual progress — drives
-  /// Home's perimeter progress ring.
   final double progress;
-
-  /// Real byte counters from the torrent engine, used for the User screen's
-  /// aggregate "Shared"/"Received" stats. Zero for mock data.
+  final int totalBytes;
   final int downloadedBytes;
   final int uploadedBytes;
-
-  /// Real live transfer rates and torrent state, for the media details
-  /// panel. Zero/empty for mock data.
   final double downloadMbps;
   final double uploadMbps;
-  final String state;
-  final String infoHash;
 
-  Color get hue => AppColors.hueAt(hueIndex);
+  /// Currently-connected peers across this collection's torrents.
+  final int livePeers;
+
+  /// Manifest entries not yet fetched — see [MediaItem.fetched].
+  final int pendingMedia;
+
+  /// `seeding` / `downloading` / `pending` / `empty`, decided in Rust so both
+  /// kinds of collection describe themselves the same way.
+  final String state;
+
+  bool get isShared => kind == bridge.CollectionKind.shared;
+
+  bool get isComplete => progress >= 1.0 && pendingMedia == 0;
+
+  /// Stable per-collection accent, derived from the id so a collection keeps
+  /// its colour across restarts.
+  Color get hue => AppColors.hueAt(id.hashCode.abs());
+
+  String get subtitle {
+    final count = media.length;
+    final items = '$count item${count == 1 ? '' : 's'}';
+    return pendingMedia > 0 ? '$items · $pendingMedia to fetch' : items;
+  }
+
+  String get peersLabel =>
+      '$livePeers peer${livePeers == 1 ? '' : 's'}';
+
+  /// The "live copies" line. Counts this device explicitly when it's
+  /// seeding: `livePeers` is remote peers only, so a healthy collection this
+  /// device just created would otherwise read as zero copies alive.
+  String get copiesLabel {
+    if (!isComplete) return '${(progress * 100).round()}% · $peersLabel';
+    return livePeers == 0
+        ? 'Seeding · this device'
+        : 'Seeding · this device + $peersLabel';
+  }
 }

@@ -42,6 +42,11 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # the public-IP address embedded in invites is actually reachable on
 # UPnP-enabled routers without manual port-forward setup).
 librqbit-upnp = "1"
+# Real interface enumeration for the addresses we advertise in invites.
+# Already in the tree (librqbit depends on the same version), so this adds no
+# compilation. Needed because inferring "our LAN address" from the default
+# route is wrong whenever a VPN owns that route — see collab_sync::lan_ips.
+network-interface = "2"
 
 # The domain layer's randomness (device keygen, invite secrets, collection
 # ids) has no OS RNG to call into on wasm32 — route it through the browser's

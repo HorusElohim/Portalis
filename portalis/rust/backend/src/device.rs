@@ -26,7 +26,8 @@ pub fn set_nickname(nickname: String) -> anyhow::Result<DeviceIdentityInfo> {
 }
 
 /// The actual signing keypair — for other backend modules that need to
-/// sign something themselves (e.g. `collab.rs` signing manifest entries),
+/// sign something themselves (e.g. `collections.rs` signing manifest
+/// entries),
 /// never exposed to Flutter directly the way `device_identity()`'s DTO is.
 pub(crate) fn current_identity() -> anyhow::Result<crate::domain::identity::DeviceIdentity> {
     native::load_or_create().map(|(identity, _nickname)| identity)

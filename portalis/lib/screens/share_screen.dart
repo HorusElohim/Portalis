@@ -7,7 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../media_convert.dart';
 import '../media_kind.dart';
-import '../services/torrent_collections.dart';
+import '../services/collections.dart';
 import '../theme.dart';
 
 typedef _PickedFile = ({String name, Uint8List bytes});
@@ -132,7 +132,9 @@ class _ShareScreenState extends State<ShareScreen> {
       final normalized = await Future.wait(
         _files.map((f) => normalizeForSharing(name: f.name, bytes: f.bytes)),
       );
-      await TorrentCollections.instance.createCollection(name, normalized);
+      // Creates a *shared* collection, not a bare torrent: what you share is
+      // now invitable and can grow later.
+      await Collections.instance.createWithMedia(name, normalized);
       if (mounted) {
         FocusScope.of(context).unfocus();
         Navigator.of(context).pop();

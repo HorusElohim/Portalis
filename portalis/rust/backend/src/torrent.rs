@@ -126,6 +126,14 @@ pub(crate) async fn add_info_hash_with_peers(
     native::add_info_hash_with_peers(info_hash_hex, peers).await
 }
 
+/// Removes a torrent from the session, leaving its downloaded files on disk
+/// (librqbit's "forget", as opposed to "delete" which also unlinks them).
+/// Backs deleting a plain-torrent collection — see
+/// `collections::delete_collection`.
+pub(crate) async fn forget_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
+    native::forget_torrent(info_hash_hex).await
+}
+
 mod native {
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -148,6 +156,18 @@ mod native {
                 std::fs::create_dir_all(&dir)
                     .with_context(|| format!("creating output dir {dir:?}"))?;
                 let opts = librqbit::SessionOptions {
+                    // Without this librqbit binds NO TCP listener at all
+                    // (verified in librqbit 8.1.1's session.rs: the listener
+                    // is only created `if let Some(port_range) =
+                    // opts.listen_port_range`, otherwise it's `(None,
+                    // None)`). That left `tcp_listen_port()` returning None
+                    // and, far worse, meant this device could never accept
+                    // an incoming peer connection — so nobody could ever
+                    // download from us, and `enable_upnp_port_forwarding`
+                    // below had no port to forward. The range is the
+                    // conventional BitTorrent one; librqbit picks the first
+                    // free port in it.
+                    listen_port_range: Some(6881..6999),
                     // Ask the router (UPnP/IGD) to forward our BT listen
                     // port, so peers outside this network can reach us —
                     // without it, cross-network fetches only work when the
@@ -395,6 +415,21 @@ mod native {
         let port = session().await?.tcp_listen_port();
         crate::log::clog!("torrent", "bt_listen_port: {port:?}");
         Ok(port)
+    }
+
+    pub(super) async fn forget_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
+        crate::log::clog!("torrent", "forget_torrent: info_hash={info_hash_hex}");
+        let session = session().await?;
+        let id = TorrentIdOrHash::try_from(info_hash_hex)
+            .map_err(|e| anyhow::anyhow!("{info_hash_hex} isn't a valid info hash: {e}"))?;
+        // `false` = forget only. Downloaded files stay on disk: removing a
+        // collection from the app shouldn't silently destroy the user's
+        // media, which `delete(.., true)` would.
+        session
+            .delete(id, false)
+            .await
+            .context("forgetting torrent")?;
+        Ok(())
     }
 
     pub(super) async fn add_info_hash_with_peers(

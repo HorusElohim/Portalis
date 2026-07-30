@@ -241,7 +241,7 @@ class PlaceholderTile extends StatelessWidget {
 /// an image — video/audio/subtitle/other files get a type icon instead,
 /// since none of those have a real frame/cover to render here). Used
 /// everywhere a media tile is shown — collection cards, grids, the media
-/// viewer — so real and mock media render identically.
+/// viewer — so a tile looks the same wherever it appears.
 class MediaThumbnail extends StatelessWidget {
   const MediaThumbnail({super.key, required this.media, this.borderRadius = 0});
 
