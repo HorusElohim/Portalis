@@ -42,11 +42,20 @@ Future<List<CollabCollectionInfo>> listCollabCollections() =>
     RustLib.instance.api.crateCollabListCollabCollections();
 
 /// Starts this device's manifest-sync listener (idempotent) and returns
-/// the `ip:port` another device on the same network can sync with. Phase 2
-/// scaffolding — Phase 3's DHT rendezvous removes the need to ever show or
-/// type an address (see `collab_sync.rs`).
+/// the addresses another device can sync with (comma-separated: LAN, and
+/// public IP when discoverable). Phase 2 scaffolding — Phase 3's DHT
+/// rendezvous removes the need to ever show or type an address (see
+/// `collab_sync.rs`).
 Future<String> collabSyncAddress() =>
     RustLib.instance.api.crateCollabCollabSyncAddress();
+
+/// Starts downloading every media item in this collection over ordinary
+/// BitTorrent, handing librqbit the peer addresses learned during sync as
+/// direct connection hints (no DHT wait on a LAN). Returns how many items
+/// were added.
+Future<int> fetchCollabCollectionMedia({required String collectionId}) =>
+    RustLib.instance.api
+        .crateCollabFetchCollabCollectionMedia(collectionId: collectionId);
 
 /// One full manifest sync with the peer at `peer_addr`: exchange signed
 /// manifest entries + collaborator lists for this collection and CRDT-merge
@@ -60,8 +69,12 @@ class CollabCollectionInfo {
   final String id;
   final String name;
 
-  /// Paste-able invite: encodes both the collection name and its invite
-  /// secret, so `join_collab_collection` only needs this one string.
+  /// Paste-able invite: `<secret hex>:<name>[@addr1,addr2,...]` — the
+  /// secret and name are what joining needs; the optional trailing
+  /// addresses are *this device's* current sync endpoints (LAN, and
+  /// public IP when discoverable), so the joiner can sync immediately
+  /// instead of typing an address by hand. Addresses are hints tied to
+  /// the moment the invite was generated, not durable state.
   final String inviteCode;
   final List<CollaboratorInfo> collaborators;
   final List<ManifestEntryInfo> media;

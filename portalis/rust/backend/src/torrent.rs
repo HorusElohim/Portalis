@@ -160,6 +160,27 @@ pub async fn set_upload_limit_bps(bytes_per_sec: Option<u32>) -> anyhow::Result<
     }
 }
 
+/// The BitTorrent session's own listen port — for `collab_sync.rs` to
+/// advertise in sync messages (so peers can fetch our seeded media
+/// directly). Internal, never bridged (`pub(crate)` is invisible to FRB's
+/// scan, same as `device::current_identity`).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) async fn bt_listen_port() -> anyhow::Result<Option<u16>> {
+    native::bt_listen_port().await
+}
+
+/// Adds a torrent by bare info-hash with explicit peer-address hints —
+/// `collab_sync.rs`'s learned "who has this collection's media" addresses
+/// go straight to librqbit as `initial_peers`, so a LAN fetch connects to
+/// the seeder immediately instead of waiting on DHT discovery.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) async fn add_info_hash_with_peers(
+    info_hash_hex: &str,
+    peers: Vec<std::net::SocketAddr>,
+) -> anyhow::Result<TorrentInfo> {
+    native::add_info_hash_with_peers(info_hash_hex, peers).await
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::path::PathBuf;
@@ -182,7 +203,16 @@ mod native {
                 let dir = output_dir();
                 std::fs::create_dir_all(&dir)
                     .with_context(|| format!("creating output dir {dir:?}"))?;
-                Session::new(dir.clone())
+                let opts = librqbit::SessionOptions {
+                    // Ask the router (UPnP/IGD) to forward our BT listen
+                    // port, so peers outside this network can reach us —
+                    // without it, cross-network fetches only work when the
+                    // *other* side is reachable. Off in Session::new()'s
+                    // defaults; harmless no-op on routers without UPnP.
+                    enable_upnp_port_forwarding: true,
+                    ..Default::default()
+                };
+                Session::new_with_opts(dir.clone(), opts)
                     .await
                     .with_context(|| format!("starting librqbit session in {dir:?}"))
             })
@@ -415,6 +445,29 @@ mod native {
             .ratelimits
             .set_upload_bps(bytes_per_sec.and_then(std::num::NonZeroU32::new));
         Ok(())
+    }
+
+    pub(super) async fn bt_listen_port() -> anyhow::Result<Option<u16>> {
+        Ok(session().await?.tcp_listen_port())
+    }
+
+    pub(super) async fn add_info_hash_with_peers(
+        info_hash_hex: &str,
+        peers: Vec<std::net::SocketAddr>,
+    ) -> anyhow::Result<TorrentInfo> {
+        let session = session().await?;
+        let opts = AddTorrentOptions {
+            overwrite: true,
+            initial_peers: (!peers.is_empty()).then_some(peers),
+            ..Default::default()
+        };
+        let response = session
+            // A bare 40-char hex info-hash is a valid magnet identifier to
+            // librqbit's URL parser, same as the user-facing magnet flow.
+            .add_torrent(AddTorrent::from_url(info_hash_hex), Some(opts))
+            .await
+            .with_context(|| format!("adding torrent {info_hash_hex} with peer hints"))?;
+        response_to_info(&api(session), response)
     }
 }
 

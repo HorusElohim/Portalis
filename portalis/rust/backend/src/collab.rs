@@ -17,8 +17,12 @@
 pub struct CollabCollectionInfo {
     pub id: String,
     pub name: String,
-    /// Paste-able invite: encodes both the collection name and its invite
-    /// secret, so `join_collab_collection` only needs this one string.
+    /// Paste-able invite: `<secret hex>:<name>[@addr1,addr2,...]` — the
+    /// secret and name are what joining needs; the optional trailing
+    /// addresses are *this device's* current sync endpoints (LAN, and
+    /// public IP when discoverable), so the joiner can sync immediately
+    /// instead of typing an address by hand. Addresses are hints tied to
+    /// the moment the invite was generated, not durable state.
     pub invite_code: String,
     pub collaborators: Vec<CollaboratorInfo>,
     pub media: Vec<ManifestEntryInfo>,
@@ -108,9 +112,10 @@ pub async fn list_collab_collections() -> anyhow::Result<Vec<CollabCollectionInf
 }
 
 /// Starts this device's manifest-sync listener (idempotent) and returns
-/// the `ip:port` another device on the same network can sync with. Phase 2
-/// scaffolding — Phase 3's DHT rendezvous removes the need to ever show or
-/// type an address (see `collab_sync.rs`).
+/// the addresses another device can sync with (comma-separated: LAN, and
+/// public IP when discoverable). Phase 2 scaffolding — Phase 3's DHT
+/// rendezvous removes the need to ever show or type an address (see
+/// `collab_sync.rs`).
 pub async fn collab_sync_address() -> anyhow::Result<String> {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -118,6 +123,22 @@ pub async fn collab_sync_address() -> anyhow::Result<String> {
     }
     #[cfg(target_arch = "wasm32")]
     {
+        native::unsupported_on_web()
+    }
+}
+
+/// Starts downloading every media item in this collection over ordinary
+/// BitTorrent, handing librqbit the peer addresses learned during sync as
+/// direct connection hints (no DHT wait on a LAN). Returns how many items
+/// were added.
+pub async fn fetch_collab_collection_media(collection_id: String) -> anyhow::Result<u32> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::fetch_collab_collection_media(collection_id).await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = collection_id;
         native::unsupported_on_web()
     }
 }
@@ -150,11 +171,38 @@ mod native {
 
     use super::{CollabCollectionInfo, CollaboratorInfo, ManifestEntryInfo};
 
-    fn to_info(collection: &Collection) -> CollabCollectionInfo {
+    /// Current sync endpoints to embed in invites: LAN always, public IP
+    /// when discoverable. Starts the listener as a side effect, so a
+    /// device that just *generated* an invite is already reachable.
+    async fn current_sync_addresses() -> Vec<String> {
+        let Ok(addr) = crate::collab_sync::ensure_listener().await else {
+            return Vec::new();
+        };
+        let mut addrs = vec![format!("{}:{}", crate::collab_sync::lan_ip(), addr.port())];
+        if let Some(public) = crate::collab_sync::public_ip().await {
+            let candidate = format!("{public}:{}", addr.port());
+            if !addrs.contains(&candidate) {
+                addrs.push(candidate);
+            }
+        }
+        addrs
+    }
+
+    fn to_info(collection: &Collection, sync_addrs: &[String]) -> CollabCollectionInfo {
+        let invite_code = if sync_addrs.is_empty() {
+            format!("{}:{}", collection.invite_secret_hex(), collection.name)
+        } else {
+            format!(
+                "{}:{}@{}",
+                collection.invite_secret_hex(),
+                collection.name,
+                sync_addrs.join(",")
+            )
+        };
         CollabCollectionInfo {
             id: collection.id.to_string(),
             name: collection.name.clone(),
-            invite_code: format!("{}:{}", collection.invite_secret_hex(), collection.name),
+            invite_code,
             collaborators: collection
                 .collaborators
                 .iter()
@@ -188,6 +236,7 @@ mod native {
         name: String,
     ) -> anyhow::Result<CollabCollectionInfo> {
         let identity = crate::device::current_identity()?;
+        let addrs = current_sync_addresses().await;
         with_store(|collections| {
             let mut collection = Collection::new(name);
             collection.collaborators.push(Collaborator::new(
@@ -196,22 +245,44 @@ mod native {
                 Role::Admin,
                 now_unix_ms(),
             ));
-            let info = to_info(&collection);
+            let info = to_info(&collection, &addrs);
             collections.push(collection);
             Ok(info)
         })
+    }
+
+    /// Splits `<secret>:<name>[@addr1,addr2]` into its parts. The address
+    /// suffix is only treated as one if every comma-separated piece looks
+    /// like `host:port` — a name that merely contains `@` stays a name.
+    fn parse_invite_code(invite_code: &str) -> anyhow::Result<(&str, &str, Vec<String>)> {
+        let (secret_hex, rest) = invite_code
+            .split_once(':')
+            .ok_or_else(|| anyhow::anyhow!("invite code is malformed"))?;
+        if let Some((name, suffix)) = rest.rsplit_once('@') {
+            let addrs: Vec<String> = suffix.split(',').map(str::to_string).collect();
+            let all_look_like_addrs = !addrs.is_empty()
+                && addrs.iter().all(|a| {
+                    a.rsplit_once(':')
+                        .is_some_and(|(_, port)| port.parse::<u16>().is_ok())
+                });
+            if all_look_like_addrs {
+                return Ok((secret_hex, name, addrs));
+            }
+        }
+        Ok((secret_hex, rest, Vec::new()))
     }
 
     pub(super) async fn join_collab_collection(
         invite_code: String,
         display_name: String,
     ) -> anyhow::Result<CollabCollectionInfo> {
-        let (secret_hex, name) = invite_code
-            .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("invite code is malformed"))?;
+        let (secret_hex, name, peer_addrs) = parse_invite_code(&invite_code)?;
         let secret = InviteSecret::from_hex(secret_hex)?;
+        let rendezvous_key_hex = secret.derive_rendezvous_key().to_hex();
         let identity = crate::device::current_identity()?;
-        with_store(|collections| {
+        let own_addrs = current_sync_addresses().await;
+
+        let (id, mut info) = with_store(|collections| {
             let mut collection = Collection::join(name.to_string(), secret);
             collection.collaborators.push(Collaborator::new(
                 identity.device_id(),
@@ -219,10 +290,31 @@ mod native {
                 Role::Member,
                 now_unix_ms(),
             ));
-            let info = to_info(&collection);
+            let info = to_info(&collection, &own_addrs);
+            let id = collection.id;
             collections.push(collection);
-            Ok(info)
-        })
+            Ok((id, info))
+        })?;
+
+        // Best-effort immediate sync with the inviter, via the addresses
+        // embedded in the code — this is what makes joining feel like
+        // "the collection appears", not an empty shell. Failure is fine
+        // (inviter offline, different network): the join itself stands and
+        // a manual sync can happen later.
+        if !peer_addrs.is_empty()
+            && crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs)
+                .await
+                .is_ok()
+        {
+            info = with_store(|collections| {
+                collections
+                    .iter()
+                    .find(|c| c.id == id)
+                    .map(|c| to_info(c, &own_addrs))
+                    .ok_or_else(|| anyhow::anyhow!("collection vanished during join sync"))
+            })?;
+        }
+        Ok(info)
     }
 
     pub(super) async fn add_media_to_collab_collection(
@@ -232,6 +324,7 @@ mod native {
     ) -> anyhow::Result<CollabCollectionInfo> {
         let identity = crate::device::current_identity()?;
         let id = CollectionId::from_string(&collection_id)?;
+        let addrs = current_sync_addresses().await;
 
         // A fresh torrent per batch — its own directory, own info-hash —
         // rather than growing one torrent, since a torrent's piece layout
@@ -260,17 +353,19 @@ mod native {
                 collection.add_manifest_entry(entry),
                 "failed to add manifest entry (should never happen for a freshly-signed entry)"
             );
-            Ok(to_info(collection))
+            Ok(to_info(collection, &addrs))
         })
     }
 
     pub(super) async fn list_collab_collections() -> anyhow::Result<Vec<CollabCollectionInfo>> {
-        with_store(|collections| Ok(collections.iter().map(to_info).collect()))
+        let addrs = current_sync_addresses().await;
+        with_store(|collections| Ok(collections.iter().map(|c| to_info(c, &addrs)).collect()))
     }
 
     pub(super) async fn collab_sync_address() -> anyhow::Result<String> {
-        let addr = crate::collab_sync::ensure_listener().await?;
-        Ok(format!("{}:{}", crate::collab_sync::lan_ip(), addr.port()))
+        let addrs = current_sync_addresses().await;
+        anyhow::ensure!(!addrs.is_empty(), "couldn't start the sync listener");
+        Ok(addrs.join(","))
     }
 
     pub(super) async fn sync_collab_collection(
@@ -288,14 +383,45 @@ mod native {
         // Make sure our own listener is up before reaching out, so the
         // peer's user can immediately sync back the other way too.
         let _ = crate::collab_sync::ensure_listener().await?;
-        crate::collab_sync::sync_with(&rendezvous_key_hex, &peer_addr).await?;
+        // The pasted value may itself be a comma-separated list (it's
+        // shown that way on the other device's User screen).
+        let peer_addrs: Vec<String> = peer_addr.split(',').map(str::to_string).collect();
+        crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs).await?;
+        let addrs = current_sync_addresses().await;
         with_store(|collections| {
             collections
                 .iter()
                 .find(|c| c.id == id)
-                .map(to_info)
+                .map(|c| to_info(c, &addrs))
                 .ok_or_else(|| anyhow::anyhow!("collection vanished during sync"))
         })
+    }
+
+    pub(super) async fn fetch_collab_collection_media(
+        collection_id: String,
+    ) -> anyhow::Result<u32> {
+        let id = CollectionId::from_string(&collection_id)?;
+        let (rendezvous_key_hex, info_hashes) = with_store(|collections| {
+            let collection = collections
+                .iter()
+                .find(|c| c.id == id)
+                .ok_or_else(|| anyhow::anyhow!("no such collab collection"))?;
+            Ok((
+                collection.rendezvous_key().to_hex(),
+                collection
+                    .manifest()
+                    .entries()
+                    .map(|e| e.info_hash.to_hex())
+                    .collect::<Vec<_>>(),
+            ))
+        })?;
+        let peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
+        let mut added = 0u32;
+        for info_hash in &info_hashes {
+            crate::torrent::add_info_hash_with_peers(info_hash, peers.clone()).await?;
+            added += 1;
+        }
+        Ok(added)
     }
 
     #[cfg(test)]
@@ -321,7 +447,7 @@ mod native {
                 20,
             ));
 
-            let info = to_info(&collection);
+            let info = to_info(&collection, &[]);
 
             assert_eq!(info.id, collection.id.to_string());
             assert_eq!(info.collaborators.len(), 1);
@@ -329,12 +455,36 @@ mod native {
             assert!(!info.collaborators[0].is_admin);
             assert_eq!(info.media.len(), 1);
             assert_eq!(info.media[0].name, "RAW_3000");
-            // invite_code is "<secret hex>:<name>" — must round-trip via
-            // the exact split_once(':') parsing join_collab_collection
-            // uses.
-            let (secret_hex, name) = info.invite_code.split_once(':').unwrap();
+            // invite_code must round-trip via the exact parsing
+            // join_collab_collection uses.
+            let (secret_hex, name, addrs) = parse_invite_code(&info.invite_code).unwrap();
             assert_eq!(secret_hex, collection.invite_secret_hex());
             assert_eq!(name, "Studio Shoot");
+            assert!(addrs.is_empty());
+        }
+
+        #[test]
+        fn invite_code_with_addresses_round_trips() {
+            let collection = Collection::new("Iceland 2024".into());
+            let addrs = vec!["192.168.1.5:5432".to_string(), "82.10.0.7:5432".to_string()];
+
+            let info = to_info(&collection, &addrs);
+            let (secret_hex, name, parsed) = parse_invite_code(&info.invite_code).unwrap();
+
+            assert_eq!(secret_hex, collection.invite_secret_hex());
+            assert_eq!(name, "Iceland 2024");
+            assert_eq!(parsed, addrs);
+        }
+
+        #[test]
+        fn a_name_containing_at_is_not_mistaken_for_addresses() {
+            let collection = Collection::new("party @ Sam's".into());
+
+            let info = to_info(&collection, &[]);
+            let (_, name, addrs) = parse_invite_code(&info.invite_code).unwrap();
+
+            assert_eq!(name, "party @ Sam's");
+            assert!(addrs.is_empty());
         }
     }
 }

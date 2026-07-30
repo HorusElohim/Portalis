@@ -32,6 +32,16 @@ serde_json = "1.0"
 # timeouts on top of the base `rt` feature — native targets only, same
 # no-sockets-on-wasm32 reasoning as librqbit above.
 tokio = { version = "1", features = ["rt", "net", "io-util", "time", "macros"] }
+# Public-IP discovery for invite codes. Already in the dependency tree
+# (librqbit pulls the same version/features), so this adds no compilation —
+# it just lets us call it directly.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# UPnP port forwarding for the manifest-sync listener (librqbit forwards
+# its own BT port via SessionOptions; this same crate — already in the
+# tree as librqbit's dependency — lets us forward the sync port too, so
+# the public-IP address embedded in invites is actually reachable on
+# UPnP-enabled routers without manual port-forward setup).
+librqbit-upnp = "1"
 
 # The domain layer's randomness (device keygen, invite secrets, collection
 # ids) has no OS RNG to call into on wasm32 — route it through the browser's

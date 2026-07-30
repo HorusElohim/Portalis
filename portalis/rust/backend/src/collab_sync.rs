@@ -43,6 +43,14 @@ pub(crate) struct SyncMessage {
     pub(crate) rendezvous_key_hex: String,
     pub(crate) collaborators: Vec<PersistedCollaborator>,
     pub(crate) entries: Vec<PersistedManifestEntry>,
+    /// The port this device's *BitTorrent* session listens on (distinct
+    /// from the sync listener's port). Combined with the IP the sync
+    /// connection itself came from/went to, the other side learns a
+    /// concrete peer address to hand librqbit as `initial_peers` when
+    /// fetching this collection's media — no DHT lookup needed on a LAN.
+    /// `default` for wire-compat with peers running the field-less build.
+    #[serde(default)]
+    pub(crate) bt_listen_port: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -83,7 +91,9 @@ async fn read_frame<R: AsyncReadExt + Unpin>(r: &mut R) -> anyhow::Result<WireFr
 
 /// Snapshot of our local state for the collection with this rendezvous
 /// key, or `None` if we don't hold it.
-fn local_message_for(rendezvous_key_hex: &str) -> anyhow::Result<Option<SyncMessage>> {
+async fn local_message_for(rendezvous_key_hex: &str) -> anyhow::Result<Option<SyncMessage>> {
+    // Best-effort: fetch may still work via DHT if the BT session isn't up.
+    let bt_listen_port = crate::torrent::bt_listen_port().await.ok().flatten();
     collab_store::with_store(|collections| {
         Ok(collections
             .iter()
@@ -92,8 +102,38 @@ fn local_message_for(rendezvous_key_hex: &str) -> anyhow::Result<Option<SyncMess
                 rendezvous_key_hex: rendezvous_key_hex.to_string(),
                 collaborators: c.collaborators.iter().map(collaborator_to_persisted).collect(),
                 entries: c.manifest().entries().map(entry_to_persisted).collect(),
+                bt_listen_port,
             }))
     })
+}
+
+/// BitTorrent peer addresses learned through sync exchanges, per
+/// rendezvous key — handed to librqbit as `initial_peers` when fetching a
+/// collection's media, so a LAN fetch connects straight to the device that
+/// has the files instead of waiting on DHT discovery. In-memory only:
+/// these are hints tied to current network conditions, not durable state.
+static LEARNED_BT_PEERS: std::sync::Mutex<
+    std::collections::BTreeMap<String, std::collections::BTreeSet<SocketAddr>>,
+> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+fn record_bt_peer(rendezvous_key_hex: &str, ip: std::net::IpAddr, msg: &SyncMessage) {
+    if let Some(port) = msg.bt_listen_port {
+        LEARNED_BT_PEERS
+            .lock()
+            .unwrap()
+            .entry(rendezvous_key_hex.to_string())
+            .or_default()
+            .insert(SocketAddr::new(ip, port));
+    }
+}
+
+pub(crate) fn learned_bt_peers(rendezvous_key_hex: &str) -> Vec<SocketAddr> {
+    LEARNED_BT_PEERS
+        .lock()
+        .unwrap()
+        .get(rendezvous_key_hex)
+        .map(|set| set.iter().copied().collect())
+        .unwrap_or_default()
 }
 
 /// CRDT-merge a peer's state into the matching local collection: manifest
@@ -158,6 +198,17 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
                     });
                 }
             });
+            // Ask the router (UPnP/IGD) to forward this port so the
+            // public-IP address embedded in invites is actually reachable
+            // from outside — same machinery librqbit uses for its own BT
+            // port. run_forever keeps re-leasing; on routers without UPnP
+            // it just keeps failing quietly, and LAN sync is unaffected.
+            if let Ok(forwarder) = librqbit_upnp::UpnpPortForwarder::new(vec![addr.port()], None)
+            {
+                tokio::spawn(async move {
+                    forwarder.run_forever().await;
+                });
+            }
             Ok(addr)
         })
         .await
@@ -165,13 +216,15 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
 }
 
 async fn handle_incoming(mut stream: TcpStream) -> anyhow::Result<()> {
+    let peer_ip = stream.peer_addr()?.ip();
     let frame = tokio::time::timeout(IO_TIMEOUT, read_frame(&mut stream)).await??;
     let WireFrame::Sync(theirs) = frame else {
         anyhow::bail!("unexpected frame from initiator");
     };
-    let reply = match local_message_for(&theirs.rendezvous_key_hex)? {
+    let reply = match local_message_for(&theirs.rendezvous_key_hex).await? {
         Some(ours) => {
             apply_message(&theirs)?;
+            record_bt_peer(&theirs.rendezvous_key_hex, peer_ip, &theirs);
             WireFrame::Sync(ours)
         }
         None => WireFrame::Unknown,
@@ -184,16 +237,19 @@ async fn handle_incoming(mut stream: TcpStream) -> anyhow::Result<()> {
 /// rendezvous key: send our state, receive theirs, merge. Symmetric — both
 /// sides end up with the union.
 pub(crate) async fn sync_with(rendezvous_key_hex: &str, peer_addr: &str) -> anyhow::Result<()> {
-    let ours = local_message_for(rendezvous_key_hex)?
+    let ours = local_message_for(rendezvous_key_hex)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("no local collection with that rendezvous key"))?;
     let mut stream = tokio::time::timeout(IO_TIMEOUT, TcpStream::connect(peer_addr))
         .await
         .context("connection timed out")?
         .with_context(|| format!("connecting to {peer_addr}"))?;
+    let peer_ip = stream.peer_addr()?.ip();
     tokio::time::timeout(IO_TIMEOUT, write_frame(&mut stream, &WireFrame::Sync(ours))).await??;
     match tokio::time::timeout(IO_TIMEOUT, read_frame(&mut stream)).await?? {
         WireFrame::Sync(theirs) => {
             apply_message(&theirs)?;
+            record_bt_peer(rendezvous_key_hex, peer_ip, &theirs);
             Ok(())
         }
         WireFrame::Unknown => anyhow::bail!(
@@ -201,6 +257,23 @@ pub(crate) async fn sync_with(rendezvous_key_hex: &str, peer_addr: &str) -> anyh
              with the same invite code first."
         ),
     }
+}
+
+/// Tries each address until one sync succeeds — invites can carry several
+/// candidate addresses (LAN + public); whichever is reachable from here
+/// wins. Returns the last error if none work.
+pub(crate) async fn sync_with_any(
+    rendezvous_key_hex: &str,
+    peer_addrs: &[String],
+) -> anyhow::Result<()> {
+    let mut last_err = anyhow::anyhow!("no peer addresses to try");
+    for addr in peer_addrs {
+        match sync_with(rendezvous_key_hex, addr).await {
+            Ok(()) => return Ok(()),
+            Err(e) => last_err = e.context(format!("via {addr}")),
+        }
+    }
+    Err(last_err)
 }
 
 /// Best-effort LAN IP for showing a connectable "sync address" in the UI.
@@ -215,6 +288,38 @@ pub(crate) fn lan_ip() -> String {
         })
         .map(|a| a.ip().to_string())
         .unwrap_or_else(|_| "127.0.0.1".to_string())
+}
+
+/// Best-effort public IP, so invites can carry an address reachable from
+/// *outside* this network too — asked once per app run (it's a network
+/// call) and cached. `None` when offline or both services are unreachable.
+///
+/// Honest limitation, until Phase 3: knowing the public IP only helps if
+/// the sync port is actually reachable from outside (router port-forward /
+/// UPnP). On an unconfigured NAT the LAN address still works for same-
+/// network peers; cross-network sync without setup needs the DHT +
+/// hole-punching phase.
+pub(crate) async fn public_ip() -> Option<String> {
+    static PUBLIC_IP: OnceCell<Option<String>> = OnceCell::const_new();
+    PUBLIC_IP
+        .get_or_init(|| async {
+            for service in ["https://api.ipify.org", "https://checkip.amazonaws.com"] {
+                let Ok(Ok(resp)) =
+                    tokio::time::timeout(Duration::from_secs(5), reqwest::get(service)).await
+                else {
+                    continue;
+                };
+                if let Ok(text) = resp.text().await {
+                    let candidate = text.trim().to_string();
+                    if candidate.parse::<std::net::IpAddr>().is_ok() {
+                        return Some(candidate);
+                    }
+                }
+            }
+            None
+        })
+        .await
+        .clone()
 }
 
 #[cfg(test)]
@@ -237,6 +342,7 @@ mod tests {
             rendezvous_key_hex: "ab".repeat(32),
             collaborators: vec![],
             entries: vec![entry_to_persisted(&entry)],
+            bt_listen_port: Some(6881),
         });
 
         let (mut a, mut b) = tokio::io::duplex(64 * 1024);

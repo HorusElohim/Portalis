@@ -175,8 +175,14 @@ class TorrentCollections extends ChangeNotifier {
       );
     }).toList();
 
+    // livePeers counts currently-connected *remote* peers — this device is
+    // never in that set, so a freshly created (or idle) collection that's
+    // seeding fine reports 0. Count ourselves explicitly: when finished,
+    // this device itself is a live copy.
     final copiesLabel = info.finished
-        ? '${info.livePeers} peer${info.livePeers == 1 ? '' : 's'} seeding'
+        ? (info.livePeers == 0
+            ? 'Seeding · this device'
+            : 'Seeding · this device + ${info.livePeers} peer${info.livePeers == 1 ? '' : 's'}')
         : '${(progress * 100).toStringAsFixed(0)}% · ${info.livePeers} peer${info.livePeers == 1 ? '' : 's'}';
 
     return Collection(

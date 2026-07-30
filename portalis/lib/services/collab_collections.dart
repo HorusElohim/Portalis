@@ -85,16 +85,11 @@ class CollabCollections extends ChangeNotifier {
   }
 
   /// Starts downloading every media item in a synced collection over
-  /// ordinary BitTorrent — each manifest entry's info-hash is a valid
-  /// magnet identifier, and whoever added it is seeding it. Returns how
+  /// ordinary BitTorrent. Rust hands librqbit the peer addresses learned
+  /// during sync as direct connection hints, so a LAN fetch connects to
+  /// the device that has the files immediately — no DHT wait. Returns how
   /// many downloads were started (items already added just re-resolve to
   /// the same torrent).
-  Future<int> fetchAllMedia(bridge.CollabCollectionInfo collection) async {
-    var started = 0;
-    for (final media in collection.media) {
-      await torrent_bridge.addTorrentFromMagnet(magnetOrHash: media.infoHash);
-      started += 1;
-    }
-    return started;
-  }
+  Future<int> fetchAllMedia(bridge.CollabCollectionInfo collection) =>
+      bridge.fetchCollabCollectionMedia(collectionId: collection.id);
 }
