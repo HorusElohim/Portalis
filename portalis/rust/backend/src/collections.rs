@@ -181,7 +181,7 @@ pub async fn sync_address() -> anyhow::Result<String> {
 mod native {
     use std::collections::{HashMap, HashSet};
 
-    use crate::collab_store::with_store;
+    use crate::collab_store::{read_store, with_store};
     use crate::domain::collaborator::{Collaborator, Role};
     use crate::domain::collection::{Collection, CollectionId};
     use crate::domain::invite::InviteSecret;
@@ -398,7 +398,7 @@ mod native {
             .map(|t| (norm(&t.info_hash), t))
             .collect();
 
-        let (mut result, claimed) = with_store(|collections| {
+        let (mut result, claimed) = read_store(|collections| {
             let mut claimed: HashSet<String> = HashSet::new();
             let mut out = Vec::with_capacity(collections.len());
             for collection in collections.iter() {
@@ -637,7 +637,7 @@ mod native {
     pub(super) async fn fetch_collection_media(collection_id: String) -> anyhow::Result<u32> {
         clog!("collections", "fetch_collection_media: id={collection_id}");
         let id = CollectionId::from_string(&collection_id)?;
-        let (rendezvous_key_hex, info_hashes) = with_store(|collections| {
+        let (rendezvous_key_hex, info_hashes) = read_store(|collections| {
             let collection = collections
                 .iter()
                 .find(|c| c.id == id)
@@ -672,7 +672,7 @@ mod native {
     ) -> anyhow::Result<CollectionInfo> {
         clog!("collections", "sync_collection: id={collection_id} peer_addr={peer_addr:?}");
         let id = CollectionId::from_string(&collection_id)?;
-        let rendezvous_key_hex = with_store(|collections| {
+        let rendezvous_key_hex = read_store(|collections| {
             collections
                 .iter()
                 .find(|c| c.id == id)

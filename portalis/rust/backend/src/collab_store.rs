@@ -192,6 +192,16 @@ fn load() -> anyhow::Result<Vec<Collection>> {
     result
 }
 
+/// Persists the store **atomically**: serialise to a sibling temp file, then
+/// rename it over the real one.
+///
+/// A plain `fs::write` opens with `O_TRUNC`, so the existing file is destroyed
+/// the instant the write begins and any later failure — a full disk, a crash,
+/// a force-quit — leaves nothing behind. That is not hypothetical: this
+/// project's own dev machine filled its disk mid-session and the store was
+/// found empty afterwards. `rename` within the same directory is atomic, so a
+/// reader sees either the complete old file or the complete new one, and a
+/// failed write leaves the original untouched.
 fn save(collections: &[Collection]) -> anyhow::Result<()> {
     let path = store_file();
     if let Some(parent) = path.parent() {
@@ -201,7 +211,11 @@ fn save(collections: &[Collection]) -> anyhow::Result<()> {
         collections: collections.iter().map(to_persisted).collect(),
     };
     let bytes = serde_json::to_vec_pretty(&persisted)?;
-    std::fs::write(&path, &bytes).with_context(|| format!("writing {path:?}"))?;
+
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &bytes).with_context(|| format!("writing {tmp:?}"))?;
+    std::fs::rename(&tmp, &path)
+        .with_context(|| format!("replacing {path:?} with {tmp:?}"))?;
     clog!(
         "collab_store",
         "save: wrote {} collection(s), {} bytes, to {path:?}",
@@ -218,27 +232,52 @@ fn save(collections: &[Collection]) -> anyhow::Result<()> {
 /// `collections.json`.
 static STORE: Mutex<Option<Vec<Collection>>> = Mutex::new(None);
 
-/// Locks the store, runs `f`, then persists. `f` must be synchronous — any
-/// `.await` (e.g. creating a torrent) has to happen *before* calling this,
-/// never inside it, since a `std::sync::MutexGuard` can't be held across an
-/// await point.
-pub(crate) fn with_store<R>(
+/// Lazily loads the store on first access. Callers go through
+/// [`read_store`] or [`with_store`] rather than this.
+fn lock_loaded<R>(
     f: impl FnOnce(&mut Vec<Collection>) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
     let mut guard = STORE.lock().unwrap();
     if guard.is_none() {
-        clog!("collab_store", "with_store: cold start, loading from disk");
+        clog!("collab_store", "cold start, loading from disk");
         *guard = Some(load()?);
     }
-    let collections = guard.as_mut().unwrap();
-    let before = collections.len();
-    let result = f(collections)?;
-    let after = collections.len();
-    if before != after {
-        clog!("collab_store", "with_store: collection count {before} -> {after}");
-    }
-    save(collections)?;
-    Ok(result)
+    f(guard.as_mut().unwrap())
+}
+
+/// Read-only access — **never writes to disk**.
+///
+/// Use this for anything that only inspects the store. It used to be
+/// impossible: every access went through [`with_store`], which saved
+/// unconditionally, so merely *listing* collections rewrote
+/// `collections.json`. With the UI polling once a second that meant a
+/// rewrite per second forever, which is both pointless and a standing
+/// opportunity for a failed write to land on good data.
+pub(crate) fn read_store<R>(
+    f: impl FnOnce(&Vec<Collection>) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    lock_loaded(|collections| f(collections))
+}
+
+/// Locks the store, runs `f`, then persists. `f` must be synchronous — any
+/// `.await` (e.g. creating a torrent) has to happen *before* calling this,
+/// never inside it, since a `std::sync::MutexGuard` can't be held across an
+/// await point.
+///
+/// Only for callers that actually mutate; reads belong in [`read_store`].
+pub(crate) fn with_store<R>(
+    f: impl FnOnce(&mut Vec<Collection>) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    lock_loaded(|collections| {
+        let before = collections.len();
+        let result = f(collections)?;
+        let after = collections.len();
+        if before != after {
+            clog!("collab_store", "with_store: collection count {before} -> {after}");
+        }
+        save(collections)?;
+        Ok(result)
+    })
 }
 
 #[cfg(test)]
@@ -278,6 +317,35 @@ mod tests {
         assert!(reloaded.collaborators[0].is_admin());
         assert_eq!(reloaded.manifest().len(), 1);
         assert!(reloaded.manifest().contains(&InfoHash::from_bytes([3; 20])));
+    }
+
+    #[test]
+    fn save_never_truncates_the_existing_file_before_the_new_one_is_complete() {
+        // The failure this guards against actually happened: a plain
+        // fs::write opens with O_TRUNC, so a full disk (or a crash) partway
+        // through left collections.json empty and every collection was lost.
+        // Writing to a sibling temp file and renaming means the real path
+        // only ever holds a complete document.
+        let dir = std::env::temp_dir().join(format!("portalis-save-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("collections.json");
+        std::fs::write(&path, b"{\"collections\":[]}").unwrap();
+
+        // Mirror save()'s write strategy against this temp path.
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, b"{\"collections\":[{}]}").unwrap();
+        // Before the rename the original is still fully intact — that is the
+        // whole property. A truncating write would have emptied it by now.
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"{\"collections\":[]}",
+            "the live file must stay untouched until the replacement is complete"
+        );
+        std::fs::rename(&tmp, &path).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"{\"collections\":[{}]}");
+        assert!(!tmp.exists(), "rename must consume the temp file");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

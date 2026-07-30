@@ -142,7 +142,7 @@ async fn local_message_for(rendezvous_key_hex: &str) -> anyhow::Result<Option<Sy
     // BT session isn't up, so this must never delay the reply (see
     // BT_PORT_TIMEOUT).
     let bt_listen_port = bt_listen_port_best_effort().await;
-    let result = collab_store::with_store(|collections| {
+    let result = collab_store::read_store(|collections| {
         clog!(
             "collab_sync",
             "local_message_for: looking for rendezvous_key={}… among {} known collection(s): {:?}",
