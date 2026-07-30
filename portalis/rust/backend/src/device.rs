@@ -121,6 +121,19 @@ mod native {
     pub(super) fn set_nickname(nickname: String) -> anyhow::Result<DeviceIdentityInfo> {
         let (identity, _old_nickname) = load_or_create()?;
         save(&identity, &nickname)?;
+        // Collaborator records hold a *copy* of the name taken when the
+        // collection was created or joined, so renaming the identity alone
+        // left every existing collection showing the old one — and kept
+        // sending it to peers, since the collaborator list is what sync
+        // exchanges. Non-fatal: the rename itself has already been saved,
+        // and a collection whose record didn't update is a stale label, not
+        // a broken collection.
+        if let Err(e) = crate::collab_store::rename_device(&identity.device_id(), &nickname) {
+            crate::log::clog!(
+                "device",
+                "set_nickname: renamed the identity but couldn't update collections ({e:#})"
+            );
+        }
         let info = DeviceIdentityInfo {
             device_id: identity.device_id().to_hex(),
             nickname,

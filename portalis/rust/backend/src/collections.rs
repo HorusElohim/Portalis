@@ -405,6 +405,29 @@ mod native {
         });
         let addrs = current_sync_addresses().await;
 
+        // Self-heal this device's own collaborator records. Collections
+        // created before the nickname was wired up (or before it was last
+        // changed) carry a stale copy of the name, and the collaborator list
+        // is exactly what sync broadcasts to peers — so a stale entry keeps
+        // announcing the wrong name until corrected. `rename_device` checks
+        // read-only first, so in the steady state this costs one comparison
+        // and never touches the file.
+        if let (Ok(identity), Ok(me)) = (
+            crate::device::current_identity(),
+            crate::device::device_identity(),
+        ) {
+            match crate::collab_store::rename_device(&identity.device_id(), &me.nickname) {
+                Ok(n) if n > 0 => clog!(
+                    "collections",
+                    "list_collections: corrected {n} stale collaborator record(s) to {:?}",
+                    me.nickname
+                ),
+                Ok(_) => {}
+                Err(e) => clog!("collections", "list_collections: couldn't reconcile this \
+                     device's collaborator name ({e:#})"),
+            }
+        }
+
         let by_hash: HashMap<String, &TorrentInfo> = torrents
             .iter()
             .map(|t| (norm(&t.info_hash), t))
@@ -524,11 +547,16 @@ mod native {
     pub(super) async fn create_collection(name: String) -> anyhow::Result<CollectionInfo> {
         clog!("collections", "create_collection: name={name:?}");
         let identity = crate::device::current_identity()?;
+        // The device's *real* nickname, not a hardcoded "Me" — that literal
+        // was what every collaborator list showed for this device, on this
+        // device and on every peer it synced with, no matter what the user
+        // had renamed themselves to.
+        let nickname = crate::device::device_identity()?.nickname;
         let id = with_store(|collections| {
             let mut collection = Collection::new(name);
             collection.collaborators.push(Collaborator::new(
                 identity.device_id(),
-                "Me".to_string(),
+                nickname,
                 Role::Admin,
                 now_unix_ms(),
             ));

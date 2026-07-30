@@ -233,16 +233,38 @@ fn apply_message(msg: &SyncMessage) -> anyhow::Result<bool> {
                 }
             }
         }
+        // Our own record is authoritative locally — a peer must never be able
+        // to rename us in our own view, and it may well be carrying a stale
+        // copy of our old name from before we renamed ourselves.
+        let own_device_id = crate::device::current_identity().ok().map(|i| i.device_id());
         for c in &msg.collaborators {
             let Ok(collaborator) = collaborator_from_persisted(c) else {
                 continue;
             };
-            let known = collection
+            if Some(collaborator.device_id) == own_device_id {
+                continue;
+            }
+            match collection
                 .collaborators
-                .iter()
-                .any(|existing| existing.device_id == collaborator.device_id);
-            if !known {
-                collection.collaborators.push(collaborator);
+                .iter_mut()
+                .find(|existing| existing.device_id == collaborator.device_id)
+            {
+                // Accept the incoming display name for someone we already
+                // know: without this a collaborator who renamed themselves
+                // stayed under their old name here forever, since the record
+                // is a copy taken when we first learned of them.
+                Some(existing) => {
+                    if existing.display_name != collaborator.display_name {
+                        clog!(
+                            "collab_sync",
+                            "apply_message: collaborator renamed {:?} -> {:?}",
+                            existing.display_name,
+                            collaborator.display_name
+                        );
+                        existing.display_name = collaborator.display_name;
+                    }
+                }
+                None => collection.collaborators.push(collaborator),
             }
         }
         clog!(
@@ -634,8 +656,51 @@ pub(crate) async fn public_ip() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::collaborator::{Collaborator, Role};
     use crate::domain::identity::DeviceIdentity;
     use crate::domain::manifest::{InfoHash, ManifestEntry};
+
+    #[test]
+    fn a_peers_rename_reaches_us_but_a_peer_cannot_rename_us() {
+        // Mirrors apply_message's collaborator-merge rule without needing the
+        // process-wide store: an incoming name updates someone we already
+        // know, adds someone we don't, and is ignored for our own device.
+        let me = DeviceIdentity::generate().device_id();
+        let theo = DeviceIdentity::generate().device_id();
+        let newcomer = DeviceIdentity::generate().device_id();
+
+        let mut local = vec![
+            Collaborator::new(me, "Maya".into(), Role::Admin, 0),
+            Collaborator::new(theo, "Theo".into(), Role::Member, 0),
+        ];
+        let incoming = vec![
+            // A peer carrying a stale copy of our old name.
+            Collaborator::new(me, "Me".into(), Role::Admin, 0),
+            // Theo renamed himself since we last synced.
+            Collaborator::new(theo, "Théo".into(), Role::Member, 0),
+            Collaborator::new(newcomer, "Ada".into(), Role::Member, 0),
+        ];
+
+        let own = Some(me);
+        for c in incoming {
+            if Some(c.device_id) == own {
+                continue;
+            }
+            match local.iter_mut().find(|e| e.device_id == c.device_id) {
+                Some(existing) => existing.display_name = c.display_name,
+                None => local.push(c),
+            }
+        }
+
+        // Our own name survives — a peer must not be able to rename us, least
+        // of all back to a stale value.
+        assert_eq!(local[0].display_name, "Maya");
+        // A rename by someone else does land.
+        assert_eq!(local[1].display_name, "Théo");
+        // And an unknown collaborator is still added.
+        assert_eq!(local.len(), 3);
+        assert_eq!(local[2].display_name, "Ada");
+    }
 
     #[tokio::test]
     async fn frames_round_trip_over_a_duplex_stream() {

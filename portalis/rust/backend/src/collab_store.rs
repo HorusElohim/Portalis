@@ -280,6 +280,43 @@ pub(crate) fn with_store<R>(
     })
 }
 
+/// Renames this device wherever it appears as a collaborator, across every
+/// collection, and persists.
+///
+/// A collaborator record is a *copy* of the name at the moment the collection
+/// was created or joined, so renaming the device identity alone left every
+/// existing collection showing the old name forever — and kept broadcasting
+/// it to peers on the next sync, since the collaborator list is what gets
+/// exchanged. Returns how many records changed.
+///
+/// Safe to call repeatedly: it checks read-only first and only writes when
+/// something actually differs, so polling callers don't rewrite the file.
+pub(crate) fn rename_device(device_id: &DeviceId, new_name: &str) -> anyhow::Result<usize> {
+    let needs_update = read_store(|collections| {
+        Ok(collections.iter().any(|c| {
+            c.collaborators
+                .iter()
+                .any(|x| &x.device_id == device_id && x.display_name != new_name)
+        }))
+    })?;
+    if !needs_update {
+        return Ok(0);
+    }
+    with_store(|collections| {
+        let mut renamed = 0;
+        for collection in collections.iter_mut() {
+            for collaborator in collection.collaborators.iter_mut() {
+                if &collaborator.device_id == device_id && collaborator.display_name != new_name {
+                    collaborator.display_name = new_name.to_string();
+                    renamed += 1;
+                }
+            }
+        }
+        clog!("collab_store", "rename_device: updated {renamed} collaborator record(s) to {new_name:?}");
+        Ok(renamed)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +354,41 @@ mod tests {
         assert!(reloaded.collaborators[0].is_admin());
         assert_eq!(reloaded.manifest().len(), 1);
         assert!(reloaded.manifest().contains(&InfoHash::from_bytes([3; 20])));
+    }
+
+    #[test]
+    fn renaming_rewrites_every_record_for_that_device_and_leaves_others_alone() {
+        // Exercises the rename against the same in-place mutation
+        // rename_device performs, without touching the process-wide store.
+        let me = DeviceIdentity::generate().device_id();
+        let someone_else = DeviceIdentity::generate().device_id();
+        let mut collections = vec![
+            Collection::new("Trip".into()),
+            Collection::new("Band".into()),
+        ];
+        for c in collections.iter_mut() {
+            c.collaborators.push(Collaborator::new(me, "Me".into(), Role::Admin, 0));
+            c.collaborators
+                .push(Collaborator::new(someone_else, "Theo".into(), Role::Member, 0));
+        }
+
+        let mut renamed = 0;
+        for collection in collections.iter_mut() {
+            for collaborator in collection.collaborators.iter_mut() {
+                if collaborator.device_id == me && collaborator.display_name != "Maya" {
+                    collaborator.display_name = "Maya".to_string();
+                    renamed += 1;
+                }
+            }
+        }
+
+        // Every collection, not just the most recent one.
+        assert_eq!(renamed, 2);
+        for c in &collections {
+            assert_eq!(c.collaborators[0].display_name, "Maya");
+            // Renaming this device must not touch anyone else's record.
+            assert_eq!(c.collaborators[1].display_name, "Theo");
+        }
     }
 
     #[test]
