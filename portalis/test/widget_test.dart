@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/main.dart';
 import 'package:portalis/models.dart';
 import 'package:portalis/screens/add_torrent_screen.dart';
+import 'package:portalis/screens/collection_details_screen.dart';
 import 'package:portalis/screens/collection_screen.dart';
 import 'package:portalis/screens/join_collection_screen.dart';
 import 'package:portalis/screens/settings_screen.dart';
@@ -182,6 +183,56 @@ void main() {
 
     await tester.tap(find.text('Done'));
     await tester.pump();
+  });
+
+  test('Media regroups into the manifest entries it was flattened from', () {
+    // The grid renders a flat file list, but the unit a collection *grows* by
+    // is the manifest entry (one torrent, one info-hash) — the details screen
+    // shows that structure, so the regrouping has to be faithful.
+    const collection = Collection(
+      id: 'c1',
+      name: 'Trip',
+      kind: CollectionKind.shared,
+      collaborators: [],
+      media: [
+        MediaItem(label: 'a.mp4', infoHash: 'aa', sizeBytes: 100, downloadedBytes: 100, addedBy: 'dev1'),
+        MediaItem(label: 'b.mp4', infoHash: 'aa', sizeBytes: 100, downloadedBytes: 50, addedBy: 'dev1'),
+        MediaItem(label: 'later', infoHash: 'bb', fetched: false, addedBy: 'dev2'),
+      ],
+      state: 'downloading',
+    );
+
+    final entries = collection.entries;
+
+    expect(entries.length, 2);
+    expect(entries.first.infoHash, 'aa');
+    expect(entries.first.media.length, 2);
+    expect(entries.first.addedBy, 'dev1');
+    expect(entries.first.fetched, isTrue);
+    expect(entries.first.totalBytes, 200);
+    expect(entries.first.downloadedBytes, 150);
+    expect(entries.first.progress, 0.75);
+    // A not-yet-fetched entry has no byte counts to report — its size isn't
+    // knowable until the torrent's metadata arrives.
+    expect(entries.last.fetched, isFalse);
+    expect(entries.last.totalBytes, 0);
+    expect(entries.last.progress, 0.0);
+  });
+
+  testWidgets('Collection details degrades when the collection is unavailable',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // RustLib isn't initialized, so Collections holds nothing — the screen
+    // must say so rather than throwing on a null lookup.
+    await tester.pumpWidget(const MaterialApp(
+      home: CollectionDetailsScreen(collectionId: 'does-not-exist'),
+    ));
+    await tester.pump();
+
+    expect(find.textContaining('no longer available'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('A plain torrent collection offers no invite or add-media',

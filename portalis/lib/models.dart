@@ -174,4 +174,62 @@ class Collection {
         ? 'Seeding · this device'
         : 'Seeding · this device + $peersLabel';
   }
+
+  /// [media] regrouped back into the manifest entries it was flattened from —
+  /// one per torrent, in first-appearance order.
+  ///
+  /// The flat list is what the grid renders, but an *entry* is the unit the
+  /// collection actually grows by: one signed manifest entry, one info-hash,
+  /// one collaborator's contribution. The details screen shows that structure,
+  /// which is otherwise invisible once the files are flattened together.
+  List<CollectionEntry> get entries {
+    final byHash = <String, List<MediaItem>>{};
+    for (final m in media) {
+      byHash.putIfAbsent(m.infoHash, () => []).add(m);
+    }
+    return [
+      for (final e in byHash.entries)
+        CollectionEntry(
+          infoHash: e.key,
+          addedBy: e.value.first.addedBy,
+          media: e.value,
+        ),
+    ];
+  }
+}
+
+/// One manifest entry: a single torrent contributed to a collection, and the
+/// files inside it. Derived from [Collection.media] rather than sent
+/// separately — every field traces back to a `MediaInfo` from Rust.
+class CollectionEntry {
+  const CollectionEntry({
+    required this.infoHash,
+    required this.media,
+    this.addedBy,
+  });
+
+  final String infoHash;
+  final List<MediaItem> media;
+
+  /// Device id of the collaborator who signed this entry — shared
+  /// collections only.
+  final String? addedBy;
+
+  /// An entry is fetched once its torrent is in the local session; until then
+  /// it's a single not-fetched placeholder standing for the whole entry.
+  bool get fetched => media.any((m) => m.fetched);
+
+  int get totalBytes =>
+      media.fold(0, (sum, m) => sum + m.sizeBytes);
+
+  int get downloadedBytes =>
+      media.fold(0, (sum, m) => sum + m.downloadedBytes);
+
+  double get progress =>
+      totalBytes == 0 ? 0.0 : (downloadedBytes / totalBytes).clamp(0.0, 1.0);
+
+  /// The entry's own label. A fetched entry has real per-file names, so the
+  /// torrent's own label isn't carried separately — fall back to the first
+  /// file, which for a single-file entry is the same thing.
+  String get label => media.isEmpty ? infoHash : media.first.label;
 }

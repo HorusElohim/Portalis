@@ -11,6 +11,7 @@ import '../models.dart';
 import '../services/collections.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'collection_details_screen.dart';
 import 'media_viewer_screen.dart';
 
 /// One collection, of either kind. Everything here now comes from the single
@@ -291,6 +292,18 @@ class _CollectionScreenState extends State<CollectionScreen> {
                           color: AppColors.neutral300,
                         ),
                       ),
+                    IconButton(
+                      tooltip: 'Details',
+                      icon: const Icon(Icons.info_outline,
+                          size: 18, color: AppColors.neutral400),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CollectionDetailsScreen(
+                            collectionId: collection.id,
+                          ),
+                        ),
+                      ),
+                    ),
                     IconButton(
                       tooltip: 'Remove from this device',
                       icon: const Icon(Icons.delete_outline,
