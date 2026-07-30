@@ -41,91 +41,93 @@ class MediaDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: NavBackButton(onTap: () => Navigator.of(context).pop()),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-                child: Text(
-                  media.label,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
+        child: PageBody(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: NavBackButton(onTap: () => Navigator.of(context).pop()),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SectionLabel('FILE'),
-                    const SizedBox(height: 8),
-                    _InfoRow(
-                      label: 'Size',
-                      value: media.sizeBytes > 0
-                          ? _formatBytes(media.sizeBytes)
-                          : 'Unknown',
-                    ),
-                    _InfoRow(
-                      label: 'Downloaded',
-                      value: media.sizeBytes > 0
-                          ? '${_formatBytes(media.downloadedBytes)} of ${_formatBytes(media.sizeBytes)} · ${(media.progress * 100).toStringAsFixed(0)}%'
-                          : '${(media.progress * 100).toStringAsFixed(0)}%',
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: media.progress.clamp(0.0, 1.0),
-                        minHeight: 4,
-                        backgroundColor: AppColors.borderStrong,
-                        valueColor: AlwaysStoppedAnimation(collection.hue),
-                      ),
-                    ),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                  child: Text(
+                    media.label,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SectionLabel('TORRENT'),
-                    const SizedBox(height: 8),
-                    _InfoRow(
-                      label: 'Collection',
-                      value: collection.name,
-                    ),
-                    _InfoRow(
-                      label: 'State',
-                      value: collection.state.isEmpty ? 'Unknown' : collection.state,
-                    ),
-                    _InfoRow(
-                      label: 'Download speed',
-                      value: _formatMbps(collection.downloadMbps),
-                    ),
-                    _InfoRow(
-                      label: 'Upload speed',
-                      value: _formatMbps(collection.uploadMbps),
-                    ),
-                    _InfoRow(label: 'Peers', value: peerLabel),
-                    // The info hash of the *torrent this file came from*.
-                    // A shared collection has one per manifest entry, so it
-                    // belongs to the media item, not the collection.
-                    if (media.infoHash.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SectionLabel('FILE'),
+                      const SizedBox(height: 8),
                       _InfoRow(
-                        label: 'Info hash',
-                        value: media.infoHash,
-                        monospace: true,
+                        label: 'Size',
+                        value: media.sizeBytes > 0
+                            ? _formatBytes(media.sizeBytes)
+                            : 'Unknown',
                       ),
-                  ],
+                      _InfoRow(
+                        label: 'Downloaded',
+                        value: media.sizeBytes > 0
+                            ? '${_formatBytes(media.downloadedBytes)} of ${_formatBytes(media.sizeBytes)} · ${(media.progress * 100).toStringAsFixed(0)}%'
+                            : '${(media.progress * 100).toStringAsFixed(0)}%',
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                          value: media.progress.clamp(0.0, 1.0),
+                          minHeight: 4,
+                          backgroundColor: AppColors.borderStrong,
+                          valueColor: AlwaysStoppedAnimation(collection.hue),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-            ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SectionLabel('TORRENT'),
+                      const SizedBox(height: 8),
+                      _InfoRow(
+                        label: 'Collection',
+                        value: collection.name,
+                      ),
+                      _InfoRow(
+                        label: 'State',
+                        value: collection.state.isEmpty ? 'Unknown' : collection.state,
+                      ),
+                      _InfoRow(
+                        label: 'Download speed',
+                        value: _formatMbps(collection.downloadMbps),
+                      ),
+                      _InfoRow(
+                        label: 'Upload speed',
+                        value: _formatMbps(collection.uploadMbps),
+                      ),
+                      _InfoRow(label: 'Peers', value: peerLabel),
+                      // The info hash of the *torrent this file came from*.
+                      // A shared collection has one per manifest entry, so it
+                      // belongs to the media item, not the collection.
+                      if (media.infoHash.isNotEmpty)
+                        _InfoRow(
+                          label: 'Info hash',
+                          value: media.infoHash,
+                          monospace: true,
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

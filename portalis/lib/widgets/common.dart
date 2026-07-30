@@ -5,6 +5,43 @@ import '../media_kind.dart';
 import '../models.dart';
 import '../theme.dart';
 
+/// Constrains a screen's content to a comfortable column and centres it.
+///
+/// Every screen here comes from a phone mockup, and a phone layout stretched
+/// across a desktop window is not the same design — full-width action buttons
+/// become metre-long bars, single-line rows put their label and value at
+/// opposite ends of the screen, and text lines grow far past a readable
+/// measure. Constraining to [maxWidth] keeps the intended proportions:
+/// identical to today on any phone (where the window is narrower than the
+/// cap), a centred column on desktop.
+///
+/// Wrap the *content*, not the [Scaffold] — the background should still fill
+/// the window.
+class PageBody extends StatelessWidget {
+  const PageBody({super.key, required this.child, this.maxWidth = 560});
+
+  final Widget child;
+
+  /// Roughly a large phone's width plus breathing room. Wide enough that
+  /// nothing reflows versus the mockup, narrow enough to stay a readable
+  /// measure on a full-screen desktop window.
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      // Top, not centre: a short page (settings, an empty collection) should
+      // start at the top of the window like every other desktop app, not
+      // float in the middle of it.
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+}
+
 /// Circular avatar with initials, matching the accent-800/600 avatar style.
 class Avatar extends StatelessWidget {
   const Avatar({super.key, required this.initials, this.size = 30});

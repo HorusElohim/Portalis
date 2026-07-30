@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../services/collections.dart';
 import '../theme.dart';
+import '../widgets/common.dart';
 
 /// "Torrent" — the join-a-swarm half of the old combined Add screen,
 /// redesigned per the Portalis Add Flow: magnet input with a live preview
@@ -119,291 +120,293 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.chevron_left,
-                    size: 18, color: AppColors.neutral300),
-                label: const Text('Back',
-                    style: TextStyle(fontSize: 14, color: AppColors.neutral300)),
+        child: PageBody(
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.chevron_left,
+                      size: 18, color: AppColors.neutral300),
+                  label: const Text('Back',
+                      style: TextStyle(fontSize: 14, color: AppColors.neutral300)),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Torrent',
-                    style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: -0.4,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Paste a magnet link or open a .torrent file.',
-                    style: TextStyle(fontSize: 12.5, color: AppColors.neutral400),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 2, 20, 14),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      key: const Key('magnetField'),
-                      controller: _magnetController,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontFamily: 'monospace',
-                        color: AppColors.text,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Torrent',
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.4,
                       ),
-                      decoration: InputDecoration(
-                        hintText: 'magnet:?xt=urn:btih:…',
-                        hintStyle: const TextStyle(color: AppColors.neutral500),
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 16),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: AppColors.borderStrong),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: AppColors.borderStrong),
-                        ),
-                      ),
-                      onChanged: (_) => setState(() => _touched = true),
-                      onSubmitted: (_) => _addMagnet(),
                     ),
-                    const SizedBox(height: 9),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _SecondaryButton(
-                            label: 'Paste',
-                            icon: Icons.content_paste,
-                            onTap: _busy ? null : _paste,
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: _SecondaryButton(
-                            label: '.torrent file',
-                            icon: Icons.description_outlined,
-                            onTap: _busy ? null : _pickTorrentFile,
-                          ),
-                        ),
-                      ],
+                    SizedBox(height: 4),
+                    Text(
+                      'Paste a magnet link or open a .torrent file.',
+                      style: TextStyle(fontSize: 12.5, color: AppColors.neutral400),
                     ),
-                    if (showInvalid)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 10),
-                        child: Text(
-                          'That isn\'t a magnet link — it should start with magnet:? '
-                          '(a bare 40-character info-hash works too)',
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              height: 1.45,
-                              color: AppColors.accent300),
-                        ),
-                      ),
-                    const SizedBox(height: 14),
-                    if (_isValid)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accent800,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border:
-                                        Border.all(color: AppColors.accent600),
-                                  ),
-                                  child: const Icon(Icons.download_outlined,
-                                      size: 19, color: AppColors.accent),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'READY TO ADD',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          letterSpacing: 1.1,
-                                          color: AppColors.accent,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _previewName,
-                                        style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                            height: 1.25),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        _previewHash,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontFamily: 'monospace',
-                                          color: AppColors.neutral500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                              decoration: const BoxDecoration(
-                                border: Border(
-                                  top: BorderSide(color: AppColors.border),
-                                ),
-                              ),
-                              child: const Text(
-                                'Size, files, and peers resolve once the swarm '
-                                'is joined — watch them live on Home.',
-                                style: TextStyle(
-                                    fontSize: 11.5,
-                                    height: 1.45,
-                                    color: AppColors.neutral400),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        height: 172,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.borderStrong),
-                          borderRadius: BorderRadius.circular(14),
-                          color: AppColors.surface.withValues(alpha: 0.4),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.download_outlined,
-                                size: 26, color: AppColors.neutral500),
-                            SizedBox(height: 8),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 60),
-                              child: Text(
-                                'Paste a link above and the torrent details appear here',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    height: 1.45,
-                                    color: AppColors.neutral400),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 14),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 9),
-                          decoration: BoxDecoration(
-                            color:
-                                const Color(0xFFEB5757).withValues(alpha: 0.1),
-                            border: Border.all(
-                                color: const Color(0xFFEB5757)
-                                    .withValues(alpha: 0.4)),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            _error!,
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFFEB5757)),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.border)),
-              ),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton(
-                      key: const Key('addMagnetButton'),
-                      onPressed: _busy || !_isValid ? null : _addMagnet,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        disabledBackgroundColor: AppColors.borderStrong,
-                        foregroundColor: AppColors.bg,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        key: const Key('magnetField'),
+                        controller: _magnetController,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                          color: AppColors.text,
                         ),
+                        decoration: InputDecoration(
+                          hintText: 'magnet:?xt=urn:btih:…',
+                          hintStyle: const TextStyle(color: AppColors.neutral500),
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 16),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.borderStrong),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.borderStrong),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() => _touched = true),
+                        onSubmitted: (_) => _addMagnet(),
                       ),
-                      child: _busy
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation(AppColors.bg),
+                      const SizedBox(height: 9),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _SecondaryButton(
+                              label: 'Paste',
+                              icon: Icons.content_paste,
+                              onTap: _busy ? null : _paste,
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: _SecondaryButton(
+                              label: '.torrent file',
+                              icon: Icons.description_outlined,
+                              onTap: _busy ? null : _pickTorrentFile,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (showInvalid)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 10),
+                          child: Text(
+                            'That isn\'t a magnet link — it should start with magnet:? '
+                            '(a bare 40-character info-hash works too)',
+                            style: TextStyle(
+                                fontSize: 12.5,
+                                height: 1.45,
+                                color: AppColors.accent300),
+                          ),
+                        ),
+                      const SizedBox(height: 14),
+                      if (_isValid)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accent800,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border:
+                                          Border.all(color: AppColors.accent600),
+                                    ),
+                                    child: const Icon(Icons.download_outlined,
+                                        size: 19, color: AppColors.accent),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'READY TO ADD',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            letterSpacing: 1.1,
+                                            color: AppColors.accent,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _previewName,
+                                          style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              height: 1.25),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          _previewHash,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontFamily: 'monospace',
+                                            color: AppColors.neutral500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            )
-                          : const Text('Add & start',
-                              style: TextStyle(fontSize: 16)),
-                    ),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: AppColors.border),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Size, files, and peers resolve once the swarm '
+                                  'is joined — watch them live on Home.',
+                                  style: TextStyle(
+                                      fontSize: 11.5,
+                                      height: 1.45,
+                                      color: AppColors.neutral400),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          height: 172,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.borderStrong),
+                            borderRadius: BorderRadius.circular(14),
+                            color: AppColors.surface.withValues(alpha: 0.4),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.download_outlined,
+                                  size: 26, color: AppColors.neutral500),
+                              SizedBox(height: 8),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 60),
+                                child: Text(
+                                  'Paste a link above and the torrent details appear here',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.45,
+                                      color: AppColors.neutral400),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 9),
+                            decoration: BoxDecoration(
+                              color:
+                                  const Color(0xFFEB5757).withValues(alpha: 0.1),
+                              border: Border.all(
+                                  color: const Color(0xFFEB5757)
+                                      .withValues(alpha: 0.4)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _error!,
+                              style: const TextStyle(
+                                  fontSize: 11, color: Color(0xFFEB5757)),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Starts fetching immediately',
-                    style:
-                        TextStyle(fontSize: 11.5, color: AppColors.neutral500),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.border)),
+                ),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        key: const Key('addMagnetButton'),
+                        onPressed: _busy || !_isValid ? null : _addMagnet,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          disabledBackgroundColor: AppColors.borderStrong,
+                          foregroundColor: AppColors.bg,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation(AppColors.bg),
+                                ),
+                              )
+                            : const Text('Add & start',
+                                style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Starts fetching immediately',
+                      style:
+                          TextStyle(fontSize: 11.5, color: AppColors.neutral500),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

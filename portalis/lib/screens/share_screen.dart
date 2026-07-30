@@ -9,6 +9,7 @@ import '../media_convert.dart';
 import '../media_kind.dart';
 import '../services/collections.dart';
 import '../theme.dart';
+import '../widgets/common.dart';
 
 typedef _PickedFile = ({String name, Uint8List bytes});
 
@@ -167,201 +168,203 @@ class _ShareScreenState extends State<ShareScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _BackButton(onTap: () => Navigator.of(context).pop()),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: const Key('collectionNameField'),
-                          controller: _nameController,
-                          style: const TextStyle(
-                            fontSize: 25,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: -0.4,
-                            color: AppColors.text,
-                          ),
-                          cursorColor: AppColors.accent,
-                          decoration: const InputDecoration(
-                            hintText: 'Untitled collection',
-                            hintStyle: TextStyle(color: AppColors.neutral500),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ),
-                      const Icon(Icons.edit_outlined,
-                          size: 16, color: AppColors.accent),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Tap the name to rename · files stay on this phone',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.neutral500),
-                  ),
-                ],
+        child: PageBody(
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _BackButton(onTap: () => Navigator.of(context).pop()),
               ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Expanded(
-                          child: _PickerButton(
-                            label: 'Photos',
-                            icon: Icons.photo_camera_outlined,
-                            onTap: _busy ? null : _pickPhotos,
+                          child: TextField(
+                            key: const Key('collectionNameField'),
+                            controller: _nameController,
+                            style: const TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: -0.4,
+                              color: AppColors.text,
+                            ),
+                            cursorColor: AppColors.accent,
+                            decoration: const InputDecoration(
+                              hintText: 'Untitled collection',
+                              hintStyle: TextStyle(color: AppColors.neutral500),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            onChanged: (_) => setState(() {}),
                           ),
                         ),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: _PickerButton(
-                            label: 'Files',
-                            icon: Icons.description_outlined,
-                            onTap: _busy ? null : _pickFiles,
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: _PickerButton(
-                            label: 'Folder',
-                            icon: Icons.folder_outlined,
-                            onTap: _busy ? null : _pickFolder,
-                          ),
-                        ),
+                        const Icon(Icons.edit_outlined,
+                            size: 16, color: AppColors.accent),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    if (_files.isEmpty)
-                      Container(
-                        height: 150,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.borderStrong),
-                          borderRadius: BorderRadius.circular(14),
-                          color: AppColors.surface.withValues(alpha: 0.4),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.upload_outlined,
-                                size: 26, color: AppColors.neutral500),
-                            SizedBox(height: 8),
-                            Text(
-                              'Nothing added yet',
-                              style: TextStyle(
-                                  fontSize: 13, color: AppColors.neutral400),
-                            ),
-                          ],
-                        ),
-                      )
-                    else ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Tap the name to rename · files stay on this phone',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.neutral500),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                       Row(
                         children: [
-                          Text(
-                            '${_files.length} ITEM${_files.length == 1 ? '' : 'S'} · ${_formatBytes(_totalBytes)}',
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              fontFamily: 'monospace',
-                              letterSpacing: 1.0,
-                              color: AppColors.neutral400,
+                          Expanded(
+                            child: _PickerButton(
+                              label: 'Photos',
+                              icon: Icons.photo_camera_outlined,
+                              onTap: _busy ? null : _pickPhotos,
                             ),
                           ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () => setState(() => _files = []),
-                            child: const Text(
-                              'Remove all',
-                              style: TextStyle(
-                                  fontSize: 12.5, color: AppColors.accent300),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: _PickerButton(
+                              label: 'Files',
+                              icon: Icons.description_outlined,
+                              onTap: _busy ? null : _pickFiles,
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: _PickerButton(
+                              label: 'Folder',
+                              icon: Icons.folder_outlined,
+                              onTap: _busy ? null : _pickFolder,
                             ),
                           ),
                         ],
                       ),
-                      for (final f in _files) _fileRow(f),
-                    ],
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 14),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 9),
+                      const SizedBox(height: 14),
+                      if (_files.isEmpty)
+                        Container(
+                          height: 150,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEB5757).withValues(alpha: 0.1),
-                            border: Border.all(
-                                color:
-                                    const Color(0xFFEB5757).withValues(alpha: 0.4)),
-                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.borderStrong),
+                            borderRadius: BorderRadius.circular(14),
+                            color: AppColors.surface.withValues(alpha: 0.4),
                           ),
-                          child: Text(
-                            _error!,
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFFEB5757)),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.upload_outlined,
+                                  size: 26, color: AppColors.neutral500),
+                              SizedBox(height: 8),
+                              Text(
+                                'Nothing added yet',
+                                style: TextStyle(
+                                    fontSize: 13, color: AppColors.neutral400),
+                              ),
+                            ],
+                          ),
+                        )
+                      else ...[
+                        Row(
+                          children: [
+                            Text(
+                              '${_files.length} ITEM${_files.length == 1 ? '' : 'S'} · ${_formatBytes(_totalBytes)}',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontFamily: 'monospace',
+                                letterSpacing: 1.0,
+                                color: AppColors.neutral400,
+                              ),
+                            ),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: () => setState(() => _files = []),
+                              child: const Text(
+                                'Remove all',
+                                style: TextStyle(
+                                    fontSize: 12.5, color: AppColors.accent300),
+                              ),
+                            ),
+                          ],
+                        ),
+                        for (final f in _files) _fileRow(f),
+                      ],
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEB5757).withValues(alpha: 0.1),
+                              border: Border.all(
+                                  color:
+                                      const Color(0xFFEB5757).withValues(alpha: 0.4)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _error!,
+                              style: const TextStyle(
+                                  fontSize: 11, color: Color(0xFFEB5757)),
+                            ),
                           ),
                         ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.border)),
+                ),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        key: const Key('createShareButton'),
+                        onPressed: canCreate ? _createShare : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          disabledBackgroundColor: AppColors.borderStrong,
+                          foregroundColor: AppColors.bg,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(AppColors.bg),
+                                ),
+                              )
+                            : const Text('Create & share',
+                                style: TextStyle(fontSize: 16)),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      summary,
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppColors.neutral500),
+                    ),
                   ],
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.border)),
-              ),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton(
-                      key: const Key('createShareButton'),
-                      onPressed: canCreate ? _createShare : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        disabledBackgroundColor: AppColors.borderStrong,
-                        foregroundColor: AppColors.bg,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: _busy
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(AppColors.bg),
-                              ),
-                            )
-                          : const Text('Create & share',
-                              style: TextStyle(fontSize: 16)),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    summary,
-                    style: const TextStyle(
-                        fontSize: 11.5, color: AppColors.neutral500),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

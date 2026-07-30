@@ -292,140 +292,142 @@ class _CollectionScreenState extends State<CollectionScreen> {
         return Scaffold(
           backgroundColor: AppColors.bg,
           body: SafeArea(
-            child: Column(
-              children: [
-                // No cover image: collection artwork isn't modeled anywhere
-                // in the backend, so there's nothing to render one from.
-                Row(
-                  children: [
-                    NavBackButton(onTap: () => Navigator.of(context).pop()),
-                    const Spacer(),
-                    if (adminCount > 0)
-                      Text(
-                        '$adminCount admin${adminCount == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontFamily: 'monospace',
-                          color: AppColors.neutral300,
-                        ),
-                      ),
-                    IconButton(
-                      tooltip: 'Details',
-                      icon: const Icon(Icons.info_outline,
-                          size: 18, color: AppColors.neutral400),
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => CollectionDetailsScreen(
-                            collectionId: collection.id,
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Remove from this device',
-                      icon: const Icon(Icons.delete_outline,
-                          size: 18, color: AppColors.neutral400),
-                      onPressed: _busy ? null : _delete,
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            collection.name,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            collection.isShared
-                                ? 'Shared collection · ${collection.subtitle}'
-                                : 'Torrent · ${collection.subtitle}',
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              fontFamily: 'monospace',
-                              color: AppColors.neutral300,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          CopiesIndicator(
-                            color: collection.hue,
-                            label: collection.copiesLabel,
-                            fontSize: 12,
-                          ),
-                          const SizedBox(height: 14),
-                          _Collaborators(
-                            collection: collection,
-                            shown: shown,
-                            remaining: remaining,
-                          ),
-                          const SizedBox(height: 12),
-                          if (collection.media.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 28),
-                              child: Center(
-                                child: Text(
-                                  'Nothing in this collection yet.',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.neutral400),
-                                ),
-                              ),
-                            )
-                          else
-                            _MediaGrid(collection: collection),
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (_busy) const LinearProgressIndicator(minHeight: 2),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 10,
-                    runSpacing: 8,
+            child: PageBody(
+              child: Column(
+                children: [
+                  // No cover image: collection artwork isn't modeled anywhere
+                  // in the backend, so there's nothing to render one from.
+                  Row(
                     children: [
-                      // Invite/add/sync exist only for shared collections —
-                      // a plain torrent has no invite secret and its contents
-                      // are fixed forever by its info-hash.
-                      if (collection.isShared) ...[
-                        PillButton(
-                          label: 'Invite',
-                          icon: const Icon(Icons.people_alt_outlined,
-                              size: 16, color: AppColors.accent300),
-                          onTap: _busy ? null : _showInvite,
+                      NavBackButton(onTap: () => Navigator.of(context).pop()),
+                      const Spacer(),
+                      if (adminCount > 0)
+                        Text(
+                          '$adminCount admin${adminCount == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                            color: AppColors.neutral300,
+                          ),
                         ),
-                        PillButton(
-                          label: '＋ Add media',
-                          dim: true,
-                          onTap: _busy ? null : _addMedia,
+                      IconButton(
+                        tooltip: 'Details',
+                        icon: const Icon(Icons.info_outline,
+                            size: 18, color: AppColors.neutral400),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CollectionDetailsScreen(
+                              collectionId: collection.id,
+                            ),
+                          ),
                         ),
-                        PillButton(
-                          label: 'Sync',
-                          dim: true,
-                          onTap: _busy ? null : _sync,
-                        ),
-                      ],
-                      if (collection.pendingMedia > 0)
-                        PillButton(
-                          label: 'Fetch ${collection.pendingMedia}',
-                          onTap: _busy ? null : _fetchPending,
-                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove from this device',
+                        icon: const Icon(Icons.delete_outline,
+                            size: 18, color: AppColors.neutral400),
+                        onPressed: _busy ? null : _delete,
+                      ),
                     ],
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              collection.name,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              collection.isShared
+                                  ? 'Shared collection · ${collection.subtitle}'
+                                  : 'Torrent · ${collection.subtitle}',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontFamily: 'monospace',
+                                color: AppColors.neutral300,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            CopiesIndicator(
+                              color: collection.hue,
+                              label: collection.copiesLabel,
+                              fontSize: 12,
+                            ),
+                            const SizedBox(height: 14),
+                            _Collaborators(
+                              collection: collection,
+                              shown: shown,
+                              remaining: remaining,
+                            ),
+                            const SizedBox(height: 12),
+                            if (collection.media.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 28),
+                                child: Center(
+                                  child: Text(
+                                    'Nothing in this collection yet.',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.neutral400),
+                                  ),
+                                ),
+                              )
+                            else
+                              _MediaGrid(collection: collection),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_busy) const LinearProgressIndicator(minHeight: 2),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        // Invite/add/sync exist only for shared collections —
+                        // a plain torrent has no invite secret and its contents
+                        // are fixed forever by its info-hash.
+                        if (collection.isShared) ...[
+                          PillButton(
+                            label: 'Invite',
+                            icon: const Icon(Icons.people_alt_outlined,
+                                size: 16, color: AppColors.accent300),
+                            onTap: _busy ? null : _showInvite,
+                          ),
+                          PillButton(
+                            label: '＋ Add media',
+                            dim: true,
+                            onTap: _busy ? null : _addMedia,
+                          ),
+                          PillButton(
+                            label: 'Sync',
+                            dim: true,
+                            onTap: _busy ? null : _sync,
+                          ),
+                        ],
+                        if (collection.pendingMedia > 0)
+                          PillButton(
+                            label: 'Fetch ${collection.pendingMedia}',
+                            onTap: _busy ? null : _fetchPending,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

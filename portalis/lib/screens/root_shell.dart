@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/collections.dart';
 import '../theme.dart';
+import '../widgets/common.dart';
 import 'home_screen.dart';
 
 /// App root: just Collections (Home). User and Settings are reached via
@@ -34,7 +35,7 @@ class _RootShellState extends State<RootShell> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: AppColors.bg,
-      body: SafeArea(child: HomeScreen()),
+      body: SafeArea(child: PageBody(child: HomeScreen())),
     );
   }
 }

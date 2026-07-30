@@ -61,87 +61,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: ListenableBuilder(
-          listenable: _settings,
-          builder: (context, _) {
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: NavBackButton(onTap: () => Navigator.of(context).pop()),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 6, 20, 6),
-                    child: Text(
-                      'Settings',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+        child: PageBody(
+          child: ListenableBuilder(
+            listenable: _settings,
+            builder: (context, _) {
+              return SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: NavBackButton(onTap: () => Navigator.of(context).pop()),
                     ),
-                  ),
-                  // Only settings the Rust engine actually honours live here.
-                  // The mockup's four toggles (auto-seed on Wi-Fi, background
-                  // sharing, discoverable, metered warning) and the storage
-                  // *cap* were removed rather than kept as switches that
-                  // persisted a preference nothing ever read — the app has no
-                  // enforcement for any of them yet.
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SectionLabel('BANDWIDTH & STORAGE'),
-                        const SizedBox(height: 10),
-                        GestureDetector(
-                          onTap: _cycleUploadLimit,
-                          child: _MeterRow(
-                            label: 'Upload limit',
-                            fraction: _settings.uploadLimitBps == 0
-                                ? 1.0
-                                : (_settings.uploadLimitBps /
-                                        _uploadLimitPresetsBps.last)
-                                    .clamp(0.0, 1.0),
-                            value: _formatBps(_settings.uploadLimitBps),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 6, 20, 6),
+                      child: Text(
+                        'Settings',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    // Only settings the Rust engine actually honours live here.
+                    // The mockup's four toggles (auto-seed on Wi-Fi, background
+                    // sharing, discoverable, metered warning) and the storage
+                    // *cap* were removed rather than kept as switches that
+                    // persisted a preference nothing ever read — the app has no
+                    // enforcement for any of them yet.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SectionLabel('BANDWIDTH & STORAGE'),
+                          const SizedBox(height: 10),
+                          GestureDetector(
+                            onTap: _cycleUploadLimit,
+                            child: _MeterRow(
+                              label: 'Upload limit',
+                              fraction: _settings.uploadLimitBps == 0
+                                  ? 1.0
+                                  : (_settings.uploadLimitBps /
+                                          _uploadLimitPresetsBps.last)
+                                      .clamp(0.0, 1.0),
+                              value: _formatBps(_settings.uploadLimitBps),
+                            ),
                           ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6),
-                          child: Text(
-                            'Tap to cycle presets. Applied to the running '
-                            'transfer engine immediately.',
-                            style: TextStyle(
-                                fontSize: 10, color: AppColors.neutral500),
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Text(
+                              'Tap to cycle presets. Applied to the running '
+                              'transfer engine immediately.',
+                              style: TextStyle(
+                                  fontSize: 10, color: AppColors.neutral500),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        // Reported by the engine (torrent.rs::storage_usage_bytes),
-                        // not capped by anything — so it's shown as a plain
-                        // figure rather than a meter against an invented limit.
-                        Row(
-                          children: [
-                            const SizedBox(
-                              width: 80,
-                              child: Text(
-                                'Storage used',
-                                style: TextStyle(
-                                    fontSize: 12, color: AppColors.neutral400),
+                          const SizedBox(height: 14),
+                          // Reported by the engine (torrent.rs::storage_usage_bytes),
+                          // not capped by anything — so it's shown as a plain
+                          // figure rather than a meter against an invented limit.
+                          Row(
+                            children: [
+                              const SizedBox(
+                                width: 80,
+                                child: Text(
+                                  'Storage used',
+                                  style: TextStyle(
+                                      fontSize: 12, color: AppColors.neutral400),
+                                ),
                               ),
-                            ),
-                            Text(
-                              _formatBytes(_settings.storageUsedBytes),
-                              style: const TextStyle(
-                                  fontSize: 12, fontFamily: 'monospace'),
-                            ),
-                          ],
-                        ),
-                      ],
+                              Text(
+                                _formatBytes(_settings.storageUsedBytes),
+                                style: const TextStyle(
+                                    fontSize: 12, fontFamily: 'monospace'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            );
-          },
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

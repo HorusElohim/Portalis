@@ -39,112 +39,114 @@ class CollectionDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: ListenableBuilder(
-          listenable: Collections.instance,
-          builder: (context, _) {
-            final collection = Collections.instance.byId(collectionId);
-            if (collection == null) {
-              // Deleted from under us (or the backend isn't up in tests).
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  NavBackButton(onTap: () => Navigator.of(context).pop()),
-                  const Expanded(
-                    child: Center(
-                      child: Text(
-                        'This collection is no longer available.',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.neutral400),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child:
-                        NavBackButton(onTap: () => Navigator.of(context).pop()),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-                    child: Text(
-                      collection.name,
-                      style: const TextStyle(
-                          fontSize: 17, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                  _Section(
-                    label: 'COLLECTION',
-                    children: [
-                      _InfoRow(
-                        label: 'Type',
-                        value: collection.isShared
-                            ? 'Shared — invite-based, can grow'
-                            : 'Torrent — fixed contents',
-                      ),
-                      _InfoRow(label: 'State', value: collection.state),
-                      _InfoRow(
-                        label: collection.isShared ? 'Collection id' : 'Info hash',
-                        value: collection.id,
-                        monospace: true,
-                        copyable: true,
-                      ),
-                    ],
-                  ),
-                  _Section(
-                    label: 'TRANSFER',
-                    children: [
-                      _InfoRow(
-                        label: 'Progress',
-                        value: collection.totalBytes > 0
-                            ? '${_formatBytes(collection.downloadedBytes)} of '
-                                '${_formatBytes(collection.totalBytes)} · '
-                                '${(collection.progress * 100).toStringAsFixed(0)}%'
-                            // No fetched torrent means no metadata, so no
-                            // total is knowable yet — say that instead of "0 B
-                            // of 0 B".
-                            : 'Nothing fetched yet',
-                      ),
-                      _InfoRow(
-                        label: 'Uploaded',
-                        value: _formatBytes(collection.uploadedBytes),
-                      ),
-                      _InfoRow(
-                        label: 'Down / up',
-                        value: '${_formatMbps(collection.downloadMbps)}'
-                            ' · ${_formatMbps(collection.uploadMbps)}',
-                      ),
-                      _InfoRow(
-                        label: 'Peers',
-                        value: collection.livePeers == 1
-                            ? '1 peer connected'
-                            : '${collection.livePeers} peers connected',
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(99),
-                        child: LinearProgressIndicator(
-                          value: collection.progress.clamp(0.0, 1.0),
-                          minHeight: 4,
-                          backgroundColor: AppColors.borderStrong,
-                          valueColor: AlwaysStoppedAnimation(collection.hue),
+        child: PageBody(
+          child: ListenableBuilder(
+            listenable: Collections.instance,
+            builder: (context, _) {
+              final collection = Collections.instance.byId(collectionId);
+              if (collection == null) {
+                // Deleted from under us (or the backend isn't up in tests).
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    NavBackButton(onTap: () => Navigator.of(context).pop()),
+                    const Expanded(
+                      child: Center(
+                        child: Text(
+                          'This collection is no longer available.',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.neutral400),
                         ),
                       ),
-                    ],
-                  ),
-                  _EntriesSection(collection: collection),
-                  if (collection.isShared)
-                    _CollaboratorsSection(collection: collection),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            );
-          },
+                    ),
+                  ],
+                );
+              }
+              return SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child:
+                          NavBackButton(onTap: () => Navigator.of(context).pop()),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                      child: Text(
+                        collection.name,
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    _Section(
+                      label: 'COLLECTION',
+                      children: [
+                        _InfoRow(
+                          label: 'Type',
+                          value: collection.isShared
+                              ? 'Shared — invite-based, can grow'
+                              : 'Torrent — fixed contents',
+                        ),
+                        _InfoRow(label: 'State', value: collection.state),
+                        _InfoRow(
+                          label: collection.isShared ? 'Collection id' : 'Info hash',
+                          value: collection.id,
+                          monospace: true,
+                          copyable: true,
+                        ),
+                      ],
+                    ),
+                    _Section(
+                      label: 'TRANSFER',
+                      children: [
+                        _InfoRow(
+                          label: 'Progress',
+                          value: collection.totalBytes > 0
+                              ? '${_formatBytes(collection.downloadedBytes)} of '
+                                  '${_formatBytes(collection.totalBytes)} · '
+                                  '${(collection.progress * 100).toStringAsFixed(0)}%'
+                              // No fetched torrent means no metadata, so no
+                              // total is knowable yet — say that instead of "0 B
+                              // of 0 B".
+                              : 'Nothing fetched yet',
+                        ),
+                        _InfoRow(
+                          label: 'Uploaded',
+                          value: _formatBytes(collection.uploadedBytes),
+                        ),
+                        _InfoRow(
+                          label: 'Down / up',
+                          value: '${_formatMbps(collection.downloadMbps)}'
+                              ' · ${_formatMbps(collection.uploadMbps)}',
+                        ),
+                        _InfoRow(
+                          label: 'Peers',
+                          value: collection.livePeers == 1
+                              ? '1 peer connected'
+                              : '${collection.livePeers} peers connected',
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(99),
+                          child: LinearProgressIndicator(
+                            value: collection.progress.clamp(0.0, 1.0),
+                            minHeight: 4,
+                            backgroundColor: AppColors.borderStrong,
+                            valueColor: AlwaysStoppedAnimation(collection.hue),
+                          ),
+                        ),
+                      ],
+                    ),
+                    _EntriesSection(collection: collection),
+                    if (collection.isShared)
+                      _CollaboratorsSection(collection: collection),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
