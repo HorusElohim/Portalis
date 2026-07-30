@@ -174,6 +174,7 @@ mod native {
     use crate::domain::collection::{Collection, CollectionId};
     use crate::domain::invite::InviteSecret;
     use crate::domain::manifest::{InfoHash, ManifestEntry};
+    use crate::log::clog;
 
     use super::{CollabCollectionInfo, CollaboratorInfo, ManifestEntryInfo};
 
@@ -182,6 +183,7 @@ mod native {
     /// device that just *generated* an invite is already reachable.
     async fn current_sync_addresses() -> Vec<String> {
         let Ok(addr) = crate::collab_sync::ensure_listener().await else {
+            clog!("collab", "current_sync_addresses: couldn't start the listener, returning no addresses");
             return Vec::new();
         };
         let mut addrs = vec![format!("{}:{}", crate::collab_sync::lan_ip(), addr.port())];
@@ -191,6 +193,7 @@ mod native {
                 addrs.push(candidate);
             }
         }
+        clog!("collab", "current_sync_addresses: {addrs:?}");
         addrs
     }
 
@@ -247,9 +250,10 @@ mod native {
     pub(super) async fn create_collab_collection(
         name: String,
     ) -> anyhow::Result<CollabCollectionInfo> {
+        clog!("collab", "create_collab_collection: name={name:?}");
         let identity = crate::device::current_identity()?;
         let addrs = current_sync_addresses().await;
-        with_store(|collections| {
+        let result = with_store(|collections| {
             let mut collection = Collection::new(name);
             collection.collaborators.push(Collaborator::new(
                 identity.device_id(),
@@ -260,7 +264,17 @@ mod native {
             let info = to_info(&collection, &addrs);
             collections.push(collection);
             Ok(info)
-        })
+        });
+        match &result {
+            Ok(info) => clog!(
+                "collab",
+                "create_collab_collection: created id={} invite_code_len={}",
+                info.id,
+                info.invite_code.len()
+            ),
+            Err(e) => clog!("collab", "create_collab_collection: failed: {e:?}"),
+        }
+        result
     }
 
     /// Un-hexes the invite code, then splits the resulting
@@ -275,7 +289,7 @@ mod native {
         let (secret_hex, rest) = decoded
             .split_once(':')
             .ok_or_else(|| anyhow::anyhow!("invite code is malformed"))?;
-        if let Some((name, suffix)) = rest.rsplit_once('@') {
+        let parsed = if let Some((name, suffix)) = rest.rsplit_once('@') {
             let addrs: Vec<String> = suffix.split(',').map(str::to_string).collect();
             let all_look_like_addrs = !addrs.is_empty()
                 && addrs.iter().all(|a| {
@@ -283,21 +297,37 @@ mod native {
                         .is_some_and(|(_, port)| port.parse::<u16>().is_ok())
                 });
             if all_look_like_addrs {
-                return Ok((secret_hex.to_string(), name.to_string(), addrs));
+                (secret_hex.to_string(), name.to_string(), addrs)
+            } else {
+                (secret_hex.to_string(), rest.to_string(), Vec::new())
             }
-        }
-        Ok((secret_hex.to_string(), rest.to_string(), Vec::new()))
+        } else {
+            (secret_hex.to_string(), rest.to_string(), Vec::new())
+        };
+        clog!(
+            "collab",
+            "parse_invite_code: name={:?} addr_count={}",
+            parsed.1,
+            parsed.2.len()
+        );
+        Ok(parsed)
     }
 
     pub(super) async fn join_collab_collection(
         invite_code: String,
         display_name: String,
     ) -> anyhow::Result<CollabCollectionInfo> {
+        clog!("collab", "join_collab_collection: invite_code_len={} display_name={display_name:?}", invite_code.len());
         let (secret_hex, name, peer_addrs) = parse_invite_code(&invite_code)?;
         let secret = InviteSecret::from_hex(&secret_hex)?;
         let rendezvous_key_hex = secret.derive_rendezvous_key().to_hex();
         let identity = crate::device::current_identity()?;
         let own_addrs = current_sync_addresses().await;
+        clog!(
+            "collab",
+            "join: name={name:?} peer_addrs={peer_addrs:?} rendezvous_key={}… own_addrs={own_addrs:?}",
+            &rendezvous_key_hex[..8.min(rendezvous_key_hex.len())],
+        );
 
         let (id, mut info) = with_store(|collections| {
             let mut collection = Collection::join(name.to_string(), secret);
@@ -312,17 +342,26 @@ mod native {
             collections.push(collection);
             Ok((id, info))
         })?;
+        clog!("collab", "join: local record created, id={id}");
 
         // Best-effort immediate sync with the inviter, via the addresses
         // embedded in the code — this is what makes joining feel like
         // "the collection appears", not an empty shell. Failure is fine
         // (inviter offline, different network): the join itself stands and
         // a manual sync can happen later.
-        if !peer_addrs.is_empty()
-            && crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs)
-                .await
-                .is_ok()
-        {
+        if peer_addrs.is_empty() {
+            clog!("collab", "join: invite carried no addresses, skipping auto-sync");
+        }
+        let sync_result = if peer_addrs.is_empty() {
+            None
+        } else {
+            Some(crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs).await)
+        };
+        if let Some(Err(e)) = &sync_result {
+            clog!("collab", "join: auto-sync failed: {e:?}");
+        }
+        if matches!(sync_result, Some(Ok(()))) {
+            clog!("collab", "join: auto-sync succeeded");
             info = with_store(|collections| {
                 collections
                     .iter()
@@ -331,6 +370,12 @@ mod native {
                     .ok_or_else(|| anyhow::anyhow!("collection vanished during join sync"))
             })?;
         }
+        clog!(
+            "collab",
+            "join_collab_collection: done, media={} collaborators={}",
+            info.media.len(),
+            info.collaborators.len()
+        );
         Ok(info)
     }
 
@@ -339,6 +384,11 @@ mod native {
         label: String,
         files: Vec<crate::torrent::NewFile>,
     ) -> anyhow::Result<CollabCollectionInfo> {
+        clog!(
+            "collab",
+            "add_media_to_collab_collection: collection_id={collection_id} label={label:?} files={}",
+            files.len()
+        );
         let identity = crate::device::current_identity()?;
         let id = CollectionId::from_string(&collection_id)?;
         let addrs = current_sync_addresses().await;
@@ -350,6 +400,11 @@ mod native {
         // two batches share the same user-facing label.
         let batch_dir_name = format!("{label}-{}", uuid::Uuid::new_v4());
         let torrent_info = crate::torrent::create_collection(batch_dir_name, files).await?;
+        clog!(
+            "collab",
+            "add_media_to_collab_collection: seeded torrent info_hash={}",
+            torrent_info.info_hash
+        );
         let info_hash_bytes: [u8; 20] = hex::decode(&torrent_info.info_hash)?
             .try_into()
             .map_err(|_| anyhow::anyhow!("torrent info hash is not 20 bytes"))?;
@@ -376,7 +431,12 @@ mod native {
 
     pub(super) async fn list_collab_collections() -> anyhow::Result<Vec<CollabCollectionInfo>> {
         let addrs = current_sync_addresses().await;
-        with_store(|collections| Ok(collections.iter().map(|c| to_info(c, &addrs)).collect()))
+        let result: anyhow::Result<Vec<_>> =
+            with_store(|collections| Ok(collections.iter().map(|c| to_info(c, &addrs)).collect()));
+        if let Ok(infos) = &result {
+            clog!("collab", "list_collab_collections: {} collection(s)", infos.len());
+        }
+        result
     }
 
     pub(super) async fn collab_sync_address() -> anyhow::Result<String> {
@@ -389,6 +449,7 @@ mod native {
         collection_id: String,
         peer_addr: String,
     ) -> anyhow::Result<CollabCollectionInfo> {
+        clog!("collab", "sync_collab_collection: collection_id={collection_id} peer_addr={peer_addr:?}");
         let id = CollectionId::from_string(&collection_id)?;
         let rendezvous_key_hex = with_store(|collections| {
             collections
@@ -417,6 +478,7 @@ mod native {
     pub(super) async fn fetch_collab_collection_media(
         collection_id: String,
     ) -> anyhow::Result<u32> {
+        clog!("collab", "fetch_collab_collection_media: collection_id={collection_id}");
         let id = CollectionId::from_string(&collection_id)?;
         let (rendezvous_key_hex, info_hashes) = with_store(|collections| {
             let collection = collections
@@ -433,6 +495,12 @@ mod native {
             ))
         })?;
         let peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
+        clog!(
+            "collab",
+            "fetch_collab_collection_media: {} media item(s), {} learned peer(s)={peers:?}",
+            info_hashes.len(),
+            peers.len()
+        );
         let mut added = 0u32;
         for info_hash in &info_hashes {
             crate::torrent::add_info_hash_with_peers(info_hash, peers.clone()).await?;

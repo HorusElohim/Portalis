@@ -30,6 +30,7 @@ use crate::domain::collection::{Collection, CollectionId};
 use crate::domain::identity::DeviceId;
 use crate::domain::invite::InviteSecret;
 use crate::domain::manifest::{InfoHash, Manifest, ManifestEntry};
+use crate::log::clog;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct PersistedManifestEntry {
@@ -129,7 +130,9 @@ fn store_file() -> PathBuf {
     let base = dirs::config_dir()
         .or_else(dirs::data_dir)
         .unwrap_or_else(std::env::temp_dir);
-    base.join("Portalis").join("collections.json")
+    let path = base.join("Portalis").join("collections.json");
+    clog!("collab_store", "store_file: {path:?}");
+    path
 }
 
 fn to_persisted(collection: &Collection) -> PersistedCollection {
@@ -170,11 +173,23 @@ fn from_persisted(persisted: &PersistedCollection) -> anyhow::Result<Collection>
 fn load() -> anyhow::Result<Vec<Collection>> {
     let path = store_file();
     let Ok(bytes) = std::fs::read(&path) else {
+        clog!("collab_store", "load: no file yet at {path:?}, starting empty");
         return Ok(Vec::new());
     };
     let persisted: PersistedStore =
         serde_json::from_slice(&bytes).context("parsing collections.json")?;
-    persisted.collections.iter().map(from_persisted).collect()
+    let result: anyhow::Result<Vec<Collection>> =
+        persisted.collections.iter().map(from_persisted).collect();
+    match &result {
+        Ok(collections) => clog!(
+            "collab_store",
+            "load: {} collection(s) from {path:?}: {:?}",
+            collections.len(),
+            collections.iter().map(|c| (c.id.to_string(), c.name.clone())).collect::<Vec<_>>()
+        ),
+        Err(e) => clog!("collab_store", "load: failed to parse {path:?}: {e:?}"),
+    }
+    result
 }
 
 fn save(collections: &[Collection]) -> anyhow::Result<()> {
@@ -186,7 +201,13 @@ fn save(collections: &[Collection]) -> anyhow::Result<()> {
         collections: collections.iter().map(to_persisted).collect(),
     };
     let bytes = serde_json::to_vec_pretty(&persisted)?;
-    std::fs::write(&path, bytes).with_context(|| format!("writing {path:?}"))?;
+    std::fs::write(&path, &bytes).with_context(|| format!("writing {path:?}"))?;
+    clog!(
+        "collab_store",
+        "save: wrote {} collection(s), {} bytes, to {path:?}",
+        collections.len(),
+        bytes.len()
+    );
     Ok(())
 }
 
@@ -206,10 +227,16 @@ pub(crate) fn with_store<R>(
 ) -> anyhow::Result<R> {
     let mut guard = STORE.lock().unwrap();
     if guard.is_none() {
+        clog!("collab_store", "with_store: cold start, loading from disk");
         *guard = Some(load()?);
     }
     let collections = guard.as_mut().unwrap();
+    let before = collections.len();
     let result = f(collections)?;
+    let after = collections.len();
+    if before != after {
+        clog!("collab_store", "with_store: collection count {before} -> {after}");
+    }
     save(collections)?;
     Ok(result)
 }

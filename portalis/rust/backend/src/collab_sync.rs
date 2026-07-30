@@ -34,6 +34,7 @@ use crate::collab_store::{
     self, collaborator_from_persisted, collaborator_to_persisted, entry_from_persisted,
     entry_to_persisted, PersistedCollaborator, PersistedManifestEntry,
 };
+use crate::log::clog;
 
 /// Everything one side knows about one collection. Entries carry their
 /// original signatures and are re-verified on receipt (`Manifest::add`),
@@ -94,7 +95,17 @@ async fn read_frame<R: AsyncReadExt + Unpin>(r: &mut R) -> anyhow::Result<WireFr
 async fn local_message_for(rendezvous_key_hex: &str) -> anyhow::Result<Option<SyncMessage>> {
     // Best-effort: fetch may still work via DHT if the BT session isn't up.
     let bt_listen_port = crate::torrent::bt_listen_port().await.ok().flatten();
-    collab_store::with_store(|collections| {
+    let result = collab_store::with_store(|collections| {
+        clog!(
+            "collab_sync",
+            "local_message_for: looking for rendezvous_key={}… among {} known collection(s): {:?}",
+            &rendezvous_key_hex[..8.min(rendezvous_key_hex.len())],
+            collections.len(),
+            collections
+                .iter()
+                .map(|c| (c.name.clone(), c.rendezvous_key().to_hex()[..8].to_string()))
+                .collect::<Vec<_>>()
+        );
         Ok(collections
             .iter()
             .find(|c| c.rendezvous_key().to_hex() == rendezvous_key_hex)
@@ -104,7 +115,11 @@ async fn local_message_for(rendezvous_key_hex: &str) -> anyhow::Result<Option<Sy
                 entries: c.manifest().entries().map(entry_to_persisted).collect(),
                 bt_listen_port,
             }))
-    })
+    });
+    if let Ok(msg) = &result {
+        clog!("collab_sync", "local_message_for: match found = {}", msg.is_some());
+    }
+    result
 }
 
 /// BitTorrent peer addresses learned through sync exchanges, per
@@ -117,13 +132,18 @@ static LEARNED_BT_PEERS: std::sync::Mutex<
 > = std::sync::Mutex::new(std::collections::BTreeMap::new());
 
 fn record_bt_peer(rendezvous_key_hex: &str, ip: std::net::IpAddr, msg: &SyncMessage) {
-    if let Some(port) = msg.bt_listen_port {
-        LEARNED_BT_PEERS
-            .lock()
-            .unwrap()
-            .entry(rendezvous_key_hex.to_string())
-            .or_default()
-            .insert(SocketAddr::new(ip, port));
+    match msg.bt_listen_port {
+        Some(port) => {
+            let addr = SocketAddr::new(ip, port);
+            clog!("collab_sync", "record_bt_peer: {addr} for rendezvous_key={}…", &rendezvous_key_hex[..8.min(rendezvous_key_hex.len())]);
+            LEARNED_BT_PEERS
+                .lock()
+                .unwrap()
+                .entry(rendezvous_key_hex.to_string())
+                .or_default()
+                .insert(addr);
+        }
+        None => clog!("collab_sync", "record_bt_peer: peer sent no bt_listen_port, nothing to record"),
     }
 }
 
@@ -146,14 +166,24 @@ fn apply_message(msg: &SyncMessage) -> anyhow::Result<bool> {
             .iter_mut()
             .find(|c| c.rendezvous_key().to_hex() == msg.rendezvous_key_hex)
         else {
+            clog!("collab_sync", "apply_message: no local collection for that rendezvous key");
             return Ok(false);
         };
+        let entries_before = collection.manifest().len();
+        let collaborators_before = collection.collaborators.len();
+        let mut entries_rejected = 0;
         for e in &msg.entries {
             // Malformed/forged entries are dropped individually rather
             // than failing the whole sync — same tolerance as
             // Manifest::merge.
-            if let Ok(entry) = entry_from_persisted(e) {
-                collection.add_manifest_entry(entry);
+            match entry_from_persisted(e) {
+                Ok(entry) => {
+                    collection.add_manifest_entry(entry);
+                }
+                Err(err) => {
+                    entries_rejected += 1;
+                    clog!("collab_sync", "apply_message: dropped an unparseable entry: {err:?}");
+                }
             }
         }
         for c in &msg.collaborators {
@@ -168,6 +198,13 @@ fn apply_message(msg: &SyncMessage) -> anyhow::Result<bool> {
                 collection.collaborators.push(collaborator);
             }
         }
+        clog!(
+            "collab_sync",
+            "apply_message: entries {entries_before} -> {} (rejected {entries_rejected}), \
+             collaborators {collaborators_before} -> {}",
+            collection.manifest().len(),
+            collection.collaborators.len(),
+        );
         Ok(true)
     })
 }
@@ -184,17 +221,22 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
                 .await
                 .context("binding sync listener")?;
             let addr = listener.local_addr()?;
+            clog!("collab_sync", "listening on {addr}");
             tokio::spawn(async move {
                 loop {
-                    let Ok((stream, _)) = listener.accept().await else {
+                    let Ok((stream, from)) = listener.accept().await else {
+                        clog!("collab_sync", "accept loop ended");
                         break;
                     };
+                    clog!("collab_sync", "incoming connection from {from}");
                     tokio::spawn(async move {
                         // Per-connection errors (bad peer, timeout) are
                         // intentionally dropped — they mustn't kill the
                         // accept loop, and the *initiating* side surfaces
                         // its own error to its user.
-                        let _ = handle_incoming(stream).await;
+                        if let Err(e) = handle_incoming(stream).await {
+                            clog!("collab_sync", "incoming sync from {from} failed: {e:?}");
+                        }
                     });
                 }
             });
@@ -221,13 +263,25 @@ async fn handle_incoming(mut stream: TcpStream) -> anyhow::Result<()> {
     let WireFrame::Sync(theirs) = frame else {
         anyhow::bail!("unexpected frame from initiator");
     };
+    clog!("collab_sync", "incoming sync for rendezvous_key={}… from {peer_ip} \
+         ({} entries, {} collaborators)",
+        &theirs.rendezvous_key_hex[..8.min(theirs.rendezvous_key_hex.len())],
+        theirs.entries.len(),
+        theirs.collaborators.len(),
+    );
     let reply = match local_message_for(&theirs.rendezvous_key_hex).await? {
         Some(ours) => {
             apply_message(&theirs)?;
             record_bt_peer(&theirs.rendezvous_key_hex, peer_ip, &theirs);
+            clog!("collab_sync", "incoming sync matched a local collection — merged and replying");
             WireFrame::Sync(ours)
         }
-        None => WireFrame::Unknown,
+        None => {
+            clog!("collab_sync", "incoming sync: no local collection for that rendezvous key \
+                 (replying Unknown)"
+            );
+            WireFrame::Unknown
+        }
     };
     tokio::time::timeout(IO_TIMEOUT, write_frame(&mut stream, &reply)).await??;
     Ok(())
@@ -237,25 +291,41 @@ async fn handle_incoming(mut stream: TcpStream) -> anyhow::Result<()> {
 /// rendezvous key: send our state, receive theirs, merge. Symmetric — both
 /// sides end up with the union.
 pub(crate) async fn sync_with(rendezvous_key_hex: &str, peer_addr: &str) -> anyhow::Result<()> {
+    clog!("collab_sync", "connecting to {peer_addr}…");
     let ours = local_message_for(rendezvous_key_hex)
         .await?
         .ok_or_else(|| anyhow::anyhow!("no local collection with that rendezvous key"))?;
-    let mut stream = tokio::time::timeout(IO_TIMEOUT, TcpStream::connect(peer_addr))
-        .await
-        .context("connection timed out")?
-        .with_context(|| format!("connecting to {peer_addr}"))?;
+    let mut stream = match tokio::time::timeout(IO_TIMEOUT, TcpStream::connect(peer_addr)).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            clog!("collab_sync", "connect to {peer_addr} failed: {e}");
+            return Err(e).with_context(|| format!("connecting to {peer_addr}"));
+        }
+        Err(_) => {
+            clog!("collab_sync", "connect to {peer_addr} timed out after {IO_TIMEOUT:?}");
+            anyhow::bail!("connection to {peer_addr} timed out");
+        }
+    };
+    clog!("collab_sync", "connected to {peer_addr}, sending our state");
     let peer_ip = stream.peer_addr()?.ip();
     tokio::time::timeout(IO_TIMEOUT, write_frame(&mut stream, &WireFrame::Sync(ours))).await??;
     match tokio::time::timeout(IO_TIMEOUT, read_frame(&mut stream)).await?? {
         WireFrame::Sync(theirs) => {
+            clog!("collab_sync", "{peer_addr} replied with {} entries, {} collaborators",
+                theirs.entries.len(),
+                theirs.collaborators.len(),
+            );
             apply_message(&theirs)?;
             record_bt_peer(rendezvous_key_hex, peer_ip, &theirs);
             Ok(())
         }
-        WireFrame::Unknown => anyhow::bail!(
-            "The other device doesn't have this collection — it needs to join \
-             with the same invite code first."
-        ),
+        WireFrame::Unknown => {
+            clog!("collab_sync", "{peer_addr} doesn't know this collection (replied Unknown)");
+            anyhow::bail!(
+                "The other device doesn't have this collection — it needs to join \
+                 with the same invite code first."
+            )
+        }
     }
 }
 
@@ -266,13 +336,21 @@ pub(crate) async fn sync_with_any(
     rendezvous_key_hex: &str,
     peer_addrs: &[String],
 ) -> anyhow::Result<()> {
+    clog!("collab_sync", "sync_with_any: trying {} address(es): {peer_addrs:?}", peer_addrs.len());
     let mut last_err = anyhow::anyhow!("no peer addresses to try");
     for addr in peer_addrs {
         match sync_with(rendezvous_key_hex, addr).await {
-            Ok(()) => return Ok(()),
-            Err(e) => last_err = e.context(format!("via {addr}")),
+            Ok(()) => {
+                clog!("collab_sync", "sync_with_any: succeeded via {addr}");
+                return Ok(());
+            }
+            Err(e) => {
+                clog!("collab_sync", "sync_with_any: {addr} failed: {e:?}");
+                last_err = e.context(format!("via {addr}"));
+            }
         }
     }
+    clog!("collab_sync", "sync_with_any: exhausted all addresses, giving up");
     Err(last_err)
 }
 
@@ -281,13 +359,19 @@ pub(crate) async fn sync_with_any(
 /// the outbound interface, whose address is what peers on the same network
 /// can reach us at.
 pub(crate) fn lan_ip() -> String {
-    std::net::UdpSocket::bind("0.0.0.0:0")
+    let ip = std::net::UdpSocket::bind("0.0.0.0:0")
         .and_then(|s| {
             s.connect("8.8.8.8:80")?;
             s.local_addr()
         })
-        .map(|a| a.ip().to_string())
-        .unwrap_or_else(|_| "127.0.0.1".to_string())
+        .map(|a| a.ip().to_string());
+    match &ip {
+        Ok(ip) => clog!("collab_sync", "lan_ip resolved to {ip}"),
+        Err(e) => clog!("collab_sync", "lan_ip couldn't resolve ({e}) — falling back to 127.0.0.1, \
+             which only works for syncing with yourself"
+        ),
+    }
+    ip.unwrap_or_else(|_| "127.0.0.1".to_string())
 }
 
 /// Best-effort public IP, so invites can carry an address reachable from
@@ -307,15 +391,19 @@ pub(crate) async fn public_ip() -> Option<String> {
                 let Ok(Ok(resp)) =
                     tokio::time::timeout(Duration::from_secs(5), reqwest::get(service)).await
                 else {
+                    clog!("collab_sync", "public_ip: {service} unreachable/timed out");
                     continue;
                 };
                 if let Ok(text) = resp.text().await {
                     let candidate = text.trim().to_string();
                     if candidate.parse::<std::net::IpAddr>().is_ok() {
+                        clog!("collab_sync", "public_ip resolved to {candidate} via {service}");
                         return Some(candidate);
                     }
+                    clog!("collab_sync", "public_ip: {service} returned non-IP text: {candidate:?}");
                 }
             }
+            clog!("collab_sync", "public_ip: no service reachable, invites won't carry one");
             None
         })
         .await

@@ -448,13 +448,19 @@ mod native {
     }
 
     pub(super) async fn bt_listen_port() -> anyhow::Result<Option<u16>> {
-        Ok(session().await?.tcp_listen_port())
+        let port = session().await?.tcp_listen_port();
+        crate::log::clog!("torrent", "bt_listen_port: {port:?}");
+        Ok(port)
     }
 
     pub(super) async fn add_info_hash_with_peers(
         info_hash_hex: &str,
         peers: Vec<std::net::SocketAddr>,
     ) -> anyhow::Result<TorrentInfo> {
+        crate::log::clog!(
+            "torrent",
+            "add_info_hash_with_peers: info_hash={info_hash_hex} peer_hints={peers:?}"
+        );
         let session = session().await?;
         let opts = AddTorrentOptions {
             overwrite: true,

@@ -1,6 +1,7 @@
 #![cfg_attr(not(frb_expand), allow(unexpected_cfgs))]
 mod api; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 mod domain;
+mod log;
 // Private and NOT part of tool/frb_build.sh's --rust-input, same reason as
 // `domain` — see collab_store.rs's own module doc.
 mod collab_store;

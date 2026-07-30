@@ -91,11 +91,22 @@ mod native {
                 .context("decoding stored secret key")?
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("stored secret key is not 32 bytes"))?;
-            return Ok((DeviceIdentity::from_bytes(&key_bytes), persisted.nickname));
+            let identity = DeviceIdentity::from_bytes(&key_bytes);
+            crate::log::clog!(
+                "device",
+                "load_or_create: loaded existing identity from {path:?}, device_id={}…",
+                &identity.device_id().to_hex()[..8]
+            );
+            return Ok((identity, persisted.nickname));
         }
 
         let identity = DeviceIdentity::generate();
         let nickname = "Me".to_string();
+        crate::log::clog!(
+            "device",
+            "load_or_create: no identity file at {path:?}, generated a new one, device_id={}…",
+            &identity.device_id().to_hex()[..8]
+        );
         save(&identity, &nickname)?;
         Ok((identity, nickname))
     }
