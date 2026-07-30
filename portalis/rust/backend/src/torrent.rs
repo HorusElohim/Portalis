@@ -174,6 +174,28 @@ mod native {
                     // *other* side is reachable. Off in Session::new()'s
                     // defaults; harmless no-op on routers without UPnP.
                     enable_upnp_port_forwarding: true,
+                    // Remember which torrents this session holds, across
+                    // restarts. Off by default, and its absence was badly
+                    // misleading: librqbit started empty every launch, so a
+                    // collection you created and were happily seeding came
+                    // back with *every* manifest entry unmatched — rendered
+                    // as "not fetched" placeholders labelled with the entry
+                    // name instead of the real files, showing 0% and
+                    // 0 bytes, and silently seeding nothing at all. The
+                    // manifest in collections.json was right the whole time;
+                    // the session simply no longer knew about the torrents
+                    // backing it.
+                    persistence: Some(librqbit::SessionPersistenceConfig::Json {
+                        // OS-specific default folder (inside the app's
+                        // container on macOS/iOS), same as the rest of our
+                        // state.
+                        folder: None,
+                    }),
+                    // Trust the persisted piece state instead of re-hashing
+                    // every file on launch — the point is that a collection
+                    // resumes seeding immediately rather than after a full
+                    // verification pass.
+                    fastresume: true,
                     ..Default::default()
                 };
                 Session::new_with_opts(dir.clone(), opts)
