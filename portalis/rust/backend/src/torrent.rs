@@ -100,11 +100,23 @@ pub async fn storage_usage_bytes() -> anyhow::Result<u64> {
     native::storage_usage_bytes().await
 }
 
-/// Caps upload speed across every torrent at once (not per-torrent) —
-/// `librqbit`'s `Session::ratelimits` is adjustable at runtime, no restart
-/// needed. `None`/0 means unlimited.
-pub async fn set_upload_limit_bps(bytes_per_sec: Option<u32>) -> anyhow::Result<()> {
-    native::set_upload_limit_bps(bytes_per_sec).await
+/// Caps transfer speed across every torrent at once (not per-torrent).
+/// `librqbit`'s `Session::ratelimits` is adjustable at runtime, so unlike the
+/// rest of `SessionOptions` these take effect without a restart. `None` means
+/// unlimited. Internal: `settings.rs` owns the user-facing surface, so there
+/// is one way to change a rate limit rather than two.
+pub(crate) async fn set_rate_limits(
+    upload_bps: Option<u32>,
+    download_bps: Option<u32>,
+) -> anyhow::Result<()> {
+    native::set_rate_limits(upload_bps, download_bps).await
+}
+
+/// Whether the BitTorrent session has already been constructed. Lets
+/// `settings.rs` tell the difference between "this change needs a restart"
+/// and "the session hasn't started yet, so it will pick this up anyway".
+pub(crate) fn session_started() -> bool {
+    native::session_started()
 }
 
 /// The BitTorrent session's own listen port — for `collab_sync.rs` to
@@ -155,47 +167,76 @@ mod native {
                 let dir = output_dir();
                 std::fs::create_dir_all(&dir)
                     .with_context(|| format!("creating output dir {dir:?}"))?;
+                // Every knob comes from the persisted settings now — see
+                // settings.rs. librqbit reads these once, here, which is why
+                // changing any of them needs a restart.
+                let settings = crate::settings::engine_settings().unwrap_or_default();
+                let peer_opts = librqbit::PeerConnectionOptions {
+                    connect_timeout: settings
+                        .peer_connect_timeout_secs
+                        .map(|s| std::time::Duration::from_secs(s as u64)),
+                    read_write_timeout: settings
+                        .peer_read_write_timeout_secs
+                        .map(|s| std::time::Duration::from_secs(s as u64)),
+                    keep_alive_interval: settings
+                        .peer_keep_alive_interval_secs
+                        .map(|s| std::time::Duration::from_secs(s as u64)),
+                };
+                let trackers = settings
+                    .trackers
+                    .iter()
+                    .filter_map(|t| match t.parse() {
+                        Ok(url) => Some(url),
+                        Err(e) => {
+                            crate::log::clog!("torrent", "ignoring unparseable tracker {t:?}: {e}");
+                            None
+                        }
+                    })
+                    .collect();
                 let opts = librqbit::SessionOptions {
-                    // Without this librqbit binds NO TCP listener at all
-                    // (verified in librqbit 8.1.1's session.rs: the listener
-                    // is only created `if let Some(port_range) =
-                    // opts.listen_port_range`, otherwise it's `(None,
-                    // None)`). That left `tcp_listen_port()` returning None
-                    // and, far worse, meant this device could never accept
-                    // an incoming peer connection — so nobody could ever
-                    // download from us, and `enable_upnp_port_forwarding`
-                    // below had no port to forward. The range is the
-                    // conventional BitTorrent one; librqbit picks the first
-                    // free port in it.
-                    listen_port_range: Some(6881..6999),
-                    // Ask the router (UPnP/IGD) to forward our BT listen
-                    // port, so peers outside this network can reach us —
-                    // without it, cross-network fetches only work when the
-                    // *other* side is reachable. Off in Session::new()'s
-                    // defaults; harmless no-op on routers without UPnP.
-                    enable_upnp_port_forwarding: true,
-                    // Remember which torrents this session holds, across
-                    // restarts. Off by default, and its absence was badly
-                    // misleading: librqbit started empty every launch, so a
-                    // collection you created and were happily seeding came
-                    // back with *every* manifest entry unmatched — rendered
-                    // as "not fetched" placeholders labelled with the entry
-                    // name instead of the real files, showing 0% and
-                    // 0 bytes, and silently seeding nothing at all. The
-                    // manifest in collections.json was right the whole time;
-                    // the session simply no longer knew about the torrents
-                    // backing it.
-                    persistence: Some(librqbit::SessionPersistenceConfig::Json {
-                        // OS-specific default folder (inside the app's
-                        // container on macOS/iOS), same as the rest of our
-                        // state.
-                        folder: None,
-                    }),
-                    // Trust the persisted piece state instead of re-hashing
-                    // every file on launch — the point is that a collection
-                    // resumes seeding immediately rather than after a full
-                    // verification pass.
-                    fastresume: true,
+                    // A range is mandatory, not optional: librqbit only binds
+                    // a TCP listener `if let Some(port_range) =
+                    // opts.listen_port_range` (verified in 8.1.1's
+                    // session.rs) — with none it binds nothing, this device
+                    // can never accept an incoming peer connection, and
+                    // enable_upnp_port_forwarding has no port to forward.
+                    // settings.rs rejects an empty or zero range for exactly
+                    // that reason.
+                    listen_port_range: Some(
+                        settings.listen_port_start..settings.listen_port_end,
+                    ),
+                    enable_upnp_port_forwarding: settings.enable_upnp_port_forwarding,
+                    // Without persistence librqbit starts empty every launch,
+                    // so a collection you were seeding comes back with every
+                    // manifest entry unmatched and silently seeds nothing.
+                    persistence: settings.persist_session.then_some(
+                        librqbit::SessionPersistenceConfig::Json {
+                            // OS-specific default folder (inside the app's
+                            // container on macOS/iOS), like our other state.
+                            folder: None,
+                        },
+                    ),
+                    fastresume: settings.fastresume,
+                    disable_dht: settings.disable_dht,
+                    disable_dht_persistence: settings.disable_dht_persistence,
+                    socks_proxy_url: settings.socks_proxy_url.clone(),
+                    defer_writes_up_to: settings
+                        .defer_writes_up_to_mb
+                        .map(|mb| mb as usize),
+                    concurrent_init_limit: settings
+                        .concurrent_init_limit
+                        .map(|n| n as usize),
+                    peer_opts: Some(peer_opts),
+                    blocklist_url: settings.blocklist_url.clone(),
+                    trackers,
+                    ratelimits: librqbit::limits::LimitsConfig {
+                        upload_bps: settings
+                            .upload_limit_bps
+                            .and_then(std::num::NonZeroU32::new),
+                        download_bps: settings
+                            .download_limit_bps
+                            .and_then(std::num::NonZeroU32::new),
+                    },
                     ..Default::default()
                 };
                 Session::new_with_opts(dir.clone(), opts)
@@ -425,11 +466,37 @@ mod native {
             .sum()
     }
 
-    pub(super) async fn set_upload_limit_bps(bytes_per_sec: Option<u32>) -> anyhow::Result<()> {
+    pub(super) fn session_started() -> bool {
+        SESSION.initialized()
+    }
+
+    pub(super) async fn set_rate_limits(
+        upload_bps: Option<u32>,
+        download_bps: Option<u32>,
+    ) -> anyhow::Result<()> {
+        // Deliberately doesn't force the session to start: if it hasn't yet,
+        // the limits are already in the SessionOptions it will be built from
+        // (see `session()`), and starting a whole BitTorrent session as a
+        // side effect of saving a preference would be a surprising cost.
+        if !session_started() {
+            crate::log::clog!(
+                "torrent",
+                "set_rate_limits: session not started yet — the saved values \
+                 will be applied when it is"
+            );
+            return Ok(());
+        }
         let session = session().await?;
         session
             .ratelimits
-            .set_upload_bps(bytes_per_sec.and_then(std::num::NonZeroU32::new));
+            .set_upload_bps(upload_bps.and_then(std::num::NonZeroU32::new));
+        session
+            .ratelimits
+            .set_download_bps(download_bps.and_then(std::num::NonZeroU32::new));
+        crate::log::clog!(
+            "torrent",
+            "set_rate_limits: upload={upload_bps:?} download={download_bps:?} bytes/sec"
+        );
         Ok(())
     }
 

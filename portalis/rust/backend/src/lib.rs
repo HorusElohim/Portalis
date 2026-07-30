@@ -14,6 +14,8 @@ pub mod bridge;
 // non-wasm32 in Cargo.toml; torrent.rs's internals mirror that.
 pub mod torrent;
 pub mod device;
+/// Every knob librqbit exposes, persisted and bridged — see its module doc.
+pub mod settings;
 /// The one collection model the app renders — see its module doc. Replaces
 /// the former `collab` module, which was one half of a pair that was never
 /// joined.

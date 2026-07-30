@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 6545956;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2094611090;
 
 // Section: executor
 
@@ -275,6 +275,39 @@ fn wire__crate__collections__create_collection_with_media_impl(
         },
     )
 }
+fn wire__crate__settings__default_engine_settings_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "default_engine_settings",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::settings::default_engine_settings())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__collections__delete_collection_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -342,6 +375,73 @@ fn wire__crate__device__device_identity_impl(
                         Ok(output_ok)
                     })(),
                 )
+            }
+        },
+    )
+}
+fn wire__crate__settings__engine_settings_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "engine_settings",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::settings::engine_settings()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__settings__engine_settings_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "engine_settings_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::settings::EngineSettings::default())?;
+                    Ok(output_ok)
+                })())
             }
         },
     )
@@ -555,6 +655,42 @@ fn wire__crate__torrent__output_dir_impl(
         },
     )
 }
+fn wire__crate__settings__set_engine_settings_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_engine_settings",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_settings = <crate::settings::EngineSettings>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::settings::set_engine_settings(api_settings).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__device__set_nickname_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -585,43 +721,6 @@ fn wire__crate__device__set_nickname_impl(
                         let output_ok = crate::device::set_nickname(api_nickname)?;
                         Ok(output_ok)
                     })(),
-                )
-            }
-        },
-    )
-}
-fn wire__crate__torrent__set_upload_limit_bps_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_upload_limit_bps",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_bytes_per_sec = <Option<u32>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok =
-                            crate::torrent::set_upload_limit_bps(api_bytes_per_sec).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
                 )
             }
         },
@@ -839,6 +938,48 @@ impl SseDecode for crate::device::DeviceIdentityInfo {
     }
 }
 
+impl SseDecode for crate::settings::EngineSettings {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_uploadLimitBps = <Option<u32>>::sse_decode(deserializer);
+        let mut var_downloadLimitBps = <Option<u32>>::sse_decode(deserializer);
+        let mut var_listenPortStart = <u16>::sse_decode(deserializer);
+        let mut var_listenPortEnd = <u16>::sse_decode(deserializer);
+        let mut var_enableUpnpPortForwarding = <bool>::sse_decode(deserializer);
+        let mut var_socksProxyUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_disableDht = <bool>::sse_decode(deserializer);
+        let mut var_disableDhtPersistence = <bool>::sse_decode(deserializer);
+        let mut var_persistSession = <bool>::sse_decode(deserializer);
+        let mut var_fastresume = <bool>::sse_decode(deserializer);
+        let mut var_deferWritesUpToMb = <Option<u32>>::sse_decode(deserializer);
+        let mut var_concurrentInitLimit = <Option<u32>>::sse_decode(deserializer);
+        let mut var_peerConnectTimeoutSecs = <Option<u32>>::sse_decode(deserializer);
+        let mut var_peerReadWriteTimeoutSecs = <Option<u32>>::sse_decode(deserializer);
+        let mut var_peerKeepAliveIntervalSecs = <Option<u32>>::sse_decode(deserializer);
+        let mut var_blocklistUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_trackers = <Vec<String>>::sse_decode(deserializer);
+        return crate::settings::EngineSettings {
+            upload_limit_bps: var_uploadLimitBps,
+            download_limit_bps: var_downloadLimitBps,
+            listen_port_start: var_listenPortStart,
+            listen_port_end: var_listenPortEnd,
+            enable_upnp_port_forwarding: var_enableUpnpPortForwarding,
+            socks_proxy_url: var_socksProxyUrl,
+            disable_dht: var_disableDht,
+            disable_dht_persistence: var_disableDhtPersistence,
+            persist_session: var_persistSession,
+            fastresume: var_fastresume,
+            defer_writes_up_to_mb: var_deferWritesUpToMb,
+            concurrent_init_limit: var_concurrentInitLimit,
+            peer_connect_timeout_secs: var_peerConnectTimeoutSecs,
+            peer_read_write_timeout_secs: var_peerReadWriteTimeoutSecs,
+            peer_keep_alive_interval_secs: var_peerKeepAliveIntervalSecs,
+            blocklist_url: var_blocklistUrl,
+            trackers: var_trackers,
+        };
+    }
+}
+
 impl SseDecode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -850,6 +991,18 @@ impl SseDecode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
     }
 }
 
@@ -1051,6 +1204,13 @@ impl SseDecode for crate::torrent::TorrentInfo {
     }
 }
 
+impl SseDecode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u16::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1114,20 +1274,25 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__collections__delete_collection_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__device__device_identity_impl(port, ptr, rust_vec_len, data_len),
-        9 => {
+        7 => wire__crate__settings__default_engine_settings_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__collections__delete_collection_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__device__device_identity_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__settings__engine_settings_impl(port, ptr, rust_vec_len, data_len),
+        11 => {
+            wire__crate__settings__engine_settings_default_impl(port, ptr, rust_vec_len, data_len)
+        }
+        12 => {
             wire__crate__collections__fetch_collection_media_impl(port, ptr, rust_vec_len, data_len)
         }
-        11 => wire__crate__collections__join_collection_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__collections__list_collections_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__torrent__set_upload_limit_bps_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__collections__sync_address_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__collections__sync_collection_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__collections__join_collection_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__collections__list_collections_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__settings__set_engine_settings_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__collections__sync_address_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__collections__sync_collection_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1140,7 +1305,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        10 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1242,6 +1407,48 @@ impl flutter_rust_bridge::IntoIntoDart<crate::device::DeviceIdentityInfo>
     for crate::device::DeviceIdentityInfo
 {
     fn into_into_dart(self) -> crate::device::DeviceIdentityInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::settings::EngineSettings {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.upload_limit_bps.into_into_dart().into_dart(),
+            self.download_limit_bps.into_into_dart().into_dart(),
+            self.listen_port_start.into_into_dart().into_dart(),
+            self.listen_port_end.into_into_dart().into_dart(),
+            self.enable_upnp_port_forwarding
+                .into_into_dart()
+                .into_dart(),
+            self.socks_proxy_url.into_into_dart().into_dart(),
+            self.disable_dht.into_into_dart().into_dart(),
+            self.disable_dht_persistence.into_into_dart().into_dart(),
+            self.persist_session.into_into_dart().into_dart(),
+            self.fastresume.into_into_dart().into_dart(),
+            self.defer_writes_up_to_mb.into_into_dart().into_dart(),
+            self.concurrent_init_limit.into_into_dart().into_dart(),
+            self.peer_connect_timeout_secs.into_into_dart().into_dart(),
+            self.peer_read_write_timeout_secs
+                .into_into_dart()
+                .into_dart(),
+            self.peer_keep_alive_interval_secs
+                .into_into_dart()
+                .into_dart(),
+            self.blocklist_url.into_into_dart().into_dart(),
+            self.trackers.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::settings::EngineSettings
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::settings::EngineSettings>
+    for crate::settings::EngineSettings
+{
+    fn into_into_dart(self) -> crate::settings::EngineSettings {
         self
     }
 }
@@ -1411,6 +1618,29 @@ impl SseEncode for crate::device::DeviceIdentityInfo {
     }
 }
 
+impl SseEncode for crate::settings::EngineSettings {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<u32>>::sse_encode(self.upload_limit_bps, serializer);
+        <Option<u32>>::sse_encode(self.download_limit_bps, serializer);
+        <u16>::sse_encode(self.listen_port_start, serializer);
+        <u16>::sse_encode(self.listen_port_end, serializer);
+        <bool>::sse_encode(self.enable_upnp_port_forwarding, serializer);
+        <Option<String>>::sse_encode(self.socks_proxy_url, serializer);
+        <bool>::sse_encode(self.disable_dht, serializer);
+        <bool>::sse_encode(self.disable_dht_persistence, serializer);
+        <bool>::sse_encode(self.persist_session, serializer);
+        <bool>::sse_encode(self.fastresume, serializer);
+        <Option<u32>>::sse_encode(self.defer_writes_up_to_mb, serializer);
+        <Option<u32>>::sse_encode(self.concurrent_init_limit, serializer);
+        <Option<u32>>::sse_encode(self.peer_connect_timeout_secs, serializer);
+        <Option<u32>>::sse_encode(self.peer_read_write_timeout_secs, serializer);
+        <Option<u32>>::sse_encode(self.peer_keep_alive_interval_secs, serializer);
+        <Option<String>>::sse_encode(self.blocklist_url, serializer);
+        <Vec<String>>::sse_encode(self.trackers, serializer);
+    }
+}
+
 impl SseEncode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1422,6 +1652,16 @@ impl SseEncode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <String>::sse_encode(item, serializer);
+        }
     }
 }
 
@@ -1564,6 +1804,13 @@ impl SseEncode for crate::torrent::TorrentInfo {
         <Option<String>>::sse_encode(self.error, serializer);
         <Vec<crate::torrent::TorrentFile>>::sse_encode(self.files, serializer);
         <u32>::sse_encode(self.live_peers, serializer);
+    }
+}
+
+impl SseEncode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u16::<NativeEndian>(self).unwrap();
     }
 }
 
