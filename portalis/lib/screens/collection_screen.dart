@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models.dart';
 import '../services/collab_collections.dart';
@@ -56,9 +57,35 @@ class CollectionScreen extends StatelessWidget {
                     'Share this code — anyone who enters it can join and add media.',
                     style: TextStyle(fontSize: 12, color: AppColors.neutral400),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 14),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      // White background: QR readers need light-on-dark
+                      // contrast regardless of the app's dark theme.
+                      child: QrImageView(
+                        data: inviteCode!,
+                        version: QrVersions.auto,
+                        size: 200,
+                        backgroundColor: Colors.white,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: Colors.black,
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   SelectableText(
-                    inviteCode!,
+                    inviteCode,
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   ),
                 ],
