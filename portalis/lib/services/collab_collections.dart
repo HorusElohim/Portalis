@@ -36,6 +36,25 @@ class CollabCollections extends ChangeNotifier {
     return info;
   }
 
+  /// Reuses an existing collab collection with this exact [name] if one's
+  /// already been created, instead of minting a duplicate — Phase 1 has no
+  /// real stored mapping between a torrent-backed Collection and its collab
+  /// counterpart yet, so name is the closest proxy available. Refreshes
+  /// first so the match (and its invite code, which is regenerated with
+  /// this device's *current* sync addresses on every list/refresh call) is
+  /// never based on stale in-memory data.
+  Future<bridge.CollabCollectionInfo> createOrReuseCollection(String name) async {
+    await refresh();
+    final existing = _collections.where((c) => c.name == name);
+    if (existing.isNotEmpty) return existing.first;
+    return createCollection(name);
+  }
+
+  Future<void> deleteCollection(String collectionId) async {
+    await bridge.deleteCollabCollection(collectionId: collectionId);
+    await refresh();
+  }
+
   Future<bridge.CollabCollectionInfo> joinCollection(
     String inviteCode,
     String displayName,

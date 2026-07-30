@@ -166,6 +166,23 @@ pub async fn sync_collab_collection(
     }
 }
 
+/// Forgets this collab collection on this device — removes it from
+/// `collections.json` entirely. Local only: other collaborators (if any
+/// synced with this device before) keep their own copies; there's no
+/// "delete for everyone" in a grow-only-manifest design, and this doesn't
+/// attempt one.
+pub async fn delete_collab_collection(collection_id: String) -> anyhow::Result<()> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        native::delete_collab_collection(collection_id).await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = collection_id;
+        native::unsupported_on_web()
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use anyhow::Context;
@@ -467,6 +484,17 @@ mod native {
                 .find(|c| c.id == id)
                 .map(|c| to_info(c, &addrs))
                 .ok_or_else(|| anyhow::anyhow!("collection vanished during sync"))
+        })
+    }
+
+    pub(super) async fn delete_collab_collection(collection_id: String) -> anyhow::Result<()> {
+        clog!("collab", "delete_collab_collection: collection_id={collection_id}");
+        let id = CollectionId::from_string(&collection_id)?;
+        with_store(|collections| {
+            let before = collections.len();
+            collections.retain(|c| c.id != id);
+            anyhow::ensure!(collections.len() != before, "no such collab collection");
+            Ok(())
         })
     }
 

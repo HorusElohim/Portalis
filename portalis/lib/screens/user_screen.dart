@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../bridge_generated/collab.dart' as collab_bridge;
 import '../bridge_generated/device.dart' as bridge;
@@ -98,6 +99,112 @@ class _UserScreenState extends State<UserScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sync failed: $e')),
+      );
+    }
+  }
+
+  /// Re-shows a collab collection's invite code/QR — the same view "Add
+  /// Collab" shows at creation time, reachable again here since Phase 1
+  /// has no other durable place to go looking for it.
+  Future<void> _viewInvite(collab_bridge.CollabCollectionInfo c) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(c.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${c.collaborators.length} collaborator${c.collaborators.length == 1 ? '' : 's'} · '
+              '${c.media.length} media item${c.media.length == 1 ? '' : 's'}',
+              style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: QrImageView(
+                  data: c.inviteCode,
+                  version: QrVersions.auto,
+                  size: 200,
+                  backgroundColor: Colors.white,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: Colors.black,
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SelectableText(
+              c.inviteCode,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: c.inviteCode));
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                const SnackBar(content: Text('Invite code copied')),
+              );
+            },
+            child: const Text('Copy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteCollabCollection(collab_bridge.CollabCollectionInfo c) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete collection?'),
+        content: Text(
+          'Removes "${c.name}" from this device only. Other collaborators '
+          '(if any have already synced) keep their own copy.',
+          style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete', style: TextStyle(color: Color(0xFFEB5757))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await CollabCollections.instance.deleteCollection(c.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted "${c.name}"')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Couldn\'t delete: $e')),
       );
     }
   }
@@ -312,43 +419,58 @@ class _UserScreenState extends State<UserScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             for (final c in collabCollections)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        c.name,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 12.5),
-                                      ),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => _viewInvite(c),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 6),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            c.name,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 12.5),
+                                          ),
+                                        ),
+                                        Text(
+                                          '${c.collaborators.length} collab · ${c.media.length} media',
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            fontFamily: 'monospace',
+                                            color: AppColors.neutral400,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        InkWell(
+                                          onTap: () => _syncCollection(c),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(3),
+                                            child: Icon(Icons.sync,
+                                                size: 15, color: AppColors.accent300),
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () => _fetchCollectionMedia(c),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(3),
+                                            child: Icon(Icons.download_outlined,
+                                                size: 15, color: AppColors.accent300),
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () => _deleteCollabCollection(c),
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(3),
+                                            child: Icon(Icons.delete_outline,
+                                                size: 15, color: Color(0xFFEB5757)),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    Text(
-                                      '${c.collaborators.length} collab · ${c.media.length} media',
-                                      style: const TextStyle(
-                                        fontSize: 10.5,
-                                        fontFamily: 'monospace',
-                                        color: AppColors.neutral400,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    InkWell(
-                                      onTap: () => _syncCollection(c),
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(3),
-                                        child: Icon(Icons.sync,
-                                            size: 15, color: AppColors.accent300),
-                                      ),
-                                    ),
-                                    InkWell(
-                                      onTap: () => _fetchCollectionMedia(c),
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(3),
-                                        child: Icon(Icons.download_outlined,
-                                            size: 15, color: AppColors.accent300),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
                           ],

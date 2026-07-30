@@ -65,6 +65,15 @@ Future<CollabCollectionInfo> syncCollabCollection(
     RustLib.instance.api.crateCollabSyncCollabCollection(
         collectionId: collectionId, peerAddr: peerAddr);
 
+/// Forgets this collab collection on this device — removes it from
+/// `collections.json` entirely. Local only: other collaborators (if any
+/// synced with this device before) keep their own copies; there's no
+/// "delete for everyone" in a grow-only-manifest design, and this doesn't
+/// attempt one.
+Future<void> deleteCollabCollection({required String collectionId}) =>
+    RustLib.instance.api
+        .crateCollabDeleteCollabCollection(collectionId: collectionId);
+
 class CollabCollectionInfo {
   final String id;
   final String name;

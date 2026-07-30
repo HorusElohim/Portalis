@@ -13,13 +13,15 @@ class CollectionScreen extends StatelessWidget {
 
   final Collection collection;
 
-  /// Phase 1 of the "Add Collab" plan: creates a real, invite-based collab
-  /// collection and shows its invite code to share. Not yet linked back to
-  /// *this* torrent-backed [Collection] — each tap mints a fresh collab
-  /// collection, since there's no stored mapping between the two concepts
-  /// yet (that unification is a later phase, once manifest-sync actually
-  /// works end to end). This still exercises the real domain layer
-  /// end-to-end: a real signed identity, a real persisted invite secret.
+  /// Phase 1 of the "Add Collab" plan: creates (or reuses, if one already
+  /// exists for this same name) a real, invite-based collab collection and
+  /// shows its invite code to share. Not yet linked back to *this*
+  /// torrent-backed [Collection] by id — name is the closest proxy there
+  /// is until that unification lands (a later phase, once manifest-sync
+  /// works fully end to end) — but reusing by name at least stops every
+  /// tap from minting a fresh, indistinguishable duplicate. This still
+  /// exercises the real domain layer end-to-end: a real signed identity, a
+  /// real persisted invite secret.
   Future<void> _showAddCollabDialog(BuildContext context) async {
     showDialog<void>(
       context: context,
@@ -30,7 +32,8 @@ class CollectionScreen extends StatelessWidget {
     String? inviteCode;
     String? error;
     try {
-      final info = await CollabCollections.instance.createCollection(collection.name);
+      final info =
+          await CollabCollections.instance.createOrReuseCollection(collection.name);
       inviteCode = info.inviteCode;
     } catch (e) {
       error = '$e';
