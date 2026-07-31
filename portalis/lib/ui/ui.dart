@@ -28,6 +28,7 @@ export 'collection_views.dart';
 export 'controls.dart';
 export 'dialogs.dart';
 export 'formatters.dart';
+export 'home_button.dart';
 export 'identity.dart';
 export 'indicators.dart';
 export 'media.dart';

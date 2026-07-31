@@ -13,6 +13,7 @@ import 'package:portalis/screens/share_screen.dart';
 import 'package:portalis/screens/transfers_screen.dart';
 import 'package:portalis/screens/user_screen.dart';
 import 'package:portalis/services/collections.dart';
+import 'package:portalis/services/navigation.dart';
 import 'package:portalis/services/settings_service.dart';
 import 'package:portalis/theme.dart';
 
@@ -82,9 +83,16 @@ Future<void> _pumpApp(
 }
 
 void main() {
-  // Every test drives the same singleton, so each one states the world it
+  // Every test drives the same singletons, so each one states the world it
   // expects rather than inheriting whatever the previous test left behind.
-  tearDown(() => Collections.instance.debugSeed([]));
+  // The selected tab and navigator depth are app-global now (the Home button
+  // lives above the navigator and has to reach them), which means a test that
+  // switches tabs would otherwise leave every later test starting there.
+  tearDown(() {
+    Collections.instance.debugSeed([]);
+    AppNavigation.tab.value = 0;
+    AppNavigation.depth.value = 0;
+  });
 
   group('design system', () {
     test('the signal accent is the mint the design specifies', () {
@@ -137,6 +145,55 @@ void main() {
       // for, and the bottom bar is gone entirely.
       expect(find.byType(AppBottomNav), findsNothing);
       expect(find.text('People'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('home button', () {
+    testWidgets('is absent at home and appears once you leave it',
+        (tester) async {
+      await _pumpApp(tester, collections: []);
+      // Nothing to return from — it must not cover content it can't help
+      // with.
+      expect(find.byKey(const Key('appHomeButton')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('navTab1')));
+      await tester.pump();
+      expect(find.byKey(const Key('appHomeButton')), findsOneWidget);
+    });
+
+    testWidgets('returns to Collections from another tab', (tester) async {
+      await _pumpApp(tester, collections: []);
+      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.pump();
+      expect(find.byType(UserScreen), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('appHomeButton')));
+      await tester.pump();
+
+      expect(AppNavigation.tab.value, 0);
+      expect(find.byKey(const Key('appHomeButton')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pops all the way back from a pushed screen', (tester) async {
+      await _pumpApp(tester);
+      await tester.tap(find.byKey(const Key('shareSomethingButton')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ShareScreen), findsOneWidget);
+      expect(AppNavigation.depth.value, greaterThan(0));
+
+      await tester.tap(find.byKey(const Key('appHomeButton')));
+      // Stepped, so the pop transition actually finishes: depth drops
+      // immediately but the outgoing route stays mounted until it does.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      // Back at the shell, not merely one screen shallower.
+      expect(find.byType(ShareScreen), findsNothing);
+      expect(AppNavigation.depth.value, 0);
       expect(tester.takeException(), isNull);
     });
   });

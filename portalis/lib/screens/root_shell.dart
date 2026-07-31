@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/collections.dart';
+import '../services/navigation.dart';
 import '../services/settings_service.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
@@ -25,12 +26,15 @@ class RootShell extends StatefulWidget {
 }
 
 class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
-  int _tab = 0;
+  /// The selected tab lives in [AppNavigation] rather than here, so the
+  /// persistent Home button — which sits *above* this widget — can change it.
+  int get _tab => AppNavigation.tab.value;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    AppNavigation.tab.addListener(_onTabChanged);
     // One start() covers everything: collections created or joined in a
     // previous session load from disk and appear immediately, alongside any
     // plain torrents in the session.
@@ -46,8 +50,13 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     Collections.instance.setPaused(state != AppLifecycleState.resumed);
   }
 
+  void _onTabChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    AppNavigation.tab.removeListener(_onTabChanged);
     WidgetsBinding.instance.removeObserver(this);
     Collections.instance.stop();
     super.dispose();
@@ -92,7 +101,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
               ),
               bottomNavigationBar: AppBottomNav(
                 index: _tab,
-                onSelected: (i) => setState(() => _tab = i),
+                onSelected: (i) => AppNavigation.tab.value = i,
               ),
             );
           },
