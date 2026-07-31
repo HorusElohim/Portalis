@@ -73,15 +73,20 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
-  # Generates platform-native app icons from assets/portalis.png — see
-  # flutter_launcher_icons.yaml for config. Run with:
-  #   dart run flutter_launcher_icons
+  # Generates platform-native app icons from assets/PortalisNature.png.
+  # Run with: dart run flutter_launcher_icons
   flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:
-  image_path: "assets/portalis.png"
+  image_path: "assets/PortalisNature.png"
   android: true
+  # iOS rejects icons with an alpha channel, and applies its own corner mask —
+  # the source already carries a rounded rect on black, so without this the
+  # system mask would cut a second, tighter radius and leave black wedges in
+  # the corners. Flattening onto the artwork's own black keeps the intended
+  # shape.
   ios: true
+  remove_alpha_ios: true
   macos:
     generate: true
   windows:
@@ -101,7 +106,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/portalis.png
+    - assets/PortalisNature.png
 
   fonts:
     # Bundled, not fetched: the app must render identically offline, and the

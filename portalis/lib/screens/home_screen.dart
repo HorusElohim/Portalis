@@ -487,19 +487,21 @@ class _FirstRun extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     PulseRings(
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [AppColors.signal, AppColors.signalDim],
-                          ),
-                          borderRadius: BorderRadius.circular(20),
+                      size: 168,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.asset(
+                          'assets/PortalisNature.png',
+                          width: 72,
+                          height: 72,
+                          // Decoded at roughly the size it is drawn rather
+                          // than at the source's 1254², so the full-resolution
+                          // bitmap never enters the image cache for a 72pt
+                          // slot. 3x covers the densest screen we target.
+                          cacheWidth: 216,
+                          cacheHeight: 216,
+                          filterQuality: FilterQuality.medium,
                         ),
-                        child: const Icon(Icons.arrow_upward,
-                            size: 24, color: AppColors.onSignal),
                       ),
                     ),
                     const SizedBox(height: 26),
