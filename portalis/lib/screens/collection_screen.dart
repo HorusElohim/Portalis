@@ -41,9 +41,10 @@ class _CollectionScreenState extends State<CollectionScreen> {
   Collection get _collection =>
       Collections.instance.byId(widget.collection.id) ?? widget.collection;
 
-  void _toast(String msg) {
+  void _toast(String msg,
+      {ToastSeverity severity = ToastSeverity.info}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showToast(context, msg, severity: severity);
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -117,9 +118,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
           TextButton(
             onPressed: () {
               Clipboard.setData(ClipboardData(text: code));
-              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                const SnackBar(content: Text('Invite code copied')),
-              );
+              showToast(dialogContext, 'Invite code copied',
+                  severity: ToastSeverity.success);
             },
             child: const Text('Copy'),
           ),

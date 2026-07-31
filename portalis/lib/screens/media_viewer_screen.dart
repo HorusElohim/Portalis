@@ -80,9 +80,8 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     if (path == null) return;
     final ok = await launchUrl(Uri.file(path));
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Couldn\'t open ${widget.media.label}')),
-      );
+      showToast(context, 'Couldn\'t open ${widget.media.label}',
+          severity: ToastSeverity.error);
     }
   }
 

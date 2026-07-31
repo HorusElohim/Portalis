@@ -96,9 +96,10 @@ class _ShareScreenState extends State<ShareScreen> {
     }
   }
 
-  void _toast(String msg) {
+  void _toast(String msg,
+      {ToastSeverity severity = ToastSeverity.info}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showToast(context, msg, severity: severity);
   }
 
   Future<void> _createShare() async {
@@ -127,9 +128,11 @@ class _ShareScreenState extends State<ShareScreen> {
     }
   }
 
-  // After pop, this screen's ScaffoldMessenger is gone — use the root one.
+  /// Shown after this screen pops. showToast targets the *root* overlay, so
+  /// unlike the old ScaffoldMessenger call it survives the navigation that
+  /// triggered it.
   void _toastGlobal(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showToast(context, msg, severity: ToastSeverity.success);
   }
 
   int get _totalBytes => _files.fold(0, (sum, f) => sum + f.bytes.length);

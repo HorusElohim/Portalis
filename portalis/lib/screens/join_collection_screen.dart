@@ -124,12 +124,12 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
       if (mounted) {
         FocusScope.of(context).unfocus();
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Joined "${collection.name}" — syncing in the background, it will '
-            'fill in on its own',
-          ),
-        ));
+        showToast(
+          context,
+          'Joined "${collection.name}" — syncing in the background, it will '
+          'fill in on its own',
+          severity: ToastSeverity.success,
+        );
       }
     } catch (e) {
       setState(() => _error = 'Couldn\'t join: $e');

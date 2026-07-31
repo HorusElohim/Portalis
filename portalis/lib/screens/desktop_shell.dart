@@ -477,10 +477,8 @@ class _Inspector extends StatelessWidget {
                         trailingChevron: false,
                         onTap: () {
                           Clipboard.setData(ClipboardData(text: code));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Invite code copied')),
-                          );
+                          showToast(context, 'Invite code copied',
+                              severity: ToastSeverity.success);
                         },
                       ),
                     ),

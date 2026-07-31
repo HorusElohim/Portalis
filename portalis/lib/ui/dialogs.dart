@@ -104,10 +104,3 @@ Future<bool> confirmAction(
   return result ?? false;
 }
 
-/// Convenience for the "show the user what happened" pattern that every
-/// screen repeats.
-void showToast(BuildContext context, String message) {
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(message)));
-}

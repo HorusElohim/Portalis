@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../theme.dart';
 import 'primitives.dart';
+import 'toast.dart';
 
 /// A titled group of rows. Settings and both detail screens each had their
 /// own private copy of this; they now share one so a section header can't
@@ -110,9 +111,8 @@ class ValueRow extends StatelessWidget {
             InkWell(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$label copied')),
-                );
+                showToast(context, '$label copied',
+                    severity: ToastSeverity.success);
               },
               child: const Padding(
                 padding: EdgeInsets.only(left: 6),
@@ -228,9 +228,8 @@ class InfoRow extends StatelessWidget {
             InkWell(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$label copied')),
-                );
+                showToast(context, '$label copied',
+                    severity: ToastSeverity.success);
               },
               child: const Padding(
                 padding: EdgeInsets.only(left: 6),

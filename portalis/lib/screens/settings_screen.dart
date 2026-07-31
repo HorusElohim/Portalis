@@ -64,9 +64,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (restartRequired && mounted) setState(() => _restartPending = true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Couldn\'t save: $e')),
-      );
+      showToast(context, 'Couldn\'t save: $e',
+          severity: ToastSeverity.error);
     }
   }
 
@@ -148,9 +147,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (restartRequired && mounted) setState(() => _restartPending = true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Couldn\'t reset: $e')),
-      );
+      showToast(context, 'Couldn\'t reset: $e',
+          severity: ToastSeverity.error);
     }
   }
 

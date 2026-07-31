@@ -79,9 +79,8 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       if (mounted) {
         FocusScope.of(context).unfocus();
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added $_previewName — joining swarm')),
-        );
+        showToast(context, 'Added $_previewName — joining swarm',
+            severity: ToastSeverity.success);
       }
     } catch (e) {
       setState(() => _error = 'Couldn\'t add magnet link: $e');
@@ -102,9 +101,8 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       await Collections.instance.addFromFileBytes(bytes);
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Torrent added — joining swarm')),
-        );
+        showToast(context, 'Torrent added — joining swarm',
+            severity: ToastSeverity.success);
       }
     } catch (e) {
       setState(() => _error = 'Couldn\'t add .torrent file: $e');
