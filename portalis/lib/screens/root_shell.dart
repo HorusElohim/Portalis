@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/collections.dart';
 import '../services/settings_service.dart';
 import '../theme.dart';
+import '../ui/ui.dart';
 import 'desktop_shell.dart';
 import 'home_screen.dart';
 import 'transfers_screen.dart';
@@ -23,12 +24,13 @@ class RootShell extends StatefulWidget {
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
+class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   int _tab = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // One start() covers everything: collections created or joined in a
     // previous session load from disk and appear immediately, alongside any
     // plain torrents in the session.
@@ -37,7 +39,16 @@ class _RootShellState extends State<RootShell> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Stop polling whenever the app isn't in front of the user. Seeding
+    // continues in Rust regardless — there is just no reason to wake the Dart
+    // isolate to redraw a list nobody is looking at.
+    Collections.instance.setPaused(state != AppLifecycleState.resumed);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     Collections.instance.stop();
     super.dispose();
   }
@@ -49,23 +60,42 @@ class _RootShellState extends State<RootShell> {
         if (constraints.maxWidth >= kDesktopBreakpoint) {
           return const DesktopShell();
         }
-        return Scaffold(
-          backgroundColor: AppColors.surfaceDeep,
-          body: SafeArea(
-            bottom: false,
-            child: IndexedStack(
-              index: _tab,
-              children: const [
-                HomeScreen(),
-                TransfersScreen(),
-                UserScreen(),
-              ],
-            ),
-          ),
-          bottomNavigationBar: AppBottomNav(
-            index: _tab,
-            onSelected: (i) => setState(() => _tab = i),
-          ),
+        return ListenableBuilder(
+          listenable: Collections.instance,
+          builder: (context, _) {
+            final rate = Collections.instance.liveRate;
+            return Scaffold(
+              backgroundColor: AppColors.surfaceDeep,
+              body: AmbientBackground(
+                intensity: AmbientBackground.intensityForRate(rate),
+                child: SafeArea(
+                  bottom: false,
+                  child: IndexedStack(
+                    index: _tab,
+                    children: [
+                      // IndexedStack keeps every tab alive so switching is
+                      // instant — but that also keeps their animations
+                      // ticking off-screen. TickerMode freezes the ones the
+                      // user can't see.
+                      for (var i = 0; i < 3; i++)
+                        TickerMode(
+                          enabled: i == _tab,
+                          child: const [
+                            HomeScreen(),
+                            TransfersScreen(),
+                            UserScreen(),
+                          ][i],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              bottomNavigationBar: AppBottomNav(
+                index: _tab,
+                onSelected: (i) => setState(() => _tab = i),
+              ),
+            );
+          },
         );
       },
     );

@@ -506,6 +506,28 @@ pub(crate) async fn sync_with_any(
 /// than guesses from names, so neither depends on platform-specific naming
 /// like `utun*`/`ppp*`.
 pub(crate) fn lan_ips() -> Vec<String> {
+    // Cached: `list_collections` runs on a UI poll and calls this every time,
+    // so an uncached version enumerated every interface on the machine
+    // several times a minute forever — a syscall walk, an allocation per
+    // address, and a log line, all to re-derive something that changes only
+    // when the network does. The TTL is short enough that plugging in
+    // Ethernet or joining a different Wi-Fi is picked up well within the time
+    // it takes to generate and send an invite.
+    const TTL: Duration = Duration::from_secs(20);
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, Vec<String>)>> =
+        std::sync::Mutex::new(None);
+
+    if let Some((at, cached)) = CACHE.lock().unwrap().as_ref() {
+        if at.elapsed() < TTL {
+            return cached.clone();
+        }
+    }
+    let fresh = enumerate_lan_ips();
+    *CACHE.lock().unwrap() = Some((std::time::Instant::now(), fresh.clone()));
+    fresh
+}
+
+fn enumerate_lan_ips() -> Vec<String> {
     use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};
 
     let Ok(interfaces) = NetworkInterface::show() else {

@@ -251,6 +251,23 @@ void main() {
     });
   });
 
+  group('polling cadence', () {
+    testWidgets('slows down when nothing is moving, speeds up when it does',
+        (tester) async {
+      // The single biggest power cost in an idle app was a one-second FFI
+      // round trip plus a full rebuild, forever.
+      await _pumpApp(tester, collections: [
+        _collection(state: 'seeding', downloadMbps: 0, uploadMbps: 0),
+      ]);
+      expect(Collections.instance.liveRate, 0);
+
+      await _pumpApp(tester, collections: [
+        _collection(state: 'downloading', downloadMbps: 12.5),
+      ]);
+      expect(Collections.instance.liveRate, 12.5);
+    });
+  });
+
   group('transfers', () {
     testWidgets('lists only what is in flight, else an empty state',
         (tester) async {

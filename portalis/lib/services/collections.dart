@@ -38,11 +38,45 @@ class Collections extends ChangeNotifier {
 
   String? lastError;
   Timer? _timer;
+  Duration _interval = _activeInterval;
+  bool _paused = false;
+
+  /// While bytes are moving, the numbers on screen are worth a second.
+  static const _activeInterval = Duration(seconds: 1);
+
+  /// When nothing is in flight, nothing changes second to second: a settled
+  /// collection's size, peers and state are static. Polling five times less
+  /// often costs an idle app five times fewer FFI round trips, JSON decodes,
+  /// and rebuilds of every listening widget.
+  static const _idleInterval = Duration(seconds: 5);
 
   void start() {
     if (_timer != null) return;
     unawaited(refresh());
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
+    _schedule(_interval);
+  }
+
+  void _schedule(Duration interval) {
+    _timer?.cancel();
+    _interval = interval;
+    _timer = Timer.periodic(interval, (_) => refresh());
+  }
+
+  /// Stops polling entirely while the app isn't in front of the user.
+  ///
+  /// The engine keeps seeding — that happens in Rust and is the whole point —
+  /// but there is no reason to wake the Dart isolate to redraw a list nobody
+  /// is looking at.
+  void setPaused(bool paused) {
+    if (_paused == paused) return;
+    _paused = paused;
+    if (paused) {
+      _timer?.cancel();
+      _timer = null;
+    } else {
+      start();
+      unawaited(refresh());
+    }
   }
 
   /// Cancels polling without disposing the singleton — a real `dispose()`
@@ -79,7 +113,22 @@ class Collections extends ChangeNotifier {
     } catch (e) {
       lastError = '$e';
     }
+    _retuneInterval();
     notifyListeners();
+  }
+
+  /// Aggregate throughput right now, in MB/s. Drives both the ambient
+  /// background and the polling cadence.
+  double get liveRate => _collections.fold<double>(
+      0, (sum, c) => sum + c.downloadMbps + c.uploadMbps);
+
+  /// Speeds polling up while anything is moving and slows it down when
+  /// everything settles. Only reschedules on an actual change of cadence, so
+  /// a busy app isn't cancelling and recreating a timer every second.
+  void _retuneInterval() {
+    if (_paused || _timer == null) return;
+    final wanted = liveRate > 0 ? _activeInterval : _idleInterval;
+    if (wanted != _interval) _schedule(wanted);
   }
 
   Collection? byId(String id) {

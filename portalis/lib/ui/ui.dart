@@ -23,6 +23,7 @@
 /// code and tests reference them too.
 library;
 
+export 'ambient_background.dart';
 export 'collection_views.dart';
 export 'controls.dart';
 export 'dialogs.dart';
