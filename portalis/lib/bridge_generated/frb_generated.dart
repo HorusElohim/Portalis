@@ -3,13 +3,17 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'bridge.dart';
+import 'collections.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'device.dart';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
-import 'lib.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'settings.dart';
+import 'torrent.dart';
 
 /// Main entrypoint of the Rust API
 class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
@@ -68,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 75514378;
+  int get rustContentHash => 2094611090;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,7 +83,61 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  String crateGetVersion();
+  Future<CollectionInfo> crateCollectionsAddMediaToCollection(
+      {required String collectionId,
+      required String label,
+      required List<NewFile> files});
+
+  Future<TorrentInfo> crateTorrentAddTorrentFromFileBytes(
+      {required List<int> bytes});
+
+  Future<TorrentInfo> crateTorrentAddTorrentFromMagnet(
+      {required String magnetOrHash});
+
+  Future<CollectionInfo> crateCollectionsCreateCollection(
+      {required String name});
+
+  Future<TorrentInfo> crateTorrentCreateCollection(
+      {required String name, required List<NewFile> files});
+
+  Future<CollectionInfo> crateCollectionsCreateCollectionWithMedia(
+      {required String name, required List<NewFile> files});
+
+  Future<EngineSettings> crateSettingsDefaultEngineSettings();
+
+  Future<void> crateCollectionsDeleteCollection({required String collectionId});
+
+  Future<DeviceIdentityInfo> crateDeviceDeviceIdentity();
+
+  Future<EngineSettings> crateSettingsEngineSettings();
+
+  Future<EngineSettings> crateSettingsEngineSettingsDefault();
+
+  Future<int> crateCollectionsFetchCollectionMedia(
+      {required String collectionId});
+
+  String crateBridgeGetVersion();
+
+  Future<CollectionInfo> crateCollectionsJoinCollection(
+      {required String inviteCode, required String displayName});
+
+  Future<List<CollectionInfo>> crateCollectionsListCollections();
+
+  Future<List<TorrentInfo>> crateTorrentListTorrents();
+
+  Future<String> crateTorrentOutputDir();
+
+  Future<bool> crateSettingsSetEngineSettings(
+      {required EngineSettings settings});
+
+  Future<DeviceIdentityInfo> crateDeviceSetNickname({required String nickname});
+
+  Future<BigInt> crateTorrentStorageUsageBytes();
+
+  Future<String> crateCollectionsSyncAddress();
+
+  Future<CollectionInfo> crateCollectionsSyncCollection(
+      {required String collectionId, required String peerAddr});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -91,26 +149,564 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  String crateGetVersion() {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
+  Future<CollectionInfo> crateCollectionsAddMediaToCollection(
+      {required String collectionId,
+      required String label,
+      required List<NewFile> files}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+        sse_encode_String(collectionId, serializer);
+        sse_encode_String(label, serializer);
+        sse_encode_list_new_file(files, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 1, port: port_);
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_String,
+        decodeSuccessData: sse_decode_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsAddMediaToCollectionConstMeta,
+      argValues: [collectionId, label, files],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsAddMediaToCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_media_to_collection",
+        argNames: ["collectionId", "label", "files"],
+      );
+
+  @override
+  Future<TorrentInfo> crateTorrentAddTorrentFromFileBytes(
+      {required List<int> bytes}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_8_loose(bytes, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 2, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_torrent_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentAddTorrentFromFileBytesConstMeta,
+      argValues: [bytes],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentAddTorrentFromFileBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_torrent_from_file_bytes",
+        argNames: ["bytes"],
+      );
+
+  @override
+  Future<TorrentInfo> crateTorrentAddTorrentFromMagnet(
+      {required String magnetOrHash}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(magnetOrHash, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 3, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_torrent_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentAddTorrentFromMagnetConstMeta,
+      argValues: [magnetOrHash],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentAddTorrentFromMagnetConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_torrent_from_magnet",
+        argNames: ["magnetOrHash"],
+      );
+
+  @override
+  Future<CollectionInfo> crateCollectionsCreateCollection(
+      {required String name}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(name, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 4, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsCreateCollectionConstMeta,
+      argValues: [name],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsCreateCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_collection",
+        argNames: ["name"],
+      );
+
+  @override
+  Future<TorrentInfo> crateTorrentCreateCollection(
+      {required String name, required List<NewFile> files}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(name, serializer);
+        sse_encode_list_new_file(files, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 5, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_torrent_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentCreateCollectionConstMeta,
+      argValues: [name, files],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentCreateCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_collection",
+        argNames: ["name", "files"],
+      );
+
+  @override
+  Future<CollectionInfo> crateCollectionsCreateCollectionWithMedia(
+      {required String name, required List<NewFile> files}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(name, serializer);
+        sse_encode_list_new_file(files, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 6, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsCreateCollectionWithMediaConstMeta,
+      argValues: [name, files],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsCreateCollectionWithMediaConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_collection_with_media",
+        argNames: ["name", "files"],
+      );
+
+  @override
+  Future<EngineSettings> crateSettingsDefaultEngineSettings() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 7, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_engine_settings,
         decodeErrorData: null,
       ),
-      constMeta: kCrateGetVersionConstMeta,
+      constMeta: kCrateSettingsDefaultEngineSettingsConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateGetVersionConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateSettingsDefaultEngineSettingsConstMeta =>
+      const TaskConstMeta(
+        debugName: "default_engine_settings",
+        argNames: [],
+      );
+
+  @override
+  Future<void> crateCollectionsDeleteCollection(
+      {required String collectionId}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(collectionId, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 8, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsDeleteCollectionConstMeta,
+      argValues: [collectionId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsDeleteCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "delete_collection",
+        argNames: ["collectionId"],
+      );
+
+  @override
+  Future<DeviceIdentityInfo> crateDeviceDeviceIdentity() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 9, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_device_identity_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateDeviceDeviceIdentityConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateDeviceDeviceIdentityConstMeta => const TaskConstMeta(
+        debugName: "device_identity",
+        argNames: [],
+      );
+
+  @override
+  Future<EngineSettings> crateSettingsEngineSettings() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 10, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_engine_settings,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateSettingsEngineSettingsConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateSettingsEngineSettingsConstMeta =>
+      const TaskConstMeta(
+        debugName: "engine_settings",
+        argNames: [],
+      );
+
+  @override
+  Future<EngineSettings> crateSettingsEngineSettingsDefault() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 11, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_engine_settings,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateSettingsEngineSettingsDefaultConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateSettingsEngineSettingsDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "engine_settings_default",
+        argNames: [],
+      );
+
+  @override
+  Future<int> crateCollectionsFetchCollectionMedia(
+      {required String collectionId}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(collectionId, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 12, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_32,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsFetchCollectionMediaConstMeta,
+      argValues: [collectionId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsFetchCollectionMediaConstMeta =>
+      const TaskConstMeta(
+        debugName: "fetch_collection_media",
+        argNames: ["collectionId"],
+      );
+
+  @override
+  String crateBridgeGetVersion() {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateBridgeGetVersionConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateBridgeGetVersionConstMeta => const TaskConstMeta(
         debugName: "get_version",
         argNames: [],
       );
+
+  @override
+  Future<CollectionInfo> crateCollectionsJoinCollection(
+      {required String inviteCode, required String displayName}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(inviteCode, serializer);
+        sse_encode_String(displayName, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 14, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsJoinCollectionConstMeta,
+      argValues: [inviteCode, displayName],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsJoinCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "join_collection",
+        argNames: ["inviteCode", "displayName"],
+      );
+
+  @override
+  Future<List<CollectionInfo>> crateCollectionsListCollections() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 15, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsListCollectionsConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsListCollectionsConstMeta =>
+      const TaskConstMeta(
+        debugName: "list_collections",
+        argNames: [],
+      );
+
+  @override
+  Future<List<TorrentInfo>> crateTorrentListTorrents() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 16, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_torrent_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentListTorrentsConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentListTorrentsConstMeta => const TaskConstMeta(
+        debugName: "list_torrents",
+        argNames: [],
+      );
+
+  @override
+  Future<String> crateTorrentOutputDir() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 17, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentOutputDirConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentOutputDirConstMeta => const TaskConstMeta(
+        debugName: "output_dir",
+        argNames: [],
+      );
+
+  @override
+  Future<bool> crateSettingsSetEngineSettings(
+      {required EngineSettings settings}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_box_autoadd_engine_settings(settings, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 18, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateSettingsSetEngineSettingsConstMeta,
+      argValues: [settings],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateSettingsSetEngineSettingsConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_engine_settings",
+        argNames: ["settings"],
+      );
+
+  @override
+  Future<DeviceIdentityInfo> crateDeviceSetNickname(
+      {required String nickname}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(nickname, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 19, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_device_identity_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateDeviceSetNicknameConstMeta,
+      argValues: [nickname],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateDeviceSetNicknameConstMeta => const TaskConstMeta(
+        debugName: "set_nickname",
+        argNames: ["nickname"],
+      );
+
+  @override
+  Future<BigInt> crateTorrentStorageUsageBytes() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 20, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateTorrentStorageUsageBytesConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateTorrentStorageUsageBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "storage_usage_bytes",
+        argNames: [],
+      );
+
+  @override
+  Future<String> crateCollectionsSyncAddress() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 21, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsSyncAddressConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsSyncAddressConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_address",
+        argNames: [],
+      );
+
+  @override
+  Future<CollectionInfo> crateCollectionsSyncCollection(
+      {required String collectionId, required String peerAddr}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(collectionId, serializer);
+        sse_encode_String(peerAddr, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 22, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_collection_info,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateCollectionsSyncCollectionConstMeta,
+      argValues: [collectionId, peerAddr],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateCollectionsSyncCollectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_collection",
+        argNames: ["collectionId", "peerAddr"],
+      );
+
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AnyhowException(raw as String);
+  }
 
   @protected
   String dco_decode_String(dynamic raw) {
@@ -119,9 +715,268 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  EngineSettings dco_decode_box_autoadd_engine_settings(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_engine_settings(raw);
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  CollaboratorInfo dco_decode_collaborator_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return CollaboratorInfo(
+      deviceId: dco_decode_String(arr[0]),
+      displayName: dco_decode_String(arr[1]),
+      isAdmin: dco_decode_bool(arr[2]),
+    );
+  }
+
+  @protected
+  CollectionInfo dco_decode_collection_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return CollectionInfo(
+      id: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      kind: dco_decode_collection_kind(arr[2]),
+      inviteCode: dco_decode_opt_String(arr[3]),
+      collaborators: dco_decode_list_collaborator_info(arr[4]),
+      media: dco_decode_list_media_info(arr[5]),
+      progress: dco_decode_f_64(arr[6]),
+      totalBytes: dco_decode_u_64(arr[7]),
+      downloadedBytes: dco_decode_u_64(arr[8]),
+      uploadedBytes: dco_decode_u_64(arr[9]),
+      downloadMbps: dco_decode_f_64(arr[10]),
+      uploadMbps: dco_decode_f_64(arr[11]),
+      livePeers: dco_decode_u_32(arr[12]),
+      pendingMedia: dco_decode_u_32(arr[13]),
+      state: dco_decode_String(arr[14]),
+    );
+  }
+
+  @protected
+  CollectionKind dco_decode_collection_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return CollectionKind.values[raw as int];
+  }
+
+  @protected
+  DeviceIdentityInfo dco_decode_device_identity_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return DeviceIdentityInfo(
+      deviceId: dco_decode_String(arr[0]),
+      nickname: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  EngineSettings dco_decode_engine_settings(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    return EngineSettings(
+      uploadLimitBps: dco_decode_opt_box_autoadd_u_32(arr[0]),
+      downloadLimitBps: dco_decode_opt_box_autoadd_u_32(arr[1]),
+      listenPortStart: dco_decode_u_16(arr[2]),
+      listenPortEnd: dco_decode_u_16(arr[3]),
+      enableUpnpPortForwarding: dco_decode_bool(arr[4]),
+      socksProxyUrl: dco_decode_opt_String(arr[5]),
+      disableDht: dco_decode_bool(arr[6]),
+      disableDhtPersistence: dco_decode_bool(arr[7]),
+      persistSession: dco_decode_bool(arr[8]),
+      fastresume: dco_decode_bool(arr[9]),
+      deferWritesUpToMb: dco_decode_opt_box_autoadd_u_32(arr[10]),
+      concurrentInitLimit: dco_decode_opt_box_autoadd_u_32(arr[11]),
+      peerConnectTimeoutSecs: dco_decode_opt_box_autoadd_u_32(arr[12]),
+      peerReadWriteTimeoutSecs: dco_decode_opt_box_autoadd_u_32(arr[13]),
+      peerKeepAliveIntervalSecs: dco_decode_opt_box_autoadd_u_32(arr[14]),
+      blocklistUrl: dco_decode_opt_String(arr[15]),
+      trackers: dco_decode_list_String(arr[16]),
+    );
+  }
+
+  @protected
+  double dco_decode_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<CollaboratorInfo> dco_decode_list_collaborator_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_collaborator_info).toList();
+  }
+
+  @protected
+  List<CollectionInfo> dco_decode_list_collection_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_collection_info).toList();
+  }
+
+  @protected
+  List<MediaInfo> dco_decode_list_media_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_media_info).toList();
+  }
+
+  @protected
+  List<NewFile> dco_decode_list_new_file(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_new_file).toList();
+  }
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<int>;
+  }
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  List<TorrentFile> dco_decode_list_torrent_file(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_torrent_file).toList();
+  }
+
+  @protected
+  List<TorrentInfo> dco_decode_list_torrent_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_torrent_info).toList();
+  }
+
+  @protected
+  MediaInfo dco_decode_media_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return MediaInfo(
+      name: dco_decode_String(arr[0]),
+      entryName: dco_decode_String(arr[1]),
+      infoHash: dco_decode_String(arr[2]),
+      absolutePath: dco_decode_opt_String(arr[3]),
+      lengthBytes: dco_decode_u_64(arr[4]),
+      downloadedBytes: dco_decode_u_64(arr[5]),
+      progress: dco_decode_f_64(arr[6]),
+      fetched: dco_decode_bool(arr[7]),
+      addedBy: dco_decode_opt_String(arr[8]),
+    );
+  }
+
+  @protected
+  NewFile dco_decode_new_file(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return NewFile(
+      name: dco_decode_String(arr[0]),
+      bytes: dco_decode_list_prim_u_8_strict(arr[1]),
+    );
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
+  TorrentFile dco_decode_torrent_file(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return TorrentFile(
+      name: dco_decode_String(arr[0]),
+      absolutePath: dco_decode_String(arr[1]),
+      lengthBytes: dco_decode_u_64(arr[2]),
+      downloadedBytes: dco_decode_u_64(arr[3]),
+    );
+  }
+
+  @protected
+  TorrentInfo dco_decode_torrent_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    return TorrentInfo(
+      id: dco_decode_usize(arr[0]),
+      infoHash: dco_decode_String(arr[1]),
+      name: dco_decode_String(arr[2]),
+      state: dco_decode_String(arr[3]),
+      progressBytes: dco_decode_u_64(arr[4]),
+      totalBytes: dco_decode_u_64(arr[5]),
+      uploadedBytes: dco_decode_u_64(arr[6]),
+      downloadMbps: dco_decode_f_64(arr[7]),
+      uploadMbps: dco_decode_f_64(arr[8]),
+      finished: dco_decode_bool(arr[9]),
+      error: dco_decode_opt_String(arr[10]),
+      files: dco_decode_list_torrent_file(arr[11]),
+      livePeers: dco_decode_u_32(arr[12]),
+    );
+  }
+
+  @protected
+  int dco_decode_u_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -137,6 +992,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_String(deserializer);
+    return AnyhowException(inner);
+  }
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
@@ -144,10 +1012,359 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  EngineSettings sse_decode_box_autoadd_engine_settings(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_engine_settings(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
+  CollaboratorInfo sse_decode_collaborator_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_deviceId = sse_decode_String(deserializer);
+    var var_displayName = sse_decode_String(deserializer);
+    var var_isAdmin = sse_decode_bool(deserializer);
+    return CollaboratorInfo(
+        deviceId: var_deviceId,
+        displayName: var_displayName,
+        isAdmin: var_isAdmin);
+  }
+
+  @protected
+  CollectionInfo sse_decode_collection_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_kind = sse_decode_collection_kind(deserializer);
+    var var_inviteCode = sse_decode_opt_String(deserializer);
+    var var_collaborators = sse_decode_list_collaborator_info(deserializer);
+    var var_media = sse_decode_list_media_info(deserializer);
+    var var_progress = sse_decode_f_64(deserializer);
+    var var_totalBytes = sse_decode_u_64(deserializer);
+    var var_downloadedBytes = sse_decode_u_64(deserializer);
+    var var_uploadedBytes = sse_decode_u_64(deserializer);
+    var var_downloadMbps = sse_decode_f_64(deserializer);
+    var var_uploadMbps = sse_decode_f_64(deserializer);
+    var var_livePeers = sse_decode_u_32(deserializer);
+    var var_pendingMedia = sse_decode_u_32(deserializer);
+    var var_state = sse_decode_String(deserializer);
+    return CollectionInfo(
+        id: var_id,
+        name: var_name,
+        kind: var_kind,
+        inviteCode: var_inviteCode,
+        collaborators: var_collaborators,
+        media: var_media,
+        progress: var_progress,
+        totalBytes: var_totalBytes,
+        downloadedBytes: var_downloadedBytes,
+        uploadedBytes: var_uploadedBytes,
+        downloadMbps: var_downloadMbps,
+        uploadMbps: var_uploadMbps,
+        livePeers: var_livePeers,
+        pendingMedia: var_pendingMedia,
+        state: var_state);
+  }
+
+  @protected
+  CollectionKind sse_decode_collection_kind(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return CollectionKind.values[inner];
+  }
+
+  @protected
+  DeviceIdentityInfo sse_decode_device_identity_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_deviceId = sse_decode_String(deserializer);
+    var var_nickname = sse_decode_String(deserializer);
+    return DeviceIdentityInfo(deviceId: var_deviceId, nickname: var_nickname);
+  }
+
+  @protected
+  EngineSettings sse_decode_engine_settings(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_uploadLimitBps = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_downloadLimitBps = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_listenPortStart = sse_decode_u_16(deserializer);
+    var var_listenPortEnd = sse_decode_u_16(deserializer);
+    var var_enableUpnpPortForwarding = sse_decode_bool(deserializer);
+    var var_socksProxyUrl = sse_decode_opt_String(deserializer);
+    var var_disableDht = sse_decode_bool(deserializer);
+    var var_disableDhtPersistence = sse_decode_bool(deserializer);
+    var var_persistSession = sse_decode_bool(deserializer);
+    var var_fastresume = sse_decode_bool(deserializer);
+    var var_deferWritesUpToMb = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_concurrentInitLimit = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_peerConnectTimeoutSecs =
+        sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_peerReadWriteTimeoutSecs =
+        sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_peerKeepAliveIntervalSecs =
+        sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_blocklistUrl = sse_decode_opt_String(deserializer);
+    var var_trackers = sse_decode_list_String(deserializer);
+    return EngineSettings(
+        uploadLimitBps: var_uploadLimitBps,
+        downloadLimitBps: var_downloadLimitBps,
+        listenPortStart: var_listenPortStart,
+        listenPortEnd: var_listenPortEnd,
+        enableUpnpPortForwarding: var_enableUpnpPortForwarding,
+        socksProxyUrl: var_socksProxyUrl,
+        disableDht: var_disableDht,
+        disableDhtPersistence: var_disableDhtPersistence,
+        persistSession: var_persistSession,
+        fastresume: var_fastresume,
+        deferWritesUpToMb: var_deferWritesUpToMb,
+        concurrentInitLimit: var_concurrentInitLimit,
+        peerConnectTimeoutSecs: var_peerConnectTimeoutSecs,
+        peerReadWriteTimeoutSecs: var_peerReadWriteTimeoutSecs,
+        peerKeepAliveIntervalSecs: var_peerKeepAliveIntervalSecs,
+        blocklistUrl: var_blocklistUrl,
+        trackers: var_trackers);
+  }
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<CollaboratorInfo> sse_decode_list_collaborator_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CollaboratorInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_collaborator_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<CollectionInfo> sse_decode_list_collection_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CollectionInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_collection_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MediaInfo> sse_decode_list_media_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MediaInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_media_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<NewFile> sse_decode_list_new_file(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <NewFile>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_new_file(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  List<TorrentFile> sse_decode_list_torrent_file(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TorrentFile>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_torrent_file(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TorrentInfo> sse_decode_list_torrent_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TorrentInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_torrent_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  MediaInfo sse_decode_media_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_entryName = sse_decode_String(deserializer);
+    var var_infoHash = sse_decode_String(deserializer);
+    var var_absolutePath = sse_decode_opt_String(deserializer);
+    var var_lengthBytes = sse_decode_u_64(deserializer);
+    var var_downloadedBytes = sse_decode_u_64(deserializer);
+    var var_progress = sse_decode_f_64(deserializer);
+    var var_fetched = sse_decode_bool(deserializer);
+    var var_addedBy = sse_decode_opt_String(deserializer);
+    return MediaInfo(
+        name: var_name,
+        entryName: var_entryName,
+        infoHash: var_infoHash,
+        absolutePath: var_absolutePath,
+        lengthBytes: var_lengthBytes,
+        downloadedBytes: var_downloadedBytes,
+        progress: var_progress,
+        fetched: var_fetched,
+        addedBy: var_addedBy);
+  }
+
+  @protected
+  NewFile sse_decode_new_file(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_bytes = sse_decode_list_prim_u_8_strict(deserializer);
+    return NewFile(name: var_name, bytes: var_bytes);
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  TorrentFile sse_decode_torrent_file(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_absolutePath = sse_decode_String(deserializer);
+    var var_lengthBytes = sse_decode_u_64(deserializer);
+    var var_downloadedBytes = sse_decode_u_64(deserializer);
+    return TorrentFile(
+        name: var_name,
+        absolutePath: var_absolutePath,
+        lengthBytes: var_lengthBytes,
+        downloadedBytes: var_downloadedBytes);
+  }
+
+  @protected
+  TorrentInfo sse_decode_torrent_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_usize(deserializer);
+    var var_infoHash = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_state = sse_decode_String(deserializer);
+    var var_progressBytes = sse_decode_u_64(deserializer);
+    var var_totalBytes = sse_decode_u_64(deserializer);
+    var var_uploadedBytes = sse_decode_u_64(deserializer);
+    var var_downloadMbps = sse_decode_f_64(deserializer);
+    var var_uploadMbps = sse_decode_f_64(deserializer);
+    var var_finished = sse_decode_bool(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    var var_files = sse_decode_list_torrent_file(deserializer);
+    var var_livePeers = sse_decode_u_32(deserializer);
+    return TorrentInfo(
+        id: var_id,
+        infoHash: var_infoHash,
+        name: var_name,
+        state: var_state,
+        progressBytes: var_progressBytes,
+        totalBytes: var_totalBytes,
+        uploadedBytes: var_uploadedBytes,
+        downloadMbps: var_downloadMbps,
+        uploadMbps: var_uploadMbps,
+        finished: var_finished,
+        error: var_error,
+        files: var_files,
+        livePeers: var_livePeers);
+  }
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint16();
+  }
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -162,15 +1379,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
+  void sse_encode_AnyhowException(
+      AnyhowException self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
+    sse_encode_String(self.message, serializer);
   }
 
   @protected
@@ -180,11 +1398,273 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_engine_settings(
+      EngineSettings self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_engine_settings(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_collaborator_info(
+      CollaboratorInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.deviceId, serializer);
+    sse_encode_String(self.displayName, serializer);
+    sse_encode_bool(self.isAdmin, serializer);
+  }
+
+  @protected
+  void sse_encode_collection_info(
+      CollectionInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_collection_kind(self.kind, serializer);
+    sse_encode_opt_String(self.inviteCode, serializer);
+    sse_encode_list_collaborator_info(self.collaborators, serializer);
+    sse_encode_list_media_info(self.media, serializer);
+    sse_encode_f_64(self.progress, serializer);
+    sse_encode_u_64(self.totalBytes, serializer);
+    sse_encode_u_64(self.downloadedBytes, serializer);
+    sse_encode_u_64(self.uploadedBytes, serializer);
+    sse_encode_f_64(self.downloadMbps, serializer);
+    sse_encode_f_64(self.uploadMbps, serializer);
+    sse_encode_u_32(self.livePeers, serializer);
+    sse_encode_u_32(self.pendingMedia, serializer);
+    sse_encode_String(self.state, serializer);
+  }
+
+  @protected
+  void sse_encode_collection_kind(
+      CollectionKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_device_identity_info(
+      DeviceIdentityInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.deviceId, serializer);
+    sse_encode_String(self.nickname, serializer);
+  }
+
+  @protected
+  void sse_encode_engine_settings(
+      EngineSettings self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_u_32(self.uploadLimitBps, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.downloadLimitBps, serializer);
+    sse_encode_u_16(self.listenPortStart, serializer);
+    sse_encode_u_16(self.listenPortEnd, serializer);
+    sse_encode_bool(self.enableUpnpPortForwarding, serializer);
+    sse_encode_opt_String(self.socksProxyUrl, serializer);
+    sse_encode_bool(self.disableDht, serializer);
+    sse_encode_bool(self.disableDhtPersistence, serializer);
+    sse_encode_bool(self.persistSession, serializer);
+    sse_encode_bool(self.fastresume, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.deferWritesUpToMb, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.concurrentInitLimit, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.peerConnectTimeoutSecs, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.peerReadWriteTimeoutSecs, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.peerKeepAliveIntervalSecs, serializer);
+    sse_encode_opt_String(self.blocklistUrl, serializer);
+    sse_encode_list_String(self.trackers, serializer);
+  }
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_collaborator_info(
+      List<CollaboratorInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_collaborator_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_collection_info(
+      List<CollectionInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_collection_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_media_info(
+      List<MediaInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_media_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_new_file(List<NewFile> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_new_file(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(
+      List<int> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer
+        .putUint8List(self is Uint8List ? self : Uint8List.fromList(self));
+  }
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_list_torrent_file(
+      List<TorrentFile> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_torrent_file(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_torrent_info(
+      List<TorrentInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_torrent_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_media_info(MediaInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.entryName, serializer);
+    sse_encode_String(self.infoHash, serializer);
+    sse_encode_opt_String(self.absolutePath, serializer);
+    sse_encode_u_64(self.lengthBytes, serializer);
+    sse_encode_u_64(self.downloadedBytes, serializer);
+    sse_encode_f_64(self.progress, serializer);
+    sse_encode_bool(self.fetched, serializer);
+    sse_encode_opt_String(self.addedBy, serializer);
+  }
+
+  @protected
+  void sse_encode_new_file(NewFile self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_list_prim_u_8_strict(self.bytes, serializer);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_torrent_file(TorrentFile self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.absolutePath, serializer);
+    sse_encode_u_64(self.lengthBytes, serializer);
+    sse_encode_u_64(self.downloadedBytes, serializer);
+  }
+
+  @protected
+  void sse_encode_torrent_info(TorrentInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(self.id, serializer);
+    sse_encode_String(self.infoHash, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.state, serializer);
+    sse_encode_u_64(self.progressBytes, serializer);
+    sse_encode_u_64(self.totalBytes, serializer);
+    sse_encode_u_64(self.uploadedBytes, serializer);
+    sse_encode_f_64(self.downloadMbps, serializer);
+    sse_encode_f_64(self.uploadMbps, serializer);
+    sse_encode_bool(self.finished, serializer);
+    sse_encode_opt_String(self.error, serializer);
+    sse_encode_list_torrent_file(self.files, serializer);
+    sse_encode_u_32(self.livePeers, serializer);
+  }
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint16(self);
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected
@@ -199,14 +1679,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
-  }
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
+    serializer.buffer.putBigUint64(self);
   }
 }

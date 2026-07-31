@@ -3,12 +3,16 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'bridge.dart';
+import 'collections.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
+import 'device.dart';
 import 'frb_generated.dart';
-import 'lib.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
+import 'settings.dart';
+import 'torrent.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustLibApiImplPlatform({
@@ -19,10 +23,94 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
+  bool dco_decode_bool(dynamic raw);
+
+  @protected
+  EngineSettings dco_decode_box_autoadd_engine_settings(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  CollaboratorInfo dco_decode_collaborator_info(dynamic raw);
+
+  @protected
+  CollectionInfo dco_decode_collection_info(dynamic raw);
+
+  @protected
+  CollectionKind dco_decode_collection_kind(dynamic raw);
+
+  @protected
+  DeviceIdentityInfo dco_decode_device_identity_info(dynamic raw);
+
+  @protected
+  EngineSettings dco_decode_engine_settings(dynamic raw);
+
+  @protected
+  double dco_decode_f_64(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<CollaboratorInfo> dco_decode_list_collaborator_info(dynamic raw);
+
+  @protected
+  List<CollectionInfo> dco_decode_list_collection_info(dynamic raw);
+
+  @protected
+  List<MediaInfo> dco_decode_list_media_info(dynamic raw);
+
+  @protected
+  List<NewFile> dco_decode_list_new_file(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<TorrentFile> dco_decode_list_torrent_file(dynamic raw);
+
+  @protected
+  List<TorrentInfo> dco_decode_list_torrent_info(dynamic raw);
+
+  @protected
+  MediaInfo dco_decode_media_info(dynamic raw);
+
+  @protected
+  NewFile dco_decode_new_file(dynamic raw);
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  TorrentFile dco_decode_torrent_file(dynamic raw);
+
+  @protected
+  TorrentInfo dco_decode_torrent_info(dynamic raw);
+
+  @protected
+  int dco_decode_u_16(dynamic raw);
+
+  @protected
+  int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -31,10 +119,101 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  EngineSettings sse_decode_box_autoadd_engine_settings(
+      SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  CollaboratorInfo sse_decode_collaborator_info(SseDeserializer deserializer);
+
+  @protected
+  CollectionInfo sse_decode_collection_info(SseDeserializer deserializer);
+
+  @protected
+  CollectionKind sse_decode_collection_kind(SseDeserializer deserializer);
+
+  @protected
+  DeviceIdentityInfo sse_decode_device_identity_info(
+      SseDeserializer deserializer);
+
+  @protected
+  EngineSettings sse_decode_engine_settings(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<CollaboratorInfo> sse_decode_list_collaborator_info(
+      SseDeserializer deserializer);
+
+  @protected
+  List<CollectionInfo> sse_decode_list_collection_info(
+      SseDeserializer deserializer);
+
+  @protected
+  List<MediaInfo> sse_decode_list_media_info(SseDeserializer deserializer);
+
+  @protected
+  List<NewFile> sse_decode_list_new_file(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<TorrentFile> sse_decode_list_torrent_file(SseDeserializer deserializer);
+
+  @protected
+  List<TorrentInfo> sse_decode_list_torrent_info(SseDeserializer deserializer);
+
+  @protected
+  MediaInfo sse_decode_media_info(SseDeserializer deserializer);
+
+  @protected
+  NewFile sse_decode_new_file(SseDeserializer deserializer);
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  TorrentFile sse_decode_torrent_file(SseDeserializer deserializer);
+
+  @protected
+  TorrentInfo sse_decode_torrent_info(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -43,17 +222,110 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
+  void sse_encode_AnyhowException(
+      AnyhowException self, SseSerializer serializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_engine_settings(
+      EngineSettings self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_collaborator_info(
+      CollaboratorInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_collection_info(
+      CollectionInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_collection_kind(
+      CollectionKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_device_identity_info(
+      DeviceIdentityInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_engine_settings(
+      EngineSettings self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_collaborator_info(
+      List<CollaboratorInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_collection_info(
+      List<CollectionInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_media_info(
+      List<MediaInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_new_file(List<NewFile> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_torrent_file(
+      List<TorrentFile> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_torrent_info(
+      List<TorrentInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_media_info(MediaInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_new_file(NewFile self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_torrent_file(TorrentFile self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_torrent_info(TorrentInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
@@ -62,10 +334,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 }
 
 // Section: wire_class

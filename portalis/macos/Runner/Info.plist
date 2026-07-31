@@ -28,5 +28,12 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Portalis uses your local network to find nearby devices and share media directly, without a server.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_portalis._tcp</string>
+		<string>_portalis._udp</string>
+	</array>
 </dict>
 </plist>

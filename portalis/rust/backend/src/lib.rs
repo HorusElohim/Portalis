@@ -1,20 +1,22 @@
 #![cfg_attr(not(frb_expand), allow(unexpected_cfgs))]
 mod api; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
-use flutter_rust_bridge::frb;
-
-// Keep web simple by making this a synchronous, non-threaded function.
-// FRB will generate a sync binding that avoids web worker/threadpool usage.
-#[frb(sync)]
-pub fn get_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn get_version_matches_crate_metadata() {
-        assert_eq!(get_version(), env!("CARGO_PKG_VERSION"));
-    }
-}
+mod domain;
+mod log;
+// Private and NOT part of tool/frb_build.sh's --rust-input, same reason as
+// `domain` — see collab_store.rs's own module doc.
+mod collab_store;
+// Real sockets — native targets only, like librqbit.
+mod collab_sync;
+pub mod bridge;
+// Unconditional on every target — see torrent.rs's module doc for why
+// (flutter_rust_bridge's generated glue references this module regardless
+// of any #[cfg] on its own declaration). librqbit itself is still gated to
+// non-wasm32 in Cargo.toml; torrent.rs's internals mirror that.
+pub mod torrent;
+pub mod device;
+/// Every knob librqbit exposes, persisted and bridged — see its module doc.
+pub mod settings;
+/// The one collection model the app renders — see its module doc. Replaces
+/// the former `collab` module, which was one half of a pair that was never
+/// joined.
+pub mod collections;
