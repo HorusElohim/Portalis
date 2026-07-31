@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../bridge_generated/device.dart' as device_bridge;
 import '../services/collections.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 
 /// Un-hexes an invite code back to `<secret>:<name>[@addr1,addr2]`, or
 /// null if it isn't valid hex / valid UTF-8 — mirrors

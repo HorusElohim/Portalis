@@ -1,19 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 
-String _formatBytes(int bytes) {
-  const gb = 1000000000;
-  const mb = 1000000;
-  const kb = 1000;
-  if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(2)} GB';
-  if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)} MB';
-  if (bytes >= kb) return '${(bytes / kb).toStringAsFixed(0)} KB';
-  return '$bytes B';
-}
 
-String _formatMbps(double mibPerSec) => '${mibPerSec.toStringAsFixed(2)} MiB/s';
 
 /// Real per-file and per-torrent stats for the media currently open in
 /// [MediaViewerScreen] — file size/progress plus the swarm's actual
@@ -64,16 +54,16 @@ class MediaDetailsScreen extends StatelessWidget {
                     children: [
                       const SectionLabel('FILE'),
                       const SizedBox(height: 8),
-                      _InfoRow(
+                      InfoRow(
                         label: 'Size',
                         value: media.sizeBytes > 0
-                            ? _formatBytes(media.sizeBytes)
+                            ? formatBytesPrecise(media.sizeBytes)
                             : 'Unknown',
                       ),
-                      _InfoRow(
+                      InfoRow(
                         label: 'Downloaded',
                         value: media.sizeBytes > 0
-                            ? '${_formatBytes(media.downloadedBytes)} of ${_formatBytes(media.sizeBytes)} · ${(media.progress * 100).toStringAsFixed(0)}%'
+                            ? '${formatBytesPrecise(media.downloadedBytes)} of ${formatBytesPrecise(media.sizeBytes)} · ${(media.progress * 100).toStringAsFixed(0)}%'
                             : '${(media.progress * 100).toStringAsFixed(0)}%',
                       ),
                       const SizedBox(height: 6),
@@ -96,28 +86,28 @@ class MediaDetailsScreen extends StatelessWidget {
                     children: [
                       const SectionLabel('TORRENT'),
                       const SizedBox(height: 8),
-                      _InfoRow(
+                      InfoRow(
                         label: 'Collection',
                         value: collection.name,
                       ),
-                      _InfoRow(
+                      InfoRow(
                         label: 'State',
                         value: collection.state.isEmpty ? 'Unknown' : collection.state,
                       ),
-                      _InfoRow(
+                      InfoRow(
                         label: 'Download speed',
-                        value: _formatMbps(collection.downloadMbps),
+                        value: formatRate(collection.downloadMbps),
                       ),
-                      _InfoRow(
+                      InfoRow(
                         label: 'Upload speed',
-                        value: _formatMbps(collection.uploadMbps),
+                        value: formatRate(collection.uploadMbps),
                       ),
-                      _InfoRow(label: 'Peers', value: peerLabel),
+                      InfoRow(label: 'Peers', value: peerLabel),
                       // The info hash of the *torrent this file came from*.
                       // A shared collection has one per manifest entry, so it
                       // belongs to the media item, not the collection.
                       if (media.infoHash.isNotEmpty)
-                        _InfoRow(
+                        InfoRow(
                           label: 'Info hash',
                           value: media.infoHash,
                           monospace: true,
@@ -135,42 +125,3 @@ class MediaDetailsScreen extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-    this.monospace = false,
-  });
-
-  final String label;
-  final String value;
-  final bool monospace;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: monospace ? 'monospace' : null,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

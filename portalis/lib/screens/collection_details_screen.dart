@@ -1,22 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models.dart';
 import '../services/collections.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 
-String _formatBytes(int bytes) {
-  const gb = 1000000000;
-  const mb = 1000000;
-  const kb = 1000;
-  if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(2)} GB';
-  if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)} MB';
-  if (bytes >= kb) return '${(bytes / kb).toStringAsFixed(0)} KB';
-  return '$bytes B';
-}
 
-String _formatMbps(double mibPerSec) => '${mibPerSec.toStringAsFixed(2)} MiB/s';
 
 /// Everything the backend actually knows about one collection — the
 /// collection-level counterpart to [MediaDetailsScreen].
@@ -79,17 +68,17 @@ class CollectionDetailsScreen extends StatelessWidget {
                             fontSize: 17, fontWeight: FontWeight.w500),
                       ),
                     ),
-                    _Section(
+                    SettingsSection(
                       label: 'COLLECTION',
                       children: [
-                        _InfoRow(
+                        InfoRow(
                           label: 'Type',
                           value: collection.isShared
                               ? 'Shared — invite-based, can grow'
                               : 'Torrent — fixed contents',
                         ),
-                        _InfoRow(label: 'State', value: collection.state),
-                        _InfoRow(
+                        InfoRow(label: 'State', value: collection.state),
+                        InfoRow(
                           label: collection.isShared ? 'Collection id' : 'Info hash',
                           value: collection.id,
                           monospace: true,
@@ -97,30 +86,30 @@ class CollectionDetailsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    _Section(
+                    SettingsSection(
                       label: 'TRANSFER',
                       children: [
-                        _InfoRow(
+                        InfoRow(
                           label: 'Progress',
                           value: collection.totalBytes > 0
-                              ? '${_formatBytes(collection.downloadedBytes)} of '
-                                  '${_formatBytes(collection.totalBytes)} · '
+                              ? '${formatBytesPrecise(collection.downloadedBytes)} of '
+                                  '${formatBytesPrecise(collection.totalBytes)} · '
                                   '${(collection.progress * 100).toStringAsFixed(0)}%'
                               // No fetched torrent means no metadata, so no
                               // total is knowable yet — say that instead of "0 B
                               // of 0 B".
                               : 'Nothing fetched yet',
                         ),
-                        _InfoRow(
+                        InfoRow(
                           label: 'Uploaded',
-                          value: _formatBytes(collection.uploadedBytes),
+                          value: formatBytesPrecise(collection.uploadedBytes),
                         ),
-                        _InfoRow(
+                        InfoRow(
                           label: 'Down / up',
-                          value: '${_formatMbps(collection.downloadMbps)}'
-                              ' · ${_formatMbps(collection.uploadMbps)}',
+                          value: '${formatRate(collection.downloadMbps)}'
+                              ' · ${formatRate(collection.uploadMbps)}',
                         ),
-                        _InfoRow(
+                        InfoRow(
                           label: 'Peers',
                           value: collection.livePeers == 1
                               ? '1 peer connected'
@@ -164,7 +153,7 @@ class _EntriesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entries = collection.entries;
-    return _Section(
+    return SettingsSection(
       label: 'CONTENTS · ${entries.length} '
           'ENTR${entries.length == 1 ? 'Y' : 'IES'}',
       children: [
@@ -203,7 +192,7 @@ class _EntriesSection extends StatelessWidget {
                         entry.fetched
                             ? '${entry.media.length} file'
                                 '${entry.media.length == 1 ? '' : 's'} · '
-                                '${_formatBytes(entry.totalBytes)}'
+                                '${formatBytesPrecise(entry.totalBytes)}'
                             : 'not fetched',
                         style: const TextStyle(
                           fontSize: 10.5,
@@ -241,7 +230,7 @@ class _CollaboratorsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final collaborators = collection.collaborators;
-    return _Section(
+    return SettingsSection(
       label: 'COLLABORATORS · ${collaborators.length}',
       children: [
         if (collaborators.isEmpty)
@@ -287,80 +276,4 @@ class _CollaboratorsSection extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.label, required this.children});
 
-  final String label;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionLabel(label),
-          const SizedBox(height: 8),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-    this.monospace = false,
-    this.copyable = false,
-  });
-
-  final String label;
-  final String value;
-  final bool monospace;
-  final bool copyable;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: monospace ? 'monospace' : null,
-              ),
-            ),
-          ),
-          if (copyable)
-            InkWell(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: value));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$label copied')),
-                );
-              },
-              child: const Padding(
-                padding: EdgeInsets.only(left: 6),
-                child:
-                    Icon(Icons.copy, size: 13, color: AppColors.textDim),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}

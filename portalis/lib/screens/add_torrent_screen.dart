@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../services/collections.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 
 /// "Torrent" — the join-a-swarm half of the old combined Add screen,
 /// redesigned per the Portalis Add Flow: magnet input with a live preview

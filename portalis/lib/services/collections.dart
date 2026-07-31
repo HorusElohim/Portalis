@@ -53,6 +53,21 @@ class Collections extends ChangeNotifier {
     _timer = null;
   }
 
+  /// Test seam: puts the cache into a known state and stops polling.
+  ///
+  /// Widget tests run without `RustLib`, so every backend call throws and the
+  /// cache would otherwise be permanently empty-with-an-error — which makes
+  /// the states worth testing (a live transfer, a filter, an empty list
+  /// versus a failed load) unreachable. Seeding the cache directly keeps the
+  /// tests honest about *rendering* without pretending the FFI layer works.
+  @visibleForTesting
+  void debugSeed(List<Collection> collections, {String? error}) {
+    stop();
+    _collections = List.of(collections);
+    lastError = error;
+    notifyListeners();
+  }
+
   Future<void> refresh() async {
     try {
       final infos = await bridge.listCollections();

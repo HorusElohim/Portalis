@@ -66,7 +66,18 @@ class SettingsService extends ChangeNotifier {
     }
   }
 
-  Future<bool> resetToDefaults() async => save(await bridge.defaultEngineSettings());
+  Future<bool> resetToDefaults() async =>
+      save(await bridge.defaultEngineSettings());
+
+  /// Test seam, mirroring `Collections.debugSeed`: widget tests run without
+  /// `RustLib`, so [load] always fails and the screen would only ever render
+  /// its loading state.
+  @visibleForTesting
+  void debugSeed(bridge.EngineSettings settings) {
+    _settings = settings;
+    lastError = null;
+    notifyListeners();
+  }
 
   Future<void> refreshStorageUsage() async {
     try {

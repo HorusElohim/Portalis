@@ -7,7 +7,7 @@ import 'package:video_player/video_player.dart';
 import '../media_kind.dart';
 import '../models.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 import 'media_details_screen.dart';
 
 class MediaViewerScreen extends StatefulWidget {

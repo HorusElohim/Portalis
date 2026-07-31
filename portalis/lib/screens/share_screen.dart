@@ -9,19 +9,10 @@ import '../media_convert.dart';
 import '../media_kind.dart';
 import '../services/collections.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 
 typedef _PickedFile = ({String name, Uint8List bytes});
 
-String _formatBytes(int bytes) {
-  const gb = 1000000000;
-  const mb = 1000000;
-  const kb = 1000;
-  if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(2)} GB';
-  if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)} MB';
-  if (bytes >= kb) return '${(bytes / kb).toStringAsFixed(0)} KB';
-  return '$bytes B';
-}
 
 String _kindLabel(String name) {
   switch (kindOf(name)) {
@@ -275,7 +266,7 @@ class _ShareScreenState extends State<ShareScreen> {
                         Row(
                           children: [
                             Text(
-                              '${_files.length} ITEM${_files.length == 1 ? '' : 'S'} · ${_formatBytes(_totalBytes)}',
+                              '${_files.length} ITEM${_files.length == 1 ? '' : 'S'} · ${formatBytes(_totalBytes)}',
                               style: const TextStyle(
                                 fontSize: 10.5,
                                 fontFamily: 'monospace',
@@ -413,7 +404,7 @@ class _ShareScreenState extends State<ShareScreen> {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  '${_kindLabel(f.name)} · ${_formatBytes(f.bytes.length)}',
+                  '${_kindLabel(f.name)} · ${formatBytes(f.bytes.length)}',
                   style: const TextStyle(
                       fontSize: 11.5, color: AppColors.textDim),
                 ),

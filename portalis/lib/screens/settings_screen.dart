@@ -2,22 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/collections.dart';
 import '../services/settings_service.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 
-String _formatBytes(int bytes) {
-  const gb = 1000000000;
-  const mb = 1000000;
-  if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(1)} GB';
-  return '${(bytes / mb).toStringAsFixed(0)} MB';
-}
 
-String _formatBps(int? bps) {
-  if (bps == null || bps == 0) return 'Unlimited';
-  if (bps < 1000000) return '${(bps / 1000).toStringAsFixed(0)} KB/s';
-  return '${(bps / 1000000).toStringAsFixed(1)} MB/s';
-}
 
 /// Every setting the BitTorrent engine honours, and nothing else.
 ///
@@ -28,7 +18,19 @@ String _formatBps(int? bps) {
 /// them is read once at session construction, which the UI states rather than
 /// implying an immediate effect.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({
+    super.key,
+    this.embedded = false,
+    this.advanced = false,
+  });
+
+  /// Rendered inside the desktop shell's centre pane: no Scaffold chrome and
+  /// no back button, because the sidebar is the navigation.
+  final bool embedded;
+
+  /// The engine internals, reached from "Network & engine". Same state class
+  /// and the same editors — only which sections are shown differs.
+  final bool advanced;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -180,13 +182,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     if (_settings.lastError != null)
-                      _Banner(
+                      InfoBanner(
                         color: const Color(0xFFEB5757),
                         icon: Icons.error_outline,
                         text: _settings.lastError!,
                       ),
                     if (_restartPending)
-                      const _Banner(
+                      const InfoBanner(
                         color: AppColors.signalSoft,
                         icon: Icons.restart_alt,
                         text: 'Some changes apply the next time Portalis '
@@ -215,14 +217,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  List<Widget> _sections(EngineSettings s) {
+  List<Widget> _sections(EngineSettings s) =>
+      widget.advanced ? _advancedSections(s) : _basicSections(s);
+
+  /// What most people ever need: how fast, and whether to keep sharing.
+  List<Widget> _basicSections(EngineSettings s) {
     return [
-      _Section(
-        label: 'TRANSFER LIMITS · APPLIES IMMEDIATELY',
+      _HealthCard(settings: s),
+      SettingsSection(
+        label: 'SPEED · APPLIES IMMEDIATELY',
         children: [
-          _ValueRow(
+          ValueRow(
             label: 'Upload limit',
-            value: _formatBps(s.uploadLimitBps),
+            value: formatLimit(s.uploadLimitBps),
             subtitle: 'Across all torrents, not per torrent.',
             onTap: () async {
               final raw = await _edit(
@@ -236,9 +243,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await _apply(_copy(s, uploadLimitBps: _parseInt(raw), clearUpload: raw.isEmpty));
             },
           ),
-          _ValueRow(
+          ValueRow(
             label: 'Download limit',
-            value: _formatBps(s.downloadLimitBps),
+            value: formatLimit(s.downloadLimitBps),
             subtitle: 'Across all torrents, not per torrent.',
             onTap: () async {
               final raw = await _edit(
@@ -254,10 +261,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      _Section(
+      SettingsSection(
+        label: 'SHARING',
+        children: [
+          SwitchRow(
+            label: 'Keep sharing after restart',
+            subtitle: 'Friends can still pull your collections when Portalis '
+                'starts again. Off means the engine forgets them and silently '
+                'seeds nothing.',
+            value: s.persistSession,
+            onChanged: (v) => _apply(_copy(s, persistSession: v)),
+          ),
+        ],
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+        child: SurfaceCard(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const SettingsScreen(advanced: true),
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.tune, size: 19, color: AppColors.textDim),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Network & engine',
+                        style: TextStyle(
+                            fontSize: 14.5, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 3),
+                    Text('Ports, DHT, proxy, trackers, disk',
+                        style: const TextStyle(
+                            fontSize: 12.5, color: AppColors.textFaint)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right,
+                  size: 16, color: AppColors.textGhost),
+            ],
+          ),
+        ),
+      ),
+      SettingsSection(
+        label: 'STORAGE',
+        children: [
+          ValueRow(
+            label: 'Storage used',
+            value: formatBytes(_settings.storageUsedBytes),
+            subtitle: 'Reported by the engine. Not capped by anything.',
+          ),
+        ],
+      ),
+    ];
+  }
+
+  /// Everything librqbit exposes. Every row here is construction-time, so the
+  /// restart banner is expected rather than exceptional.
+  List<Widget> _advancedSections(EngineSettings s) {
+    return [
+      SettingsSection(
         label: 'NETWORK · NEEDS RESTART',
         children: [
-          _ValueRow(
+          ValueRow(
             label: 'Listen ports',
             value: '${s.listenPortStart}–${s.listenPortEnd}',
             subtitle:
@@ -278,7 +348,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await _apply(_copy(s, listenPortStart: start, listenPortEnd: end));
             },
           ),
-          _SwitchRow(
+          SwitchRow(
             label: 'UPnP port forwarding',
             subtitle: 'Ask the router to forward the listen port. No effect '
                 'if the router has UPnP off, or while a VPN owns the default '
@@ -286,7 +356,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: s.enableUpnpPortForwarding,
             onChanged: (v) => _apply(_copy(s, enableUpnpPortForwarding: v)),
           ),
-          _ValueRow(
+          ValueRow(
             label: 'SOCKS5 proxy',
             value: s.socksProxyUrl ?? 'None',
             subtitle: 'Routes peer traffic through a proxy.',
@@ -303,17 +373,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      _Section(
+      SettingsSection(
         label: 'PEER DISCOVERY · NEEDS RESTART',
         children: [
-          _SwitchRow(
+          SwitchRow(
             label: 'Disable DHT',
             subtitle: 'Without the distributed hash table, peers are only '
                 'found via trackers or addresses shared directly.',
             value: s.disableDht,
             onChanged: (v) => _apply(_copy(s, disableDht: v)),
           ),
-          _SwitchRow(
+          SwitchRow(
             label: 'Disable DHT persistence',
             subtitle: 'Stop reusing the stored DHT identity and port between '
                 'runs. That stored port is why two copies of Portalis can\'t '
@@ -321,7 +391,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: s.disableDhtPersistence,
             onChanged: (v) => _apply(_copy(s, disableDhtPersistence: v)),
           ),
-          _ValueRow(
+          ValueRow(
             label: 'Extra trackers',
             value: s.trackers.isEmpty
                 ? 'None'
@@ -345,7 +415,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await _apply(_copy(s, trackers: trackers));
             },
           ),
-          _ValueRow(
+          ValueRow(
             label: 'Blocklist URL',
             value: s.blocklistUrl ?? 'None',
             subtitle: 'An IP blocklist to fetch and enforce.',
@@ -362,17 +432,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      _Section(
+      SettingsSection(
         label: 'SESSION · NEEDS RESTART',
         children: [
-          _SwitchRow(
-            label: 'Remember torrents across restarts',
-            subtitle: 'Off means the engine starts empty each launch and '
-                'silently stops seeding everything you have shared.',
-            value: s.persistSession,
-            onChanged: (v) => _apply(_copy(s, persistSession: v)),
-          ),
-          _SwitchRow(
+          SwitchRow(
             label: 'Fast resume',
             subtitle: 'Trust the saved piece state instead of re-hashing every '
                 'file at launch.',
@@ -381,10 +444,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      _Section(
+      SettingsSection(
         label: 'PERFORMANCE · NEEDS RESTART',
         children: [
-          _ValueRow(
+          ValueRow(
             label: 'Deferred writes',
             value: s.deferWritesUpToMb == null
                 ? 'Write through'
@@ -404,7 +467,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   deferWritesUpToMb: _parseInt(raw), clearDefer: raw.isEmpty));
             },
           ),
-          _ValueRow(
+          ValueRow(
             label: 'Concurrent inits',
             value: s.concurrentInitLimit?.toString() ?? 'Engine default',
             subtitle: 'How many torrents may start up at once.',
@@ -423,10 +486,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      _Section(
+      SettingsSection(
         label: 'PEER TIMEOUTS · NEEDS RESTART',
         children: [
-          _ValueRow(
+          ValueRow(
             label: 'Connect',
             value: _secs(s.peerConnectTimeoutSecs),
             onTap: () async {
@@ -443,7 +506,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   clearConnect: raw.isEmpty));
             },
           ),
-          _ValueRow(
+          ValueRow(
             label: 'Read / write',
             value: _secs(s.peerReadWriteTimeoutSecs),
             onTap: () async {
@@ -460,7 +523,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   clearReadWrite: raw.isEmpty));
             },
           ),
-          _ValueRow(
+          ValueRow(
             label: 'Keep-alive',
             value: _secs(s.peerKeepAliveIntervalSecs),
             onTap: () async {
@@ -476,16 +539,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   peerKeepAliveIntervalSecs: _parseInt(raw),
                   clearKeepAlive: raw.isEmpty));
             },
-          ),
-        ],
-      ),
-      _Section(
-        label: 'STORAGE',
-        children: [
-          _ValueRow(
-            label: 'Storage used',
-            value: _formatBytes(_settings.storageUsedBytes),
-            subtitle: 'Reported by the engine. Not capped by anything.',
           ),
         ],
       ),
@@ -571,179 +624,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _Banner extends StatelessWidget {
-  const _Banner({required this.color, required this.icon, required this.text});
 
-  final Color color;
-  final IconData icon;
-  final String text;
+
+
+/// A label/value row; tappable when [onTap] is given, read-only otherwise.
+
+/// A summary of what the engine is actually doing.
+///
+/// The design's version claimed "Everything is healthy · PORT OPEN · DHT ON ·
+/// 14 PEERS". Two of those three are knowable and one is not: nothing here
+/// verifies that the listen port is *reachable* from outside, only which port
+/// range was configured. So this states the configured port and the real DHT
+/// and peer figures, and never asserts overall health.
+class _HealthCard extends StatelessWidget {
+  const _HealthCard({required this.settings});
+
+  final EngineSettings settings;
 
   @override
   Widget build(BuildContext context) {
+    final peers = Collections.instance.collections
+        .fold<int>(0, (sum, c) => sum + c.livePeers);
+    final dhtOn = !settings.disableDht;
+    final facts = [
+      'PORT ${settings.listenPortStart}–${settings.listenPortEnd}',
+      dhtOn ? 'DHT ON' : 'DHT OFF',
+      plural(peers, 'PEER').toUpperCase(),
+    ];
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          border: Border.all(color: color.withValues(alpha: 0.5)),
-          borderRadius: BorderRadius.circular(8),
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      child: SurfaceCard(
+        padding: const EdgeInsets.all(16),
+        // Mint only when something is genuinely connected; otherwise this is
+        // a neutral status panel, not a reassurance.
+        borderColor: peers > 0
+            ? AppColors.signal.withValues(alpha: 0.24)
+            : AppColors.border,
+        gradient: peers > 0
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.signal.withValues(alpha: 0.13),
+                  AppColors.signal.withValues(alpha: 0.03),
+                ],
+              )
+            : null,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 15, color: color),
-            const SizedBox(width: 9),
             Expanded(
-              child: Text(
-                text,
-                style: TextStyle(fontSize: 11, height: 1.4, color: color),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    peers > 0 ? 'Connected' : 'Idle',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    facts.join(' · '),
+                    style: monoLabel(
+                      size: 10.5,
+                      color: peers > 0
+                          ? AppColors.signalMuted
+                          : AppColors.textFaint,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
               ),
+            ),
+            Icon(
+              peers > 0 ? Icons.check_circle_outline : Icons.circle_outlined,
+              size: 20,
+              color: peers > 0 ? AppColors.signal : AppColors.textGhost,
             ),
           ],
         ),
       ),
     );
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.label, required this.children});
-
-  final String label;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionLabel(label),
-          const SizedBox(height: 4),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  const _SwitchRow({
-    required this.label,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontSize: 13)),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                      fontSize: 10.5, height: 1.35, color: AppColors.textDim),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: AppColors.signal,
-            activeThumbColor: AppColors.text,
-            inactiveTrackColor: AppColors.borderStrong,
-            inactiveThumbColor: AppColors.text,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A label/value row; tappable when [onTap] is given, read-only otherwise.
-class _ValueRow extends StatelessWidget {
-  const _ValueRow({
-    required this.label,
-    required this.value,
-    this.subtitle,
-    this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final String? subtitle;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final row = Container(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontSize: 13)),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(
-                        fontSize: 10.5,
-                        height: 1.35,
-                        color: AppColors.textDim),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 150),
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontFamily: 'monospace',
-                color: AppColors.signalSoft,
-              ),
-            ),
-          ),
-          if (onTap != null)
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Icon(Icons.chevron_right,
-                  size: 15, color: AppColors.textGhost),
-            ),
-        ],
-      ),
-    );
-    if (onTap == null) return row;
-    return InkWell(onTap: onTap, child: row);
   }
 }

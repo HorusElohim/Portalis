@@ -10,7 +10,7 @@ import '../media_convert.dart';
 import '../models.dart';
 import '../services/collections.dart';
 import '../theme.dart';
-import '../widgets/common.dart';
+import '../ui/ui.dart';
 import 'collection_details_screen.dart';
 import 'media_viewer_screen.dart';
 
