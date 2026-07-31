@@ -82,6 +82,12 @@ Future<void> _pumpApp(
   await tester.pump();
 }
 
+/// Switches to the Collections destination, where the list now lives.
+Future<void> _openCollections(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('navTab1')));
+  await tester.pump();
+}
+
 void main() {
   // Every test drives the same singletons, so each one states the world it
   // expects rather than inheriting whatever the previous test left behind.
@@ -115,14 +121,15 @@ void main() {
       await _pumpApp(tester, collections: []);
 
       expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Collections'), findsWidgets);
       expect(find.text('Transfers'), findsWidgets);
       expect(find.text('You'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('navTab1')));
+      await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
       expect(find.byType(TransfersScreen), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
       expect(find.byType(UserScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -149,13 +156,47 @@ void main() {
     });
   });
 
+  group('home is the welcome, collections is the list', () {
+    testWidgets('Home shows the welcome whether or not you own anything',
+        (tester) async {
+      // Previously Home changed shape depending on whether you had
+      // collections; it is one thing now.
+      await _pumpApp(tester);
+      expect(find.textContaining('Send anything'), findsOneWidget);
+
+      await _pumpApp(tester, collections: [_collection(name: 'Iceland trip')]);
+      expect(find.textContaining('Send anything'), findsOneWidget);
+      // The list is a different destination, so its rows are not here.
+      expect(find.text('Iceland trip'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Collections holds the list, and Home links across to it',
+        (tester) async {
+      // Taller than a phone so the link below the welcome is actually built —
+      // on a real device you scroll to it.
+      await _pumpApp(tester,
+          collections: [_collection(name: 'Iceland trip')],
+          size: const Size(390, 1300));
+
+      // Home offers a way across rather than duplicating the list.
+      expect(find.text('1 collection'), findsOneWidget);
+      await tester.tap(find.text('1 collection'));
+      await tester.pump();
+
+      expect(AppNavigation.tab.value, 1);
+      expect(find.text('Iceland trip'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('home tab', () {
     testWidgets('is the leftmost destination and returns from another tab',
         (tester) async {
       await _pumpApp(tester, collections: []);
       expect(find.text('Home'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
       expect(find.byType(UserScreen), findsOneWidget);
 
@@ -205,7 +246,6 @@ void main() {
       ]);
 
       expect(find.byType(LiveTransferCard), findsOneWidget);
-      expect(find.text('Moving now'), findsOneWidget);
       expect(find.text('RECEIVING'), findsOneWidget);
       expect(find.text('42.6'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -219,8 +259,8 @@ void main() {
       ]);
 
       expect(find.byType(LiveTransferCard), findsNothing);
-      expect(find.text('Moving now'), findsNothing);
-      expect(find.text('Your collections'), findsOneWidget);
+      // The welcome is unconditional; only the live card is not.
+      expect(find.textContaining('Send anything'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -229,6 +269,7 @@ void main() {
         _collection(id: 'a', name: 'Band demos', state: 'seeding'),
         _collection(id: 'b', name: 'Iceland trip', state: 'downloading'),
       ]);
+      await _openCollections(tester);
 
       expect(find.text('Band demos'), findsOneWidget);
       expect(find.text('Iceland trip'), findsOneWidget);
@@ -248,16 +289,17 @@ void main() {
     testWidgets('a failed backend does not look like an empty one',
         (tester) async {
       // These used to render identically, which is what made real failures so
-      // hard to spot on device.
+      // hard to spot on device. Home always shows the welcome now, so the
+      // distinction is made on Collections — and on Home by a banner.
       await _pumpApp(tester, collections: [], error: 'PanicException(boom)');
-
+      await _openCollections(tester);
       expect(find.textContaining('Couldn\'t load your collections'),
           findsOneWidget);
-      expect(find.textContaining('Send anything'), findsNothing);
+      expect(find.textContaining('No collections yet'), findsNothing);
 
-      await _pumpApp(tester, collections: []);
+      Collections.instance.debugSeed([]);
       await tester.pump();
-      expect(find.textContaining('Send anything'), findsOneWidget);
+      expect(find.textContaining('No collections yet'), findsOneWidget);
       expect(find.textContaining('Couldn\'t load'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -276,6 +318,8 @@ void main() {
   group('colour carries meaning', () {
     testWidgets('a torrent row is ember and a shared row is mint',
         (tester) async {
+      // Tall enough that both rows are built — a SliverList doesn't
+      // instantiate what it can't show, and the assertion is about both.
       await _pumpApp(tester, collections: [
         _collection(
             id: 'a', name: 'Shared thing', state: 'downloading',
@@ -287,7 +331,8 @@ void main() {
           state: 'downloading',
           downloadMbps: 2,
         ),
-      ]);
+      ], size: const Size(390, 1400));
+      await _openCollections(tester);
 
       final bars = tester
           .widgetList<LinearProgressIndicator>(
@@ -321,6 +366,7 @@ void main() {
           media: const [MediaItem(label: 'a.jpg', infoHash: 'aa')],
         ),
       ]);
+      await _openCollections(tester);
 
       expect(find.text('SHARING'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -331,6 +377,7 @@ void main() {
       await _pumpApp(tester, collections: [
         _collection(state: 'seeding', media: const []),
       ]);
+      await _openCollections(tester);
 
       expect(find.text('SHARING'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -362,7 +409,7 @@ void main() {
         _collection(
             id: 'b', name: 'In flight', state: 'downloading', downloadMbps: 5),
       ]);
-      await tester.tap(find.byKey(const Key('navTab1')));
+      await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
 
       expect(find.text('In flight'), findsOneWidget);
@@ -390,7 +437,7 @@ void main() {
         _collection(id: 'a', collaborators: [ana, jonas]),
         _collection(id: 'b', collaborators: [ana, rosa]),
       ]);
-      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
 
       expect(find.text('PEOPLE'), findsOneWidget);

@@ -6,6 +6,7 @@ import '../services/settings_service.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'desktop_shell.dart';
+import 'collections_screen.dart';
 import 'home_screen.dart';
 import 'transfers_screen.dart';
 import 'user_screen.dart';
@@ -85,12 +86,14 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                       // IndexedStack keeps every tab alive so switching is
                       // instant — but that also keeps their animations
                       // ticking off-screen. TickerMode freezes the ones the
-                      // user can't see.
-                      for (var i = 0; i < 3; i++)
+                      // user can't see, which matters more now that Home
+                      // carries a permanently-animating motif.
+                      for (var i = 0; i < AppBottomNav.items.length; i++)
                         TickerMode(
                           enabled: i == _tab,
                           child: const [
                             HomeScreen(),
+                            CollectionsScreen(),
                             TransfersScreen(),
                             UserScreen(),
                           ][i],
@@ -124,9 +127,11 @@ class AppBottomNav extends StatelessWidget {
 
   /// The leftmost destination is Home, and it carries the app's mark rather
   /// than a generic glyph — it is both "where you are" and "how you get
-  /// back".
+  /// back". Collections is its own peer beside it: Home answers "what can I
+  /// do", Collections answers "what do I have".
   static const items = [
     (icon: null, label: 'Home'),
+    (icon: Icons.dashboard_outlined, label: 'Collections'),
     (icon: Icons.swap_horiz, label: 'Transfers'),
     (icon: Icons.person_outline, label: 'You'),
   ];
@@ -141,7 +146,7 @@ class AppBottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
           child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
@@ -193,7 +198,7 @@ class AppBottomNav extends StatelessWidget {
                           Text(
                             items[i].label,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 9.5,
                               fontWeight: i == index
                                   ? FontWeight.w600
                                   : FontWeight.w400,

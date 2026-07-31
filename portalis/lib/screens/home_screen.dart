@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../bridge_generated/device.dart' as bridge;
 import '../models.dart';
 import '../services/collections.dart';
+import '../services/navigation.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'add_torrent_screen.dart';
@@ -10,37 +11,20 @@ import 'collection_screen.dart';
 import 'join_collection_screen.dart';
 import 'share_screen.dart';
 
-/// Collections — the app's first destination.
+/// Home — the welcome.
 ///
-/// The transfer itself is promoted to the top: when something is genuinely
-/// moving, a live card sits above the list. When nothing is, that card is
-/// *absent* rather than dormant, so mint on this screen always means motion.
-class HomeScreen extends StatefulWidget {
+/// Always the same shape, whether you own nothing or fifty collections: what
+/// Portalis is, and the three ways to start something. The list lives on its
+/// own destination now, so this screen never has to be two things at once.
+///
+/// The one thing that does appear conditionally is a live transfer card,
+/// because "something is moving right now" is the single fact worth
+/// interrupting a welcome for.
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-/// All / Sharing / Receiving, derived from `state`.
-enum _Filter { all, sharing, receiving }
-
-class _HomeScreenState extends State<HomeScreen> {
-  _Filter _filter = _Filter.all;
-
-  void _push(Widget screen) {
+  void _push(BuildContext context, Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-  }
-
-  List<Collection> _apply(List<Collection> all) {
-    switch (_filter) {
-      case _Filter.all:
-        return all;
-      case _Filter.sharing:
-        return all.where((c) => c.state == 'seeding').toList();
-      case _Filter.receiving:
-        return all.where((c) => c.state == 'downloading').toList();
-    }
   }
 
   @override
@@ -50,245 +34,170 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, _) {
         final all = Collections.instance.collections;
         final error = Collections.instance.lastError;
-
-        if (all.isEmpty) {
-          // A backend that failed to answer must not look identical to one
-          // that answered "nothing" — that ambiguity is what made earlier
-          // failures so hard to spot on device.
-          return error != null
-              ? _CollectionsError(message: error)
-              : _FirstRun(onPush: _push);
-        }
-
-        // The single most active transfer gets the hero treatment. Picking
-        // one rather than listing all keeps the top of the screen answering
-        // "what is happening right now" in one glance.
         final moving = all
             .where((c) => c.downloadMbps > 0 || c.uploadMbps > 0)
             .toList()
           ..sort((a, b) => (b.downloadMbps + b.uploadMbps)
               .compareTo(a.downloadMbps + a.uploadMbps));
         final hero = moving.isEmpty ? null : moving.first;
-        final shown = _apply(all);
 
-        return Stack(
-          children: [
-            PageBody(
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(child: const _Header()),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+        return PageBody(
+          child: CustomScrollView(
+            slivers: [
+              const SliverToBoxAdapter(child: _Header()),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(34, 30, 34, 0),
+                  child: Column(
+                    children: [
+                      PulseRings(
+                        size: 168,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset(
+                            'assets/PortalisNature.png',
+                            width: 72,
+                            height: 72,
+                            // Decoded at roughly the size it is drawn rather
+                            // than at the source's 1254², so the
+                            // full-resolution bitmap never enters the image
+                            // cache for a 72pt slot.
+                            cacheWidth: 216,
+                            cacheHeight: 216,
+                            filterQuality: FilterQuality.medium,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Text(
+                        'Send anything,\nstraight to a friend',
+                        textAlign: TextAlign.center,
+                        style: displayText(size: 28, height: 1.15),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'No uploads, no size limits. Files move device to '
+                        'device — and stay on yours.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 14.5,
+                            height: 1.5,
+                            color: AppColors.textDim),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (error != null)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+                    child: InfoBanner(
+                      color: AppColors.danger,
+                      icon: Icons.error_outline,
+                      text: error,
+                    ),
+                  ),
+                )
+              else if (!Collections.instance.engineReady)
+                const SliverToBoxAdapter(child: EngineStartingNotice()),
+              if (hero != null)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
+                    child: LiveTransferCard(
+                      collection: hero,
+                      onTap: () =>
+                          _push(context, CollectionScreen(collection: hero)),
+                    ),
+                  ),
+                ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 26, 22, 0),
+                  child: Column(
+                    children: [
+                      PrimaryAction(
+                        key: const Key('shareSomethingButton'),
+                        label: 'Share something',
+                        icon: Icons.arrow_upward,
+                        onTap: () => _push(context, const ShareScreen()),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
                         children: [
-                          Text(
-                            hero == null ? 'Your collections' : 'Moving now',
-                            style: displayText(size: 30, height: 1.1),
+                          Expanded(
+                            child: _SecondaryCard(
+                              icon: Icons.link,
+                              iconColor: AppColors.signal,
+                              label: 'Join with a key',
+                              onTap: () => _push(
+                                  context, const JoinCollectionScreen()),
+                            ),
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            _summary(all, moving.length),
-                            style: const TextStyle(
-                                fontSize: 14, color: AppColors.textDim),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _SecondaryCard(
+                              icon: Icons.download_outlined,
+                              iconColor: AppColors.ember,
+                              label: 'Add a torrent',
+                              onTap: () =>
+                                  _push(context, const AddTorrentScreen()),
+                            ),
                           ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (all.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                    child: SurfaceCard(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 13),
+                      // Switches destination rather than pushing a route:
+                      // Collections is a peer of Home, not a child of it.
+                      onTap: () => AppNavigation.tab.value = 1,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.dashboard_outlined,
+                              size: 18, color: AppColors.textDim),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              plural(all.length, 'collection'),
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right,
+                              size: 16, color: AppColors.textGhost),
                         ],
                       ),
                     ),
                   ),
-                  if (hero != null)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
-                        child: LiveTransferCard(
-                          collection: hero,
-                          onTap: () =>
-                              _push(CollectionScreen(collection: hero)),
-                        ),
-                      ),
-                    ),
-                  if (!Collections.instance.engineReady)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
-                        child: SurfaceCard(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 11),
-                          child: Row(
-                            children: [
-                              const SizedBox(
-                                width: 13,
-                                height: 13,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 1.8,
-                                  valueColor: AlwaysStoppedAnimation(
-                                      AppColors.textDim),
-                                ),
-                              ),
-                              const SizedBox(width: 11),
-                              Expanded(
-                                child: Text(
-                                  'Starting the transfer engine — nothing is '
-                                  'being shared yet.',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      height: 1.4,
-                                      color: AppColors.textDim),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-                      child: FilterChips(
-                        labels: const ['All', 'Sharing', 'Receiving'],
-                        selected: _Filter.values.indexOf(_filter),
-                        onSelected: (i) =>
-                            setState(() => _filter = _Filter.values[i]),
-                      ),
-                    ),
+                ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 26),
+                  child: Text(
+                    'NO ACCOUNT · NOTHING LEAVES THIS DEVICE UNASKED',
+                    textAlign: TextAlign.center,
+                    style: monoLabel(size: 10.5, color: AppColors.textGhost),
                   ),
-                  if (shown.isEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 40, 22, 0),
-                        child: Center(
-                          child: Text(
-                            _filter == _Filter.sharing
-                                ? 'Nothing is being shared right now.'
-                                : 'Nothing is being received right now.',
-                            style: const TextStyle(
-                                fontSize: 13, color: AppColors.textDim),
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
-                      sliver: SliverList.separated(
-                        itemCount: shown.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, i) => CollectionRow(
-                          collection: shown[i],
-                          onTap: () =>
-                              _push(CollectionScreen(collection: shown[i])),
-                        ),
-                      ),
-                    ),
-                  // Clearance so the FAB never covers the last row.
-                  const SliverToBoxAdapter(child: SizedBox(height: 96)),
-                ],
+                ),
               ),
-            ),
-            Positioned(
-              right: 20,
-              bottom: 20,
-              child: _AddFab(onPush: _push),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
   }
-
-  String _summary(List<Collection> all, int movingCount) {
-    final c = '${all.length} collection${all.length == 1 ? '' : 's'}';
-    if (movingCount == 0) return c;
-    return '$c · $movingCount transfer${movingCount == 1 ? '' : 's'} in flight';
-  }
 }
 
-/// The one unmistakable primary action on this screen.
-class _AddFab extends StatelessWidget {
-  const _AddFab({required this.onPush});
-
-  final void Function(Widget) onPush;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.signal,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        key: const Key('addFab'),
-        borderRadius: BorderRadius.circular(22),
-        onTap: () => _showSheet(context),
-        child: const SizedBox(
-          width: 62,
-          height: 62,
-          child: Icon(Icons.add, size: 26, color: AppColors.onSignal),
-        ),
-      ),
-    );
-  }
-
-  void _showSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            _sheetItem(
-              sheetContext,
-              Icons.arrow_upward,
-              AppColors.signal,
-              'Share something',
-              'Seed files from this device',
-              const ShareScreen(),
-            ),
-            _sheetItem(
-              sheetContext,
-              Icons.link,
-              AppColors.signal,
-              'Join with a key',
-              'Paste an invite you were sent',
-              const JoinCollectionScreen(),
-            ),
-            _sheetItem(
-              sheetContext,
-              Icons.download_outlined,
-              AppColors.ember,
-              'Add a torrent',
-              'Magnet link or .torrent file',
-              const AddTorrentScreen(),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sheetItem(BuildContext sheetContext, IconData icon, Color color,
-      String title, String subtitle, Widget screen) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(title,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 12, color: AppColors.textDim)),
-      onTap: () {
-        Navigator.of(sheetContext).pop();
-        onPush(screen);
-      },
-    );
-  }
-}
-
-/// Home's top bar: identity, app name, and a live peer count when there is
-/// one to report.
 class _Header extends StatefulWidget {
   const _Header();
 
@@ -502,110 +411,6 @@ class _AvatarStack extends StatelessWidget {
   }
 }
 
-/// First run — no collections at all.
-class _FirstRun extends StatelessWidget {
-  const _FirstRun({required this.onPush});
-
-  final void Function(Widget) onPush;
-
-  @override
-  Widget build(BuildContext context) {
-    return PageBody(
-      child: Column(
-        children: [
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 34),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    PulseRings(
-                      size: 168,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.asset(
-                          'assets/PortalisNature.png',
-                          width: 72,
-                          height: 72,
-                          // Decoded at roughly the size it is drawn rather
-                          // than at the source's 1254², so the full-resolution
-                          // bitmap never enters the image cache for a 72pt
-                          // slot. 3x covers the densest screen we target.
-                          cacheWidth: 216,
-                          cacheHeight: 216,
-                          filterQuality: FilterQuality.medium,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 26),
-                    Text(
-                      'Send anything,\nstraight to a friend',
-                      textAlign: TextAlign.center,
-                      style: displayText(size: 28, height: 1.15),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'No uploads, no size limits. Files move device to '
-                      'device — and stay on yours.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 14.5,
-                          height: 1.5,
-                          color: AppColors.textDim),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 0, 22, 26),
-            child: Column(
-              children: [
-                PrimaryAction(
-                  key: const Key('shareSomethingButton'),
-                  label: 'Share something',
-                  icon: Icons.arrow_upward,
-                  onTap: () => onPush(const ShareScreen()),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SecondaryCard(
-                        icon: Icons.link,
-                        iconColor: AppColors.signal,
-                        label: 'Join with a key',
-                        onTap: () => onPush(const JoinCollectionScreen()),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _SecondaryCard(
-                        icon: Icons.download_outlined,
-                        iconColor: AppColors.ember,
-                        label: 'Add a torrent',
-                        onTap: () => onPush(const AddTorrentScreen()),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'NO ACCOUNT · NOTHING LEAVES THIS DEVICE UNASKED',
-                  textAlign: TextAlign.center,
-                  style: monoLabel(size: 10.5, color: AppColors.textGhost),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SecondaryCard extends StatelessWidget {
   const _SecondaryCard({
     required this.icon,
@@ -635,43 +440,6 @@ class _SecondaryCard extends StatelessWidget {
             style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Shown instead of the empty state when the backend itself failed, so the
-/// two are distinguishable. The raw message is included deliberately — it's
-/// the only place a Rust-side error reaches the user.
-class _CollectionsError extends StatelessWidget {
-  const _CollectionsError({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 40, color: AppColors.danger),
-            const SizedBox(height: 14),
-            Text(
-              'Couldn\'t load your collections.',
-              textAlign: TextAlign.center,
-              style: displayText(size: 17),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: monoLabel(
-                  size: 10.5, color: AppColors.textDim, letterSpacing: 0.1),
-            ),
-          ],
-        ),
       ),
     );
   }

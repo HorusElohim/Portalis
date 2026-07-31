@@ -134,3 +134,79 @@ class CollectionRow extends StatelessWidget {
     );
   }
 }
+
+/// Shown when the backend itself failed, so it is never mistaken for an empty
+/// list. The raw message is included deliberately — it is the only place a
+/// Rust-side error reaches the user.
+class CollectionsErrorState extends StatelessWidget {
+  const CollectionsErrorState({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 40, color: AppColors.danger),
+            const SizedBox(height: 14),
+            Text(
+              'Couldn\'t load your collections.',
+              textAlign: TextAlign.center,
+              style: displayText(size: 17),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: monoLabel(
+                  size: 10.5, color: AppColors.textDim, letterSpacing: 0.1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "The engine is still starting, so nothing is live yet."
+///
+/// Its own widget because both Home and Collections have to say it: a
+/// collection that exists on disk but has no torrent running is not being
+/// shared, and silence there is what made a fresh launch look broken.
+class EngineStartingNotice extends StatelessWidget {
+  const EngineStartingNotice({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+      child: SurfaceCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 13,
+              height: 13,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.8,
+                valueColor: AlwaysStoppedAnimation(AppColors.textDim),
+              ),
+            ),
+            const SizedBox(width: 11),
+            const Expanded(
+              child: Text(
+                'Starting the transfer engine — nothing is being shared yet.',
+                style: TextStyle(
+                    fontSize: 12, height: 1.4, color: AppColors.textDim),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
