@@ -119,6 +119,17 @@ pub async fn list_collections() -> anyhow::Result<Vec<CollectionInfo>> {
     native::list_collections().await
 }
 
+/// Whether the BitTorrent engine has finished starting.
+///
+/// Exposed so the UI can tell the difference between "this collection has
+/// nothing to fetch" and "the engine hasn't come up yet, so nothing is being
+/// shared *right now*". Those two look identical otherwise, which is exactly
+/// the ambiguity that made a freshly-launched app look broken. Never blocks —
+/// `sync_address`/`ensure_listener` warms the session in the background.
+pub async fn engine_ready() -> bool {
+    crate::torrent::session_started()
+}
+
 /// Creates a new shared collection (empty) and persists it. This device
 /// becomes its first collaborator, as admin.
 pub async fn create_collection(name: String) -> anyhow::Result<CollectionInfo> {
@@ -223,7 +234,7 @@ mod native {
             .into_iter()
             .map(|ip| format!("{ip}:{}", addr.port()))
             .collect();
-        if let Some(public) = crate::collab_sync::public_ip().await {
+        if let Some(public) = crate::collab_sync::public_ip_now() {
             let candidate = format!("{public}:{}", addr.port());
             if !addrs.contains(&candidate) {
                 addrs.push(candidate);
@@ -398,11 +409,20 @@ mod native {
     pub(super) async fn list_collections() -> anyhow::Result<Vec<CollectionInfo>> {
         // Both halves of the join are gathered *before* taking the store
         // lock — `with_store`'s closure is synchronous and can't await.
-        let torrents = crate::torrent::list_torrents().await.unwrap_or_else(|e| {
-            clog!("collections", "list_collections: torrent session unavailable ({e:#}) — \
-                 shared collections still list, with everything marked not-fetched");
+        // Never *waits* for the engine. Constructing librqbit's session
+        // bootstraps the DHT, probes UPnP and re-reads persisted torrents; the
+        // old version awaited all of that on the UI poll, so the first listing
+        // after launch could hang for seconds with the collection names
+        // already sitting on disk. `ensure_listener` warms the session in the
+        // background, and a later poll picks it up.
+        let torrents = if crate::torrent::session_started() {
+            crate::torrent::list_torrents().await.unwrap_or_else(|e| {
+                clog!("collections", "list_collections: torrent session unavailable ({e:#})");
+                Vec::new()
+            })
+        } else {
             Vec::new()
-        });
+        };
         let addrs = current_sync_addresses().await;
 
         // Self-heal this device's own collaborator records. Collections

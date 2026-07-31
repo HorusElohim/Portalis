@@ -648,31 +648,64 @@ fn default_route_ip() -> Option<std::net::IpAddr> {
 /// UPnP). On an unconfigured NAT the LAN address still works for same-
 /// network peers; cross-network sync without setup needs the DHT +
 /// hole-punching phase.
-pub(crate) async fn public_ip() -> Option<String> {
-    static PUBLIC_IP: OnceCell<Option<String>> = OnceCell::const_new();
-    PUBLIC_IP
-        .get_or_init(|| async {
-            for service in ["https://api.ipify.org", "https://checkip.amazonaws.com"] {
-                let Ok(Ok(resp)) =
-                    tokio::time::timeout(Duration::from_secs(5), reqwest::get(service)).await
-                else {
-                    clog!("collab_sync", "public_ip: {service} unreachable/timed out");
-                    continue;
-                };
-                if let Ok(text) = resp.text().await {
-                    let candidate = text.trim().to_string();
-                    if candidate.parse::<std::net::IpAddr>().is_ok() {
-                        clog!("collab_sync", "public_ip resolved to {candidate} via {service}");
-                        return Some(candidate);
-                    }
-                    clog!("collab_sync", "public_ip: {service} returned non-IP text: {candidate:?}");
-                }
+/// The public IP if it is *already known*, and never a wait.
+///
+/// Discovery costs two HTTP requests with 5s timeouts each, and the old
+/// blocking version was awaited by `list_collections` — which runs on the UI
+/// poll. So the very first listing after launch could sit for ten seconds
+/// before showing a single collection, on a screen whose data was sitting on
+/// disk the whole time. Now the first call starts discovery in the background
+/// and returns `None`; invites generated in that window carry the LAN
+/// addresses only, and pick up the public one as soon as it lands.
+pub(crate) fn public_ip_now() -> Option<String> {
+    static RESOLVED: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+    static ATTEMPTED_AT: std::sync::Mutex<Option<std::time::Instant>> =
+        std::sync::Mutex::new(None);
+
+    if let Some(ip) = RESOLVED.lock().unwrap().clone() {
+        return Some(ip);
+    }
+
+    // Retry occasionally rather than once: the first attempt often lands
+    // before any network is up (launching on a phone that is still
+    // associating), and giving up forever would mean invites never carry a
+    // public address for the rest of the run.
+    const RETRY_AFTER: Duration = Duration::from_secs(60);
+    let mut attempted = ATTEMPTED_AT.lock().unwrap();
+    let due = attempted.map(|at| at.elapsed() >= RETRY_AFTER).unwrap_or(true);
+    if !due {
+        return None;
+    }
+    *attempted = Some(std::time::Instant::now());
+    drop(attempted);
+
+    tokio::spawn(async move {
+        if let Some(ip) = discover_public_ip().await {
+            *RESOLVED.lock().unwrap() = Some(ip);
+        }
+    });
+    None
+}
+
+async fn discover_public_ip() -> Option<String> {
+    for service in ["https://api.ipify.org", "https://checkip.amazonaws.com"] {
+        let Ok(Ok(resp)) =
+            tokio::time::timeout(Duration::from_secs(5), reqwest::get(service)).await
+        else {
+            clog!("collab_sync", "public_ip: {service} unreachable/timed out");
+            continue;
+        };
+        if let Ok(text) = resp.text().await {
+            let candidate = text.trim().to_string();
+            if candidate.parse::<std::net::IpAddr>().is_ok() {
+                clog!("collab_sync", "public_ip resolved to {candidate} via {service}");
+                return Some(candidate);
             }
-            clog!("collab_sync", "public_ip: no service reachable, invites won't carry one");
-            None
-        })
-        .await
-        .clone()
+            clog!("collab_sync", "public_ip: {service} returned non-IP text: {candidate:?}");
+        }
+    }
+    clog!("collab_sync", "public_ip: no service reachable this round");
+    None
 }
 
 #[cfg(test)]

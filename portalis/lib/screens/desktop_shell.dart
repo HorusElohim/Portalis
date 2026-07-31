@@ -49,13 +49,35 @@ class _DesktopShellState extends State<DesktopShell> {
       body: ListenableBuilder(
         listenable: Collections.instance,
         builder: (context, _) {
+          // Collections stays on the left at all times. Swapping it out for
+          // Transfers/People/Settings meant losing sight of your own
+          // collections just to change a setting — on a screen wide enough to
+          // show both, there is no reason to.
+          final secondary = _pane == _Pane.collections ? null : _centre();
+          final collections = SafeArea(
+            child: _CollectionsPane(
+              selectedId: _selected?.id,
+              onSelect: (id) => setState(() {
+                _selectedId = id;
+                // Picking a collection means you want to look at it, so any
+                // secondary pane steps aside.
+                _pane = _Pane.collections;
+              }),
+            ),
+          );
           return Row(
             children: [
               _Sidebar(
                 pane: _pane,
                 onPane: (p) => setState(() => _pane = p),
               ),
-              Expanded(child: _centre()),
+              if (secondary == null)
+                Expanded(child: collections)
+              else
+                // Fixed while something else is open, so the list doesn't
+                // reflow every time a secondary pane appears.
+                SizedBox(width: 360, child: collections),
+              if (secondary != null) Expanded(child: secondary),
               if (_pane == _Pane.collections && _selected != null)
                 _Inspector(collection: _selected!),
             ],
@@ -74,12 +96,8 @@ class _DesktopShellState extends State<DesktopShell> {
       case _Pane.settings:
         return const SettingsScreen(embedded: true);
       case _Pane.collections:
-        return SafeArea(
-          child: _CollectionsPane(
-            selectedId: _selected?.id,
-            onSelect: (id) => setState(() => _selectedId = id),
-          ),
-        );
+        // Rendered directly in build(), since it is always on screen.
+        return const SizedBox.shrink();
     }
   }
 }

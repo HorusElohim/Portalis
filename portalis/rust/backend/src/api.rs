@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2094611090;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1815899941;
 
 // Section: executor
 
@@ -374,6 +374,42 @@ fn wire__crate__device__device_identity_impl(
                         let output_ok = crate::device::device_identity()?;
                         Ok(output_ok)
                     })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__collections__engine_ready_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "engine_ready",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok =
+                            Result::<_, ()>::Ok(crate::collections::engine_ready().await)?;
+                        Ok(output_ok)
+                    })()
+                    .await,
                 )
             }
         },
@@ -1277,22 +1313,23 @@ fn pde_ffi_dispatcher_primary_impl(
         7 => wire__crate__settings__default_engine_settings_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__collections__delete_collection_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__device__device_identity_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__settings__engine_settings_impl(port, ptr, rust_vec_len, data_len),
-        11 => {
+        10 => wire__crate__collections__engine_ready_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__settings__engine_settings_impl(port, ptr, rust_vec_len, data_len),
+        12 => {
             wire__crate__settings__engine_settings_default_impl(port, ptr, rust_vec_len, data_len)
         }
-        12 => {
+        13 => {
             wire__crate__collections__fetch_collection_media_impl(port, ptr, rust_vec_len, data_len)
         }
-        14 => wire__crate__collections__join_collection_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__collections__list_collections_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__settings__set_engine_settings_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__collections__sync_address_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__collections__sync_collection_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__collections__join_collection_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__collections__list_collections_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__torrent__list_torrents_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__torrent__output_dir_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__settings__set_engine_settings_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__device__set_nickname_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__torrent__storage_usage_bytes_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__collections__sync_address_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__collections__sync_collection_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1305,7 +1342,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        13 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
+        14 => wire__crate__bridge__get_version_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

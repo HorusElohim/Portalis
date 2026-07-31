@@ -133,7 +133,26 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 2, 20, 14),
-                child: Column(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // The torrent mark, decoded at its display size rather
+                    // than the source's 1254² — see the same treatment on
+                    // first run.
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset(
+                        'assets/PortalisTorrentNature.png',
+                        width: 46,
+                        height: 46,
+                        cacheWidth: 138,
+                        cacheHeight: 138,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
                     Text(
@@ -148,6 +167,9 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                     Text(
                       'Paste a magnet link or open a .torrent file.',
                       style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
+                    ),
+                  ],
+                ),
                     ),
                   ],
                 ),

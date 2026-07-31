@@ -160,3 +160,105 @@ class AppTheme {
     );
   }
 }
+
+/// Glow — the "positive energy" layer of the theme.
+///
+/// A scalable set rather than a one-off effect: every highlight in the app
+/// asks for a [GlowLevel] and gets a consistent border tint, shadow spread and
+/// opacity back. Adding a new level, or retuning the whole app's energy, is a
+/// change to this one table.
+///
+/// The same discipline as the rest of the palette applies: glow marks
+/// something *alive* — sharing, receiving, connected — never mere selection or
+/// decoration. A screen where everything glows says nothing.
+enum GlowLevel {
+  /// No energy. Settled, idle, or purely structural.
+  none,
+
+  /// Present and healthy, but not transferring — a collection that is being
+  /// shared and simply has no taker right now.
+  calm,
+
+  /// Actively doing something.
+  active,
+
+  /// Doing something at full tilt.
+  vivid,
+}
+
+/// The resolved appearance of a [GlowLevel] in a given colour.
+@immutable
+class Glow {
+  const Glow({
+    required this.level,
+    required this.color,
+    required this.borderOpacity,
+    required this.blur,
+    required this.spread,
+    required this.shadowOpacity,
+  });
+
+  final GlowLevel level;
+  final Color color;
+  final double borderOpacity;
+  final double blur;
+  final double spread;
+  final double shadowOpacity;
+
+  bool get isVisible => level != GlowLevel.none;
+
+  Border get border => Border.all(
+        color: isVisible
+            ? color.withValues(alpha: borderOpacity)
+            : AppColors.border,
+        width: level == GlowLevel.vivid ? 1.4 : 1,
+      );
+
+  List<BoxShadow> get shadows => isVisible
+      ? [
+          BoxShadow(
+            color: color.withValues(alpha: shadowOpacity),
+            blurRadius: blur,
+            spreadRadius: spread,
+          ),
+        ]
+      : const [];
+
+  /// Looks up the tuned appearance for a level. One table, so retuning the
+  /// app's energy is a single edit.
+  static Glow of(GlowLevel level, {Color color = AppColors.signal}) =>
+      switch (level) {
+        GlowLevel.none => Glow(
+            level: level,
+            color: color,
+            borderOpacity: 0,
+            blur: 0,
+            spread: 0,
+            shadowOpacity: 0,
+          ),
+        GlowLevel.calm => Glow(
+            level: level,
+            color: color,
+            borderOpacity: 0.26,
+            blur: 14,
+            spread: -4,
+            shadowOpacity: 0.10,
+          ),
+        GlowLevel.active => Glow(
+            level: level,
+            color: color,
+            borderOpacity: 0.40,
+            blur: 22,
+            spread: -2,
+            shadowOpacity: 0.18,
+          ),
+        GlowLevel.vivid => Glow(
+            level: level,
+            color: color,
+            borderOpacity: 0.58,
+            blur: 30,
+            spread: 0,
+            shadowOpacity: 0.26,
+          ),
+      };
+}

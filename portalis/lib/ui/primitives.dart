@@ -51,6 +51,8 @@ class SurfaceCard extends StatelessWidget {
     this.onTap,
     this.borderColor,
     this.gradient,
+    this.glow = GlowLevel.none,
+    this.glowColor = AppColors.signal,
   });
 
   final Widget child;
@@ -60,15 +62,24 @@ class SurfaceCard extends StatelessWidget {
   final Color? borderColor;
   final Gradient? gradient;
 
+  /// Energy, not decoration — see [GlowLevel]. A card that is merely selected
+  /// must stay [GlowLevel.none].
+  final GlowLevel glow;
+  final Color glowColor;
+
   @override
   Widget build(BuildContext context) {
+    final energy = Glow.of(glow, color: glowColor);
     final content = Container(
       padding: padding,
       decoration: BoxDecoration(
         color: gradient == null ? AppColors.surface : null,
         gradient: gradient,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? AppColors.border),
+        border: borderColor != null
+            ? Border.all(color: borderColor!)
+            : energy.border,
+        boxShadow: energy.shadows,
       ),
       child: child,
     );

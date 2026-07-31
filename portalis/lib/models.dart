@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'bridge_generated/collections.dart' as bridge;
 import 'theme.dart';
+export 'theme.dart' show GlowLevel;
 
 export 'bridge_generated/collections.dart' show CollectionKind;
 
@@ -160,6 +161,24 @@ class Collection {
   bool get isShared => kind == bridge.CollectionKind.shared;
 
   bool get isComplete => progress >= 1.0 && pendingMedia == 0;
+
+  /// Whether this device is actually serving this collection to others right
+  /// now — not "could", not "has the files", but *is*.
+  ///
+  /// The engine has to be up and the collection has to have something live in
+  /// it. Anything short of that is honestly reported as not shared, because
+  /// the alternative is telling someone their photos are available when no
+  /// socket is listening for them.
+  bool get isSharing => state == 'seeding' && media.isNotEmpty;
+
+  /// Energy for this collection's card, by what it is genuinely doing.
+  GlowLevel get glow {
+    if (downloadMbps > 0 || uploadMbps > 0) {
+      return (downloadMbps + uploadMbps) > 4 ? GlowLevel.vivid : GlowLevel.active;
+    }
+    // Shared and standing by: alive, but nothing is flowing.
+    return isSharing ? GlowLevel.calm : GlowLevel.none;
+  }
 
   /// Stable per-collection accent, derived from the id so a collection keeps
   /// its colour across restarts.

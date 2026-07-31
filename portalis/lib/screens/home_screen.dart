@@ -108,6 +108,40 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
+                  if (!Collections.instance.engineReady)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+                        child: SurfaceCard(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 11),
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 13,
+                                height: 13,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.8,
+                                  valueColor: AlwaysStoppedAnimation(
+                                      AppColors.textDim),
+                                ),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Text(
+                                  'Starting the transfer engine — nothing is '
+                                  'being shared yet.',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      height: 1.4,
+                                      color: AppColors.textDim),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),

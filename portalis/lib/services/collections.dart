@@ -37,6 +37,14 @@ class Collections extends ChangeNotifier {
       _collections.where((c) => c.isShared).toList(growable: false);
 
   String? lastError;
+
+  /// Whether the transfer engine has finished starting.
+  ///
+  /// Until it has, *nothing* is being shared — the collections exist on disk
+  /// but no torrent is live. Without this the UI showed those collections as
+  /// though they were simply empty, which is why a freshly-launched app looked
+  /// broken and it was never clear whether sharing had actually begun.
+  bool engineReady = false;
   Timer? _timer;
   Duration _interval = _activeInterval;
   bool _paused = false;
@@ -106,6 +114,7 @@ class Collections extends ChangeNotifier {
     try {
       final infos = await bridge.listCollections();
       _collections = infos.map(Collection.fromInfo).toList();
+      engineReady = await bridge.engineReady();
       lastError = null;
       if (_hasPhotoGallery) {
         unawaited(_importNewlyReadyMedia());

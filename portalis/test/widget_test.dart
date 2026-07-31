@@ -251,6 +251,43 @@ void main() {
     });
   });
 
+  group('sharing is stated, never implied', () {
+    testWidgets('says so plainly while the engine is still starting',
+        (tester) async {
+      // Collections exist on disk but nothing is live yet. Showing them as
+      // though they were simply empty is what made a fresh launch look
+      // broken.
+      await _pumpApp(tester, collections: [_collection(state: 'pending')]);
+
+      expect(find.textContaining('Starting the transfer engine'),
+          findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a seeding collection with content reads as SHARING',
+        (tester) async {
+      await _pumpApp(tester, collections: [
+        _collection(
+          state: 'seeding',
+          media: const [MediaItem(label: 'a.jpg', infoHash: 'aa')],
+        ),
+      ]);
+
+      expect(find.text('SHARING'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an empty collection does not claim to be sharing',
+        (tester) async {
+      await _pumpApp(tester, collections: [
+        _collection(state: 'seeding', media: const []),
+      ]);
+
+      expect(find.text('SHARING'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('polling cadence', () {
     testWidgets('slows down when nothing is moving, speeds up when it does',
         (tester) async {

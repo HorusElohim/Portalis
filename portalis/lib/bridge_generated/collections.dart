@@ -13,6 +13,16 @@ import 'torrent.dart';
 Future<List<CollectionInfo>> listCollections() =>
     RustLib.instance.api.crateCollectionsListCollections();
 
+/// Whether the BitTorrent engine has finished starting.
+///
+/// Exposed so the UI can tell the difference between "this collection has
+/// nothing to fetch" and "the engine hasn't come up yet, so nothing is being
+/// shared *right now*". Those two look identical otherwise, which is exactly
+/// the ambiguity that made a freshly-launched app look broken. Never blocks —
+/// `sync_address`/`ensure_listener` warms the session in the background.
+Future<bool> engineReady() =>
+    RustLib.instance.api.crateCollectionsEngineReady();
+
 /// Creates a new shared collection (empty) and persists it. This device
 /// becomes its first collaborator, as admin.
 Future<CollectionInfo> createCollection({required String name}) =>

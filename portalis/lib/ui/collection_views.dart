@@ -46,9 +46,14 @@ class CollectionRow extends StatelessWidget {
               ],
             )
           : null,
-      borderColor: live
-          ? accent.withValues(alpha: 0.28)
-          : (selected ? AppColors.borderStrong : AppColors.border),
+      // Energy by what it is genuinely doing: transferring glows brightest,
+      // shared-and-standing-by glows calmly, everything else not at all.
+      glow: collection.glow,
+      glowColor: accent,
+      borderColor:
+          selected && collection.glow == GlowLevel.none
+              ? AppColors.borderStrong
+              : null,
       child: Row(
         children: [
           SizedBox(
@@ -118,8 +123,10 @@ class CollectionRow extends StatelessWidget {
               label: '${(collection.progress * 100).round()}%',
               color: accent,
             )
-          else if (collection.state == 'seeding')
-            const StatusBadge(label: 'SHARING')
+          else if (collection.isSharing)
+            // Mint here is earned: this device is genuinely serving the
+            // collection right now.
+            StatusBadge(label: 'SHARING', color: accent)
           else
             StatusBadge(label: collection.state.toUpperCase()),
         ],
