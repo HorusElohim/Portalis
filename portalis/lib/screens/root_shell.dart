@@ -34,7 +34,7 @@ class _RootShellState extends State<RootShell> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(child: PageBody(child: HomeScreen())),
     );
   }

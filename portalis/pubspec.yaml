@@ -103,6 +103,21 @@ flutter:
   assets:
     - assets/portalis.png
 
+  fonts:
+    # Bundled, not fetched: the app must render identically offline, and the
+    # previous theme named a family ('Inter') that was never in this list —
+    # so it had been silently falling back to the system font all along.
+    # All three are variable fonts; Flutter picks the nearest named weight.
+    - family: Space Grotesk
+      fonts:
+        - asset: fonts/SpaceGrotesk.ttf
+    - family: Instrument Sans
+      fonts:
+        - asset: fonts/InstrumentSans.ttf
+    - family: JetBrains Mono
+      fonts:
+        - asset: fonts/JetBrainsMono.ttf
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

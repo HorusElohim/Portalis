@@ -39,7 +39,7 @@ class MediaDetailsScreen extends StatelessWidget {
         : '${collection.livePeers} peers connected';
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
         child: PageBody(
           child: SingleChildScrollView(
@@ -157,7 +157,7 @@ class _InfoRow extends StatelessWidget {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
             ),
           ),
           Expanded(

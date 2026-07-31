@@ -143,7 +143,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
     final parsed = _parsed;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
         child: PageBody(
           child: Column(
@@ -153,9 +153,9 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                 child: TextButton.icon(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.chevron_left,
-                      size: 18, color: AppColors.neutral300),
+                      size: 18, color: AppColors.textDim),
                   label: const Text('Back',
-                      style: TextStyle(fontSize: 14, color: AppColors.neutral300)),
+                      style: TextStyle(fontSize: 14, color: AppColors.textDim)),
                 ),
               ),
               Padding(
@@ -174,7 +174,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                     SizedBox(height: 4),
                     Text(
                       'Enter the invite code you were sent.',
-                      style: TextStyle(fontSize: 12.5, color: AppColors.neutral400),
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -197,7 +197,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                         ),
                         decoration: InputDecoration(
                           hintText: 'Paste the invite code',
-                          hintStyle: const TextStyle(color: AppColors.neutral500),
+                          hintStyle: const TextStyle(color: AppColors.textGhost),
                           filled: true,
                           fillColor: AppColors.surface,
                           contentPadding: const EdgeInsets.symmetric(
@@ -223,7 +223,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                             child: const Text(
                               'Paste code',
                               style: TextStyle(
-                                  fontSize: 13.5, color: AppColors.accent300),
+                                  fontSize: 13.5, color: AppColors.signalSoft),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -235,7 +235,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                               textAlign: TextAlign.right,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                  fontSize: 11.5, color: AppColors.neutral500),
+                                  fontSize: 11.5, color: AppColors.textGhost),
                             ),
                           ),
                         ],
@@ -276,7 +276,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                                           : '${parsed.$2} address${parsed.$2 == 1 ? '' : 'es'} embedded — syncs on join',
                                       style: const TextStyle(
                                           fontSize: 11.5,
-                                          color: AppColors.neutral400),
+                                          color: AppColors.textDim),
                                     ),
                                   ],
                                 ),
@@ -321,9 +321,9 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                         key: const Key('joinCollectionButton'),
                         onPressed: _busy || parsed == null ? null : _join,
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.accent,
+                          backgroundColor: AppColors.signal,
                           disabledBackgroundColor: AppColors.borderStrong,
-                          foregroundColor: AppColors.bg,
+                          foregroundColor: AppColors.surfaceDeep,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -335,7 +335,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   valueColor:
-                                      AlwaysStoppedAnimation(AppColors.bg),
+                                      AlwaysStoppedAnimation(AppColors.surfaceDeep),
                                 ),
                               )
                             : const Text('Join', style: TextStyle(fontSize: 16)),
@@ -345,7 +345,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                     Text(
                       'You\'ll appear as $_nickname to the other members',
                       style: const TextStyle(
-                          fontSize: 11.5, color: AppColors.neutral500),
+                          fontSize: 11.5, color: AppColors.textGhost),
                     ),
                   ],
                 ),

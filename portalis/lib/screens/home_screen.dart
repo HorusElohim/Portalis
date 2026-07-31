@@ -46,7 +46,7 @@ class HomeScreen extends StatelessWidget {
                       'Your collections',
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: AppColors.neutral400,
+                        color: AppColors.textDim,
                       ),
                     ),
                   ],
@@ -58,7 +58,7 @@ class HomeScreen extends StatelessWidget {
                 child: const Padding(
                   padding: EdgeInsets.all(8),
                   child: Icon(Icons.settings_outlined,
-                      size: 21, color: AppColors.neutral400),
+                      size: 21, color: AppColors.textDim),
                 ),
               ),
               const SizedBox(width: 6),
@@ -197,7 +197,7 @@ class _CollectionsError extends StatelessWidget {
                 fontSize: 10.5,
                 height: 1.4,
                 fontFamily: 'monospace',
-                color: AppColors.neutral400,
+                color: AppColors.textDim,
               ),
             ),
           ],
@@ -218,7 +218,7 @@ class _EmptyCollections extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.hub_outlined, size: 44, color: AppColors.neutral500),
+            const Icon(Icons.hub_outlined, size: 44, color: AppColors.textGhost),
             const SizedBox(height: 14),
             Text(
               'Nothing here yet. Share files of your own, join a collection, or add a torrent.',
@@ -226,7 +226,7 @@ class _EmptyCollections extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13.5,
                 height: 1.5,
-                color: AppColors.neutral400,
+                color: AppColors.textDim,
               ),
             ),
           ],
@@ -280,7 +280,7 @@ class _CollectionCard extends StatelessWidget {
                       fontSize: 10,
                       fontFamily: 'monospace',
                       letterSpacing: 1.1,
-                      color: AppColors.accent300,
+                      color: AppColors.signalSoft,
                     ),
                   ),
                   const Spacer(),
@@ -288,7 +288,7 @@ class _CollectionCard extends StatelessWidget {
                     '$pct%',
                     style: const TextStyle(
                       fontSize: 11,
-                      color: AppColors.neutral400,
+                      color: AppColors.textDim,
                     ),
                   ),
                 ],
@@ -303,7 +303,7 @@ class _CollectionCard extends StatelessWidget {
               Text(
                 meta,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11.5, color: AppColors.neutral400),
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textDim),
               ),
               const SizedBox(height: 9),
               ClipRRect(
@@ -340,9 +340,9 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = primary ? AppColors.bg : AppColors.text;
+    final fg = primary ? AppColors.surfaceDeep : AppColors.text;
     return Material(
-      color: primary ? AppColors.accent : AppColors.surface,
+      color: primary ? AppColors.signal : AppColors.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),

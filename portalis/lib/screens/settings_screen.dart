@@ -95,11 +95,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 color: AppColors.text, fontSize: 13, fontFamily: 'monospace'),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: AppColors.neutral500),
+              hintStyle: const TextStyle(color: AppColors.textGhost),
               helperText: helper,
               helperMaxLines: 3,
               helperStyle:
-                  const TextStyle(fontSize: 10.5, color: AppColors.neutral400),
+                  const TextStyle(fontSize: 10.5, color: AppColors.textDim),
             ),
           ),
         ),
@@ -126,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: const Text(
           'Restores every value below to the built-in default. Your '
           'collections and identity are untouched.',
-          style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+          style: TextStyle(fontSize: 12, color: AppColors.textDim),
         ),
         actions: [
           TextButton(
@@ -155,7 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
         child: PageBody(
           child: ListenableBuilder(
@@ -187,7 +187,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     if (_restartPending)
                       const _Banner(
-                        color: AppColors.accent300,
+                        color: AppColors.signalSoft,
                         icon: Icons.restart_alt,
                         text: 'Some changes apply the next time Portalis '
                             'starts — the transfer engine reads them once, '
@@ -199,7 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Text(
                           'Loading engine settings…',
                           style: TextStyle(
-                              fontSize: 12, color: AppColors.neutral400),
+                              fontSize: 12, color: AppColors.textDim),
                         ),
                       )
                     else
@@ -659,7 +659,7 @@ class _SwitchRow extends StatelessWidget {
                 Text(
                   subtitle,
                   style: const TextStyle(
-                      fontSize: 10.5, height: 1.35, color: AppColors.neutral400),
+                      fontSize: 10.5, height: 1.35, color: AppColors.textDim),
                 ),
               ],
             ),
@@ -668,7 +668,7 @@ class _SwitchRow extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeTrackColor: AppColors.accent,
+            activeTrackColor: AppColors.signal,
             activeThumbColor: AppColors.text,
             inactiveTrackColor: AppColors.borderStrong,
             inactiveThumbColor: AppColors.text,
@@ -714,7 +714,7 @@ class _ValueRow extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 10.5,
                         height: 1.35,
-                        color: AppColors.neutral400),
+                        color: AppColors.textDim),
                   ),
                 ],
               ],
@@ -730,7 +730,7 @@ class _ValueRow extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 11.5,
                 fontFamily: 'monospace',
-                color: AppColors.accent300,
+                color: AppColors.signalSoft,
               ),
             ),
           ),
@@ -738,7 +738,7 @@ class _ValueRow extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.only(left: 4),
               child: Icon(Icons.chevron_right,
-                  size: 15, color: AppColors.neutral500),
+                  size: 15, color: AppColors.textGhost),
             ),
         ],
       ),

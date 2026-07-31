@@ -56,14 +56,14 @@ class Avatar extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.accent800,
+        color: AppColors.signalDeep,
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.accent600),
+        border: Border.all(color: AppColors.signalDim),
       ),
       child: Text(
         initials,
         style: TextStyle(
-          color: AppColors.accent300,
+          color: AppColors.signalSoft,
           fontSize: size * 0.4,
           fontWeight: FontWeight.w500,
         ),
@@ -185,12 +185,12 @@ class PillButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = dim ? AppColors.neutral300 : AppColors.accent300;
-    final borderColor = dim ? AppColors.borderStrong : AppColors.accent;
+    final color = dim ? AppColors.textDim : AppColors.signalSoft;
+    final borderColor = dim ? AppColors.borderStrong : AppColors.signal;
     return Material(
-      color: filled ? AppColors.accent : Colors.transparent,
+      color: filled ? AppColors.signal : Colors.transparent,
       shape: StadiumBorder(
-        side: BorderSide(color: filled ? AppColors.accent : borderColor),
+        side: BorderSide(color: filled ? AppColors.signal : borderColor),
       ),
       child: InkWell(
         customBorder: const StadiumBorder(),
@@ -206,7 +206,7 @@ class PillButton extends StatelessWidget {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: filled ? AppColors.bg : color,
+                    color: filled ? AppColors.surfaceDeep : color,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -247,7 +247,7 @@ class PlaceholderTile extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(iconFor(kind), size: 26, color: AppColors.neutral400),
+              Icon(iconFor(kind), size: 26, color: AppColors.textDim),
               if (label != null) ...[
                 const SizedBox(height: 6),
                 Padding(
@@ -258,7 +258,7 @@ class PlaceholderTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: AppColors.neutral500,
+                      color: AppColors.textGhost,
                       fontSize: 10,
                       fontFamily: 'monospace',
                     ),
@@ -342,7 +342,7 @@ class SectionLabel extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: AppColors.neutral400,
+        color: AppColors.textDim,
         fontSize: 9.5,
         fontFamily: 'monospace',
         fontWeight: FontWeight.w500,
@@ -447,7 +447,7 @@ class NavBackButton extends StatelessWidget {
     return TextButton(
       onPressed: onTap ?? () => Navigator.of(context).maybePop(),
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.accent300,
+        foregroundColor: AppColors.signalSoft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       ),
       child: const Text(

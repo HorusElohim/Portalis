@@ -77,7 +77,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
             children: [
               const Text(
                 'Share this code — anyone who enters it can join and add media.',
-                style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+                style: TextStyle(fontSize: 12, color: AppColors.textDim),
               ),
               const SizedBox(height: 14),
               Center(
@@ -215,9 +215,9 @@ class _CollectionScreenState extends State<CollectionScreen> {
               color: AppColors.text, fontSize: 13, fontFamily: 'monospace'),
           decoration: const InputDecoration(
             hintText: '192.168.1.23:54321',
-            hintStyle: TextStyle(color: AppColors.neutral500),
+            hintStyle: TextStyle(color: AppColors.textGhost),
             helperText: "The other device's sync address (on its User screen)",
-            helperStyle: TextStyle(fontSize: 10.5, color: AppColors.neutral400),
+            helperStyle: TextStyle(fontSize: 10.5, color: AppColors.textDim),
           ),
         ),
         actions: [
@@ -250,7 +250,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
         content: const Text(
           'This only removes it from this device. Downloaded files stay on '
           'disk, and other collaborators keep their own copies.',
-          style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+          style: TextStyle(fontSize: 12, color: AppColors.textDim),
         ),
         actions: [
           TextButton(
@@ -290,7 +290,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
             collection.collaborators.where((c) => c.isAdmin).length;
 
         return Scaffold(
-          backgroundColor: AppColors.bg,
+          backgroundColor: AppColors.surfaceDeep,
           body: SafeArea(
             child: PageBody(
               child: Column(
@@ -307,13 +307,13 @@ class _CollectionScreenState extends State<CollectionScreen> {
                           style: const TextStyle(
                             fontSize: 10,
                             fontFamily: 'monospace',
-                            color: AppColors.neutral300,
+                            color: AppColors.textDim,
                           ),
                         ),
                       IconButton(
                         tooltip: 'Details',
                         icon: const Icon(Icons.info_outline,
-                            size: 18, color: AppColors.neutral400),
+                            size: 18, color: AppColors.textDim),
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => CollectionDetailsScreen(
@@ -325,7 +325,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                       IconButton(
                         tooltip: 'Remove from this device',
                         icon: const Icon(Icons.delete_outline,
-                            size: 18, color: AppColors.neutral400),
+                            size: 18, color: AppColors.textDim),
                         onPressed: _busy ? null : _delete,
                       ),
                     ],
@@ -352,7 +352,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                               style: const TextStyle(
                                 fontSize: 10.5,
                                 fontFamily: 'monospace',
-                                color: AppColors.neutral300,
+                                color: AppColors.textDim,
                               ),
                             ),
                             const SizedBox(height: 6),
@@ -376,7 +376,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                                     'Nothing in this collection yet.',
                                     style: TextStyle(
                                         fontSize: 12,
-                                        color: AppColors.neutral400),
+                                        color: AppColors.textDim),
                                   ),
                                 ),
                               )
@@ -404,7 +404,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                           PillButton(
                             label: 'Invite',
                             icon: const Icon(Icons.people_alt_outlined,
-                                size: 16, color: AppColors.accent300),
+                                size: 16, color: AppColors.signalSoft),
                             onTap: _busy ? null : _showInvite,
                           ),
                           PillButton(
@@ -465,7 +465,7 @@ class _Collaborators extends StatelessWidget {
             style: const TextStyle(
               fontSize: 10,
               fontFamily: 'monospace',
-              color: AppColors.neutral400,
+              color: AppColors.textDim,
             ),
           ),
         ],
@@ -491,7 +491,7 @@ class _Collaborators extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border:
-                                Border.all(color: AppColors.bg, width: 2),
+                                Border.all(color: AppColors.surfaceDeep, width: 2),
                           ),
                           child:
                               Avatar(initials: shown[i].initials, size: 27),
@@ -510,7 +510,7 @@ class _Collaborators extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10,
                     fontFamily: 'monospace',
-                    color: AppColors.neutral400,
+                    color: AppColors.textDim,
                   ),
                 ),
               ),
@@ -574,12 +574,12 @@ class _MediaGrid extends StatelessWidget {
                     // "downloading" (the progress ring) and "ready".
                     if (!m.fetched)
                       Container(
-                        color: AppColors.bg.withValues(alpha: 0.55),
+                        color: AppColors.surfaceDeep.withValues(alpha: 0.55),
                         alignment: Alignment.center,
                         child: const Icon(
                           Icons.cloud_download_outlined,
                           size: 22,
-                          color: AppColors.accent300,
+                          color: AppColors.signalSoft,
                         ),
                       ),
                   ],

@@ -97,7 +97,7 @@ class _UserScreenState extends State<UserScreen> {
     final initials = nickname.isNotEmpty ? nickname[0].toUpperCase() : '?';
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
         child: PageBody(
           child: SingleChildScrollView(
@@ -119,7 +119,7 @@ class _UserScreenState extends State<UserScreen> {
                   _identity == null
                       ? (_error ?? 'loading…')
                       : 'device ${_identity!.deviceId.substring(0, _identity!.deviceId.length.clamp(0, 12))}… · no account needed',
-                  style: const TextStyle(fontSize: 11, color: AppColors.neutral400),
+                  style: const TextStyle(fontSize: 11, color: AppColors.textDim),
                 ),
                 const SizedBox(height: 8),
                 PillButton(
@@ -171,7 +171,7 @@ class _UserScreenState extends State<UserScreen> {
                                     style: const TextStyle(
                                       fontSize: 9,
                                       fontFamily: 'monospace',
-                                      color: AppColors.neutral400,
+                                      color: AppColors.textDim,
                                     ),
                                   ),
                                   const SizedBox(height: 3),
@@ -180,7 +180,7 @@ class _UserScreenState extends State<UserScreen> {
                                     style: const TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w500,
-                                      color: AppColors.accent300,
+                                      color: AppColors.signalSoft,
                                     ),
                                   ),
                                 ],
@@ -208,7 +208,7 @@ class _UserScreenState extends State<UserScreen> {
                                 style: const TextStyle(
                                   fontSize: 11,
                                   fontFamily: 'monospace',
-                                  color: AppColors.accent300,
+                                  color: AppColors.signalSoft,
                                 ),
                               ),
                             ),
@@ -223,7 +223,7 @@ class _UserScreenState extends State<UserScreen> {
                                 );
                               },
                               child: const Icon(Icons.copy,
-                                  size: 13, color: AppColors.neutral400),
+                                  size: 13, color: AppColors.textDim),
                             ),
                           ],
                         ),
@@ -235,7 +235,7 @@ class _UserScreenState extends State<UserScreen> {
                           style: TextStyle(
                               fontSize: 10.5,
                               height: 1.5,
-                              color: AppColors.neutral500),
+                              color: AppColors.textGhost),
                         ),
                       ],
                     ),
@@ -268,7 +268,7 @@ class _UserScreenState extends State<UserScreen> {
                         style: TextStyle(
                             fontSize: 10.5,
                             height: 1.5,
-                            color: AppColors.neutral500),
+                            color: AppColors.textGhost),
                       ),
                     ],
                   ),

@@ -149,7 +149,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                           : '${collection.name} · downloading, $peerLabel connected',
                       style: const TextStyle(
                         fontSize: 11.5,
-                        color: AppColors.neutral400,
+                        color: AppColors.textDim,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -190,7 +190,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
               height: 32,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation(AppColors.accent300),
+                valueColor: AlwaysStoppedAnimation(AppColors.signalSoft),
               ),
             )
           else if (!media.isReady)
@@ -199,14 +199,14 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
               height: 62,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.bg.withValues(alpha: 0.85),
-                border: Border.all(color: AppColors.accent600),
+                color: AppColors.surfaceDeep.withValues(alpha: 0.85),
+                border: Border.all(color: AppColors.signalDim),
               ),
               child: Center(
                 child: Text(
                   '${(media.progress * 100).toStringAsFixed(0)}%',
                   style: const TextStyle(
-                    color: AppColors.accent300,
+                    color: AppColors.signalSoft,
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -264,12 +264,12 @@ class _VideoPlayerViewState extends State<_VideoPlayerView> {
               height: 62,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.bg.withValues(alpha: 0.75),
-                border: Border.all(color: AppColors.accent600),
+                color: AppColors.surfaceDeep.withValues(alpha: 0.75),
+                border: Border.all(color: AppColors.signalDim),
               ),
               child: const Icon(
                 Icons.play_arrow_rounded,
-                color: AppColors.accent300,
+                color: AppColors.signalSoft,
                 size: 32,
               ),
             ),
@@ -282,7 +282,7 @@ class _VideoPlayerViewState extends State<_VideoPlayerView> {
               allowScrubbing: true,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               colors: const VideoProgressColors(
-                playedColor: AppColors.accent,
+                playedColor: AppColors.signal,
                 bufferedColor: AppColors.borderStrong,
                 backgroundColor: Colors.black26,
               ),

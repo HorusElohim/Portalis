@@ -166,7 +166,7 @@ class _ShareScreenState extends State<ShareScreen> {
             : 'Seeds from this device as soon as it\'s created';
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
         child: PageBody(
           child: Column(
@@ -192,10 +192,10 @@ class _ShareScreenState extends State<ShareScreen> {
                               letterSpacing: -0.4,
                               color: AppColors.text,
                             ),
-                            cursorColor: AppColors.accent,
+                            cursorColor: AppColors.signal,
                             decoration: const InputDecoration(
                               hintText: 'Untitled collection',
-                              hintStyle: TextStyle(color: AppColors.neutral500),
+                              hintStyle: TextStyle(color: AppColors.textGhost),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero,
@@ -204,13 +204,13 @@ class _ShareScreenState extends State<ShareScreen> {
                           ),
                         ),
                         const Icon(Icons.edit_outlined,
-                            size: 16, color: AppColors.accent),
+                            size: 16, color: AppColors.signal),
                       ],
                     ),
                     const SizedBox(height: 4),
                     const Text(
                       'Tap the name to rename · files stay on this phone',
-                      style: TextStyle(fontSize: 11.5, color: AppColors.neutral500),
+                      style: TextStyle(fontSize: 11.5, color: AppColors.textGhost),
                     ),
                   ],
                 ),
@@ -261,12 +261,12 @@ class _ShareScreenState extends State<ShareScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: const [
                               Icon(Icons.upload_outlined,
-                                  size: 26, color: AppColors.neutral500),
+                                  size: 26, color: AppColors.textGhost),
                               SizedBox(height: 8),
                               Text(
                                 'Nothing added yet',
                                 style: TextStyle(
-                                    fontSize: 13, color: AppColors.neutral400),
+                                    fontSize: 13, color: AppColors.textDim),
                               ),
                             ],
                           ),
@@ -280,7 +280,7 @@ class _ShareScreenState extends State<ShareScreen> {
                                 fontSize: 10.5,
                                 fontFamily: 'monospace',
                                 letterSpacing: 1.0,
-                                color: AppColors.neutral400,
+                                color: AppColors.textDim,
                               ),
                             ),
                             const Spacer(),
@@ -289,7 +289,7 @@ class _ShareScreenState extends State<ShareScreen> {
                               child: const Text(
                                 'Remove all',
                                 style: TextStyle(
-                                    fontSize: 12.5, color: AppColors.accent300),
+                                    fontSize: 12.5, color: AppColors.signalSoft),
                               ),
                             ),
                           ],
@@ -334,9 +334,9 @@ class _ShareScreenState extends State<ShareScreen> {
                         key: const Key('createShareButton'),
                         onPressed: canCreate ? _createShare : null,
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.accent,
+                          backgroundColor: AppColors.signal,
                           disabledBackgroundColor: AppColors.borderStrong,
-                          foregroundColor: AppColors.bg,
+                          foregroundColor: AppColors.surfaceDeep,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -347,7 +347,7 @@ class _ShareScreenState extends State<ShareScreen> {
                                 height: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(AppColors.bg),
+                                  valueColor: AlwaysStoppedAnimation(AppColors.surfaceDeep),
                                 ),
                               )
                             : const Text('Create & share',
@@ -358,7 +358,7 @@ class _ShareScreenState extends State<ShareScreen> {
                     Text(
                       summary,
                       style: const TextStyle(
-                          fontSize: 11.5, color: AppColors.neutral500),
+                          fontSize: 11.5, color: AppColors.textGhost),
                     ),
                   ],
                 ),
@@ -397,7 +397,7 @@ class _ShareScreenState extends State<ShareScreen> {
                 fontSize: 9,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.6,
-                color: AppColors.neutral400,
+                color: AppColors.textDim,
               ),
             ),
           ),
@@ -415,7 +415,7 @@ class _ShareScreenState extends State<ShareScreen> {
                 Text(
                   '${_kindLabel(f.name)} · ${_formatBytes(f.bytes.length)}',
                   style: const TextStyle(
-                      fontSize: 11.5, color: AppColors.neutral400),
+                      fontSize: 11.5, color: AppColors.textDim),
                 ),
               ],
             ),
@@ -423,7 +423,7 @@ class _ShareScreenState extends State<ShareScreen> {
           IconButton(
             onPressed: () => setState(() =>
                 _files = _files.where((other) => other != f).toList()),
-            icon: const Icon(Icons.close, size: 15, color: AppColors.neutral400),
+            icon: const Icon(Icons.close, size: 15, color: AppColors.textDim),
           ),
         ],
       ),
@@ -476,10 +476,10 @@ class _BackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton.icon(
       onPressed: onTap,
-      icon: const Icon(Icons.chevron_left, size: 18, color: AppColors.neutral300),
+      icon: const Icon(Icons.chevron_left, size: 18, color: AppColors.textDim),
       label: const Text(
         'Back',
-        style: TextStyle(fontSize: 14, color: AppColors.neutral300),
+        style: TextStyle(fontSize: 14, color: AppColors.textDim),
       ),
     );
   }

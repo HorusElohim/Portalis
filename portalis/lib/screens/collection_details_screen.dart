@@ -37,7 +37,7 @@ class CollectionDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
         child: PageBody(
           child: ListenableBuilder(
@@ -55,7 +55,7 @@ class CollectionDetailsScreen extends StatelessWidget {
                         child: Text(
                           'This collection is no longer available.',
                           style: TextStyle(
-                              fontSize: 12, color: AppColors.neutral400),
+                              fontSize: 12, color: AppColors.textDim),
                         ),
                       ),
                     ),
@@ -171,7 +171,7 @@ class _EntriesSection extends StatelessWidget {
         if (entries.isEmpty)
           const Text(
             'Nothing added yet.',
-            style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+            style: TextStyle(fontSize: 12, color: AppColors.textDim),
           )
         else
           for (final entry in entries)
@@ -189,7 +189,7 @@ class _EntriesSection extends StatelessWidget {
                         size: 13,
                         color: entry.fetched
                             ? collection.hue
-                            : AppColors.neutral400,
+                            : AppColors.textDim,
                       ),
                       const SizedBox(width: 6),
                       Expanded(
@@ -208,7 +208,7 @@ class _EntriesSection extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 10.5,
                           fontFamily: 'monospace',
-                          color: AppColors.neutral400,
+                          color: AppColors.textDim,
                         ),
                       ),
                     ],
@@ -221,7 +221,7 @@ class _EntriesSection extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 9.5,
                         fontFamily: 'monospace',
-                        color: AppColors.neutral500,
+                        color: AppColors.textGhost,
                       ),
                     ),
                   ),
@@ -248,7 +248,7 @@ class _CollaboratorsSection extends StatelessWidget {
           const Text(
             'No collaborators recorded yet — sync with someone who has this '
             'collection to exchange lists.',
-            style: TextStyle(fontSize: 12, color: AppColors.neutral400),
+            style: TextStyle(fontSize: 12, color: AppColors.textDim),
           )
         else
           for (final c in collaborators)
@@ -273,7 +273,7 @@ class _CollaboratorsSection extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 9.5,
                             fontFamily: 'monospace',
-                            color: AppColors.neutral500,
+                            color: AppColors.textGhost,
                           ),
                         ),
                       ],
@@ -333,7 +333,7 @@ class _InfoRow extends StatelessWidget {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
             ),
           ),
           Expanded(
@@ -356,7 +356,7 @@ class _InfoRow extends StatelessWidget {
               child: const Padding(
                 padding: EdgeInsets.only(left: 6),
                 child:
-                    Icon(Icons.copy, size: 13, color: AppColors.neutral400),
+                    Icon(Icons.copy, size: 13, color: AppColors.textDim),
               ),
             ),
         ],

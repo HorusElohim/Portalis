@@ -118,7 +118,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
     final showInvalid = _touched && _magnet.isNotEmpty && !_isValid;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
         child: PageBody(
           child: Column(
@@ -128,9 +128,9 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                 child: TextButton.icon(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.chevron_left,
-                      size: 18, color: AppColors.neutral300),
+                      size: 18, color: AppColors.textDim),
                   label: const Text('Back',
-                      style: TextStyle(fontSize: 14, color: AppColors.neutral300)),
+                      style: TextStyle(fontSize: 14, color: AppColors.textDim)),
                 ),
               ),
               Padding(
@@ -149,7 +149,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                     SizedBox(height: 4),
                     Text(
                       'Paste a magnet link or open a .torrent file.',
-                      style: TextStyle(fontSize: 12.5, color: AppColors.neutral400),
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
                     ),
                   ],
                 ),
@@ -170,7 +170,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                         ),
                         decoration: InputDecoration(
                           hintText: 'magnet:?xt=urn:btih:…',
-                          hintStyle: const TextStyle(color: AppColors.neutral500),
+                          hintStyle: const TextStyle(color: AppColors.textGhost),
                           filled: true,
                           fillColor: AppColors.surface,
                           contentPadding: const EdgeInsets.symmetric(
@@ -218,7 +218,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                             style: TextStyle(
                                 fontSize: 12.5,
                                 height: 1.45,
-                                color: AppColors.accent300),
+                                color: AppColors.signalSoft),
                           ),
                         ),
                       const SizedBox(height: 14),
@@ -241,13 +241,13 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                                     height: 40,
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: AppColors.accent800,
+                                      color: AppColors.signalDeep,
                                       borderRadius: BorderRadius.circular(10),
                                       border:
-                                          Border.all(color: AppColors.accent600),
+                                          Border.all(color: AppColors.signalDim),
                                     ),
                                     child: const Icon(Icons.download_outlined,
-                                        size: 19, color: AppColors.accent),
+                                        size: 19, color: AppColors.signal),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -260,7 +260,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                                           style: TextStyle(
                                             fontSize: 10,
                                             letterSpacing: 1.1,
-                                            color: AppColors.accent,
+                                            color: AppColors.signal,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
@@ -279,7 +279,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                                           style: const TextStyle(
                                             fontSize: 11,
                                             fontFamily: 'monospace',
-                                            color: AppColors.neutral500,
+                                            color: AppColors.textGhost,
                                           ),
                                         ),
                                       ],
@@ -302,7 +302,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                                   style: TextStyle(
                                       fontSize: 11.5,
                                       height: 1.45,
-                                      color: AppColors.neutral400),
+                                      color: AppColors.textDim),
                                 ),
                               ),
                             ],
@@ -320,7 +320,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: const [
                               Icon(Icons.download_outlined,
-                                  size: 26, color: AppColors.neutral500),
+                                  size: 26, color: AppColors.textGhost),
                               SizedBox(height: 8),
                               Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 60),
@@ -330,7 +330,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                                   style: TextStyle(
                                       fontSize: 13,
                                       height: 1.45,
-                                      color: AppColors.neutral400),
+                                      color: AppColors.textDim),
                                 ),
                               ),
                             ],
@@ -375,9 +375,9 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                         key: const Key('addMagnetButton'),
                         onPressed: _busy || !_isValid ? null : _addMagnet,
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.accent,
+                          backgroundColor: AppColors.signal,
                           disabledBackgroundColor: AppColors.borderStrong,
-                          foregroundColor: AppColors.bg,
+                          foregroundColor: AppColors.surfaceDeep,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -389,7 +389,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   valueColor:
-                                      AlwaysStoppedAnimation(AppColors.bg),
+                                      AlwaysStoppedAnimation(AppColors.surfaceDeep),
                                 ),
                               )
                             : const Text('Add & start',
@@ -400,7 +400,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
                     const Text(
                       'Starts fetching immediately',
                       style:
-                          TextStyle(fontSize: 11.5, color: AppColors.neutral500),
+                          TextStyle(fontSize: 11.5, color: AppColors.textGhost),
                     ),
                   ],
                 ),
