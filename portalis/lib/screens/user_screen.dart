@@ -5,6 +5,7 @@ import '../bridge_generated/device.dart' as bridge;
 import '../services/collections.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
+import 'formats_screen.dart';
 import 'settings_screen.dart';
 
 /// You — this device's identity and what it has moved.
@@ -221,6 +222,43 @@ class _UserScreenState extends State<UserScreen> {
                             ],
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                  child: SurfaceCard(
+                    padding: const EdgeInsets.all(16),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const FormatsScreen()),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.category_outlined,
+                            size: 19, color: AppColors.textDim),
+                        SizedBox(width: 13),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('File formats',
+                                  style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w600)),
+                              SizedBox(height: 3),
+                              Text(
+                                'What Portalis can view, and what it converts',
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: AppColors.textFaint),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right,
+                            size: 16, color: AppColors.textGhost),
                       ],
                     ),
                   ),

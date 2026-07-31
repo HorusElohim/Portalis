@@ -5,8 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../media_convert.dart';
-import '../media_kind.dart';
+import '../media/formats.dart';
 import '../services/collections.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
@@ -14,20 +13,9 @@ import '../ui/ui.dart';
 typedef _PickedFile = ({String name, Uint8List bytes});
 
 
-String _kindLabel(String name) {
-  switch (kindOf(name)) {
-    case MediaKind.image:
-      return 'Photo';
-    case MediaKind.video:
-      return 'Video';
-    case MediaKind.audio:
-      return 'Audio';
-    case MediaKind.subtitle:
-      return 'Subtitles';
-    case MediaKind.other:
-      return 'File';
-  }
-}
+/// The registry already names every type it knows, so this reads the label
+/// off the format rather than maintaining a second mapping that could drift.
+String _kindLabel(String name) => MediaFormats.resolve(name).label;
 
 /// "Share something" — the share half of the old combined Add screen,
 /// redesigned per the Portalis Add Flow: inline-editable collection name,

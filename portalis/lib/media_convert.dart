@@ -2,29 +2,27 @@ import 'dart:typed_data';
 
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
-import 'media_kind.dart';
-
-/// Flutter's built-in image codecs (Skia) can't decode HEIC/HEIF at all —
-/// the iPhone camera's default format since iOS 11. Left as-is, a shared
-/// HEIC photo would never preview in-app for anyone (us included) and may
-/// not open for recipients on non-Apple platforms either. Converting to
-/// JPEG at share-time fixes both: it's what actually gets seeded, so it's
+/// Re-encodes HEIC/HEIF to JPEG.
+///
+/// Flutter's built-in image codecs (Skia) cannot decode HEIC at all — the
+/// iPhone camera's default format since iOS 11. Left as-is, a shared HEIC
+/// photo would never preview in-app for anyone (the sender included) and may
+/// not open for recipients on non-Apple platforms either. Converting at
+/// share-time fixes both: the JPEG is what actually gets seeded, so it is
 /// what every peer receives.
 ///
-/// Non-HEIC files pass through untouched.
-Future<({String name, Uint8List bytes})> normalizeForSharing({
+/// Registered against the HEIC format in `media/formats.dart` rather than
+/// called directly, so the decision "this type needs converting" lives with
+/// the type. Kept in its own file so the registry doesn't pull in a platform
+/// codec plugin.
+Future<({String name, Uint8List bytes})> heicToJpeg({
   required String name,
   required Uint8List bytes,
 }) async {
-  final ext = extensionOf(name);
-  if (ext != 'heic' && ext != 'heif') {
-    return (name: name, bytes: bytes);
-  }
-
   final jpeg = await FlutterImageCompress.compressWithList(
     bytes,
-    // Large enough that real photos never get needlessly downscaled —
-    // this is a format fix, not a size reduction.
+    // Large enough that real photos are never needlessly downscaled — this is
+    // a format fix, not a size reduction.
     minWidth: 8000,
     minHeight: 8000,
     quality: 95,

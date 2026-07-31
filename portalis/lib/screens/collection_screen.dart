@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-import '../media_convert.dart';
+import '../media/formats.dart';
 import '../models.dart';
 import '../services/collections.dart';
 import '../theme.dart';

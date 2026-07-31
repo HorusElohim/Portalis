@@ -5,7 +5,7 @@ import 'package:gal/gal.dart';
 
 import '../bridge_generated/collections.dart' as bridge;
 import '../bridge_generated/torrent.dart' as torrent_bridge;
-import '../media_kind.dart';
+import '../media/formats.dart';
 import '../models.dart';
 
 /// iOS/Android only — desktop already writes straight to Downloads (see

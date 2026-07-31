@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
-import '../media_kind.dart';
+import '../media/formats.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
@@ -49,7 +49,14 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     super.dispose();
   }
 
-  bool get _isPlayableVideo => widget.media.isReady && isVideo(widget.media.label);
+  /// Whether *this* file can play inline, per the registry — not merely
+  /// whether it is video. MKV and AVI are video-kind but the platform players
+  /// handle them inconsistently, so they open externally instead of showing
+  /// a black frame here.
+  bool get _isPlayableVideo =>
+      widget.media.isReady &&
+      MediaFormats.resolve(widget.media.label).preview ==
+          PreviewSupport.player;
 
   void _maybeInitVideo() {
     if (!_isPlayableVideo) return;

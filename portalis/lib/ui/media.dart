@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../media_kind.dart';
+import '../media/formats.dart';
 import '../models.dart';
 import '../theme.dart';
 
@@ -75,7 +75,11 @@ class MediaThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (media.isReady && isImage(media.label)) {
+    // Ask the registry what this type can do, rather than assuming every
+    // image-kind file is decodable — HEIC is image-kind but only previews
+    // because it was converted on the way in.
+    final format = MediaFormats.resolve(media.label);
+    if (media.isReady && format.preview == PreviewSupport.image) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
         child: Image.file(
