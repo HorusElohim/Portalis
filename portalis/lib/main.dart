@@ -35,14 +35,7 @@ class MyApp extends StatelessWidget {
           // outside an input, on any screen, now closes it.
           behavior: HitTestBehavior.opaque,
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-          // Stacked above every route: the Home button has to outlive the
-          // screens it returns you from.
-          child: Stack(
-            children: [
-              child ?? const SizedBox.shrink(),
-              const AppHomeButton(),
-            ],
-          ),
+          child: child ?? const SizedBox.shrink(),
         ),
       ),
     );

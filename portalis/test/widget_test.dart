@@ -114,7 +114,7 @@ void main() {
         (tester) async {
       await _pumpApp(tester, collections: []);
 
-      expect(find.text('Collections'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('Transfers'), findsWidgets);
       expect(find.text('You'), findsOneWidget);
 
@@ -149,34 +149,27 @@ void main() {
     });
   });
 
-  group('home button', () {
-    testWidgets('is absent at home and appears once you leave it',
+  group('home tab', () {
+    testWidgets('is the leftmost destination and returns from another tab',
         (tester) async {
       await _pumpApp(tester, collections: []);
-      // Nothing to return from — it must not cover content it can't help
-      // with.
-      expect(find.byKey(const Key('appHomeButton')), findsNothing);
+      expect(find.text('Home'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('navTab1')));
-      await tester.pump();
-      expect(find.byKey(const Key('appHomeButton')), findsOneWidget);
-    });
-
-    testWidgets('returns to Collections from another tab', (tester) async {
-      await _pumpApp(tester, collections: []);
       await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
       expect(find.byType(UserScreen), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('appHomeButton')));
+      await tester.tap(find.byKey(const Key('navTab0')));
       await tester.pump();
 
       expect(AppNavigation.tab.value, 0);
-      expect(find.byKey(const Key('appHomeButton')), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('pops all the way back from a pushed screen', (tester) async {
+    testWidgets('unwinds a pushed screen rather than only switching tab',
+        (tester) async {
+      // The distinction that makes it a Home button and not just a tab: one
+      // tap lands you at the start, not one screen shallower.
       await _pumpApp(tester);
       await tester.tap(find.byKey(const Key('shareSomethingButton')));
       await tester.pump();
@@ -184,14 +177,13 @@ void main() {
       expect(find.byType(ShareScreen), findsOneWidget);
       expect(AppNavigation.depth.value, greaterThan(0));
 
-      await tester.tap(find.byKey(const Key('appHomeButton')));
+      AppNavigation.goHome();
       // Stepped, so the pop transition actually finishes: depth drops
       // immediately but the outgoing route stays mounted until it does.
       for (var i = 0; i < 12; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
 
-      // Back at the shell, not merely one screen shallower.
       expect(find.byType(ShareScreen), findsNothing);
       expect(AppNavigation.depth.value, 0);
       expect(tester.takeException(), isNull);

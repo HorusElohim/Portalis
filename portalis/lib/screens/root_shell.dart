@@ -122,8 +122,11 @@ class AppBottomNav extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
 
+  /// The leftmost destination is Home, and it carries the app's mark rather
+  /// than a generic glyph — it is both "where you are" and "how you get
+  /// back".
   static const items = [
-    (icon: Icons.dashboard_outlined, label: 'Collections'),
+    (icon: null, label: 'Home'),
     (icon: Icons.swap_horiz, label: 'Transfers'),
     (icon: Icons.person_outline, label: 'You'),
   ];
@@ -146,21 +149,46 @@ class AppBottomNav extends StatelessWidget {
                   child: InkWell(
                     key: Key('navTab$i'),
                     borderRadius: BorderRadius.circular(12),
-                    onTap: () => onSelected(i),
+                    // Home doesn't just select a tab: it unwinds anything
+                    // pushed on top as well, so one tap always lands you at
+                    // the start rather than one screen shallower.
+                    onTap: () => i == 0 ? AppNavigation.goHome() : onSelected(i),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            items[i].icon,
-                            size: 21,
-                            // Selection is plain white, not mint — mint is
-                            // reserved for data actually moving.
-                            color: i == index
-                                ? AppColors.text
-                                : AppColors.textGhost,
-                          ),
+                          if (items[i].icon == null)
+                            Opacity(
+                              // The mark is full colour; dimming it is what
+                              // makes an unselected tab read as unselected,
+                              // the same as the glyphs beside it.
+                              opacity: i == index ? 1 : 0.45,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(7),
+                                child: Image.asset(
+                                  'assets/PortalisNature.png',
+                                  width: 21,
+                                  height: 21,
+                                  // Decoded at 3× its slot, not the source's
+                                  // 1254² — permanent chrome must not park a
+                                  // full-resolution bitmap in the cache.
+                                  cacheWidth: 63,
+                                  cacheHeight: 63,
+                                  filterQuality: FilterQuality.medium,
+                                ),
+                              ),
+                            )
+                          else
+                            Icon(
+                              items[i].icon,
+                              size: 21,
+                              // Selection is plain white, not mint — mint is
+                              // reserved for data actually moving.
+                              color: i == index
+                                  ? AppColors.text
+                                  : AppColors.textGhost,
+                            ),
                           const SizedBox(height: 5),
                           Text(
                             items[i].label,
