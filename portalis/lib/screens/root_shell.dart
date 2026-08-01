@@ -16,10 +16,12 @@ import 'user_screen.dart';
 /// Chosen on available width, never on `Platform`: a narrow window on a Mac
 /// should get the phone layout, and a wide tablet should get the desktop one.
 ///
-/// The desktop runners open above this and refuse to be dragged below it, so
-/// the desktop app is never in the phone layout by accident — see the sizes in
-/// `macos/Runner/MainFlutterWindow.swift`, `linux/my_application.cc` and
-/// `windows/runner/`. Change one and change the others.
+/// The desktop runners *open* above this, so the app never launches into the
+/// phone layout by accident, but they can be dragged well below it: the phone
+/// layout is a first-class layout on desktop too, and the crossing is a real
+/// transition rather than a degradation. Their floor is the smallest phone the
+/// design targets — see `macos/Runner/MainFlutterWindow.swift`,
+/// `linux/my_application.cc` and `windows/runner/`.
 const kDesktopBreakpoint = 1000.0;
 
 /// App root. Three destinations on mobile — Collections, Transfers, You —

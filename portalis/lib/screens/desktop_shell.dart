@@ -5,9 +5,11 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../bridge_generated/device.dart' as device_bridge;
 import '../models.dart';
 import '../services/collections.dart';
+import '../services/navigation.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'collection_screen.dart';
+import 'home_screen.dart';
 import 'settings_screen.dart';
 import 'share_screen.dart';
 import 'transfers_screen.dart';
@@ -24,11 +26,60 @@ class DesktopShell extends StatefulWidget {
   State<DesktopShell> createState() => _DesktopShellState();
 }
 
-enum _Pane { collections, transfers, people, settings }
+enum _Pane { home, collections, transfers, people, settings }
 
 class _DesktopShellState extends State<DesktopShell> {
   _Pane _pane = _Pane.collections;
   String? _selectedId;
+
+  /// The two shells share a destination wherever they have one in common, so
+  /// that resizing across the breakpoint leaves you where you were rather than
+  /// somewhere arbitrary — which matters now that the window can be dragged
+  /// freely between the desktop and phone layouts. It is also what makes
+  /// Home's "go to Collections" link work here: it sets the tab, and nothing
+  /// was listening.
+  static _Pane? _paneForTab(int tab) => switch (tab) {
+        0 => _Pane.home,
+        1 => _Pane.collections,
+        2 => _Pane.transfers,
+        // "You" has no desktop peer — identity lives in the sidebar chip and
+        // Settings — so it leaves the pane alone rather than guessing.
+        _ => null,
+      };
+
+  static int? _tabForPane(_Pane pane) => switch (pane) {
+        _Pane.home => 0,
+        _Pane.collections => 1,
+        _Pane.transfers => 2,
+        _Pane.people || _Pane.settings => null,
+      };
+
+  @override
+  void initState() {
+    super.initState();
+    _pane = _paneForTab(AppNavigation.tab.value) ?? _Pane.collections;
+    AppNavigation.tab.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    AppNavigation.tab.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    final pane = _paneForTab(AppNavigation.tab.value);
+    if (pane != null && pane != _pane && mounted) {
+      setState(() => _pane = pane);
+    }
+  }
+
+  void _select(_Pane pane) {
+    if (pane == _pane) return;
+    setState(() => _pane = pane);
+    final tab = _tabForPane(pane);
+    if (tab != null) AppNavigation.tab.value = tab;
+  }
 
   Collection? get _selected {
     final list = Collections.instance.collections;
@@ -57,20 +108,17 @@ class _DesktopShellState extends State<DesktopShell> {
           final collections = SafeArea(
             child: _CollectionsPane(
               selectedId: _selected?.id,
-              onSelect: (id) => setState(() {
-                _selectedId = id;
+              onSelect: (id) {
+                setState(() => _selectedId = id);
                 // Picking a collection means you want to look at it, so any
                 // secondary pane steps aside.
-                _pane = _Pane.collections;
-              }),
+                _select(_Pane.collections);
+              },
             ),
           );
           return Row(
             children: [
-              _Sidebar(
-                pane: _pane,
-                onPane: (p) => setState(() => _pane = p),
-              ),
+              _Sidebar(pane: _pane, onPane: _select),
               if (secondary == null)
                 Expanded(child: collections)
               else
@@ -89,6 +137,8 @@ class _DesktopShellState extends State<DesktopShell> {
 
   Widget _centre() {
     switch (_pane) {
+      case _Pane.home:
+        return const SafeArea(child: HomeScreen());
       case _Pane.transfers:
         return const SafeArea(child: TransfersScreen());
       case _Pane.people:
@@ -131,6 +181,14 @@ class _Sidebar extends StatelessWidget {
             children: [
               const _IdentityChip(),
               const SizedBox(height: 22),
+              // Desktop had no Home at all: the welcome — what Portalis is
+              // and the three ways to start something — was reachable only by
+              // narrowing the window into the phone layout. It is the same
+              // destination as the mobile bar's first item, and carries the
+              // same mark for the same reason: it is both where you are and
+              // how you get back.
+              _navItem(_Pane.home, null, 'Home', null),
+              const SizedBox(height: 14),
               PrimaryAction(
                 label: 'New share',
                 icon: Icons.add,
@@ -157,7 +215,8 @@ class _Sidebar extends StatelessWidget {
     );
   }
 
-  Widget _navItem(_Pane p, IconData icon, String label, String? count,
+  /// A null [icon] means the app's mark — see the Home item above.
+  Widget _navItem(_Pane p, IconData? icon, String label, String? count,
       {bool countIsLive = false}) {
     final selected = p == pane;
     return Padding(
@@ -172,9 +231,31 @@ class _Sidebar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Icon(icon,
-                    size: 17,
-                    color: selected ? AppColors.text : AppColors.textDim),
+                if (icon == null)
+                  Opacity(
+                    // The mark is full colour; dimming it is what makes an
+                    // unselected item read as unselected, the same as the
+                    // glyphs beside it.
+                    opacity: selected ? 1 : 0.45,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.asset(
+                        'assets/PortalisNature.png',
+                        width: 17,
+                        height: 17,
+                        // Decoded at 3x its slot, not the source's 1254² —
+                        // permanent chrome must not park a full-resolution
+                        // bitmap in the cache.
+                        cacheWidth: 51,
+                        cacheHeight: 51,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
+                  )
+                else
+                  Icon(icon,
+                      size: 17,
+                      color: selected ? AppColors.text : AppColors.textDim),
                 const SizedBox(width: 11),
                 Expanded(
                   child: Text(

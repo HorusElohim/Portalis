@@ -7,13 +7,16 @@ import FlutterMacOS
 /// `kDesktopBreakpoint` (1000pt, see lib/screens/root_shell.dart) it renders
 /// the three-pane desktop shell, and below that the phone layout. The stock
 /// runner opened at 800x600, so the Mac app launched into the phone layout
-/// every time and had to be widened by hand.
+/// every time and had to be widened by hand. Opening well clear of the
+/// breakpoint fixes that.
 ///
-/// The minimum is what the desktop shell actually needs: sidebar (236) +
-/// collections list (360) + inspector (314) side by side, with room left for
-/// the list to breathe. The default adds margin on top of that.
+/// The minimum deliberately sits *below* the breakpoint: the phone layout is
+/// a first-class layout here, not a fallback, and it is the right rendering
+/// for a narrow window parked beside something else. 375x667 is the smallest
+/// phone the design targets, so nothing between the minimum and the
+/// breakpoint is untested territory.
 private let kDefaultWindowSize = NSSize(width: 1280, height: 840)
-private let kMinimumWindowSize = NSSize(width: 1024, height: 720)
+private let kMinimumWindowSize = NSSize(width: 375, height: 667)
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {

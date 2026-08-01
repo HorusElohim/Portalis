@@ -154,6 +154,39 @@ void main() {
       expect(find.text('People'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('the desktop sidebar can reach Home', (tester) async {
+      // It couldn't: the sidebar had Collections/Transfers/People/Settings and
+      // no Home at all, so the welcome was reachable on desktop only by
+      // narrowing the window into the phone layout.
+      await _pumpApp(tester, size: _desktop, collections: [_collection()]);
+      expect(find.text('Home'), findsOneWidget);
+
+      await tester.tap(find.text('Home'));
+      // pump, not pumpAndSettle: Home's mark pulses forever by design, so
+      // there is no settled frame to wait for.
+      await tester.pump();
+
+      expect(find.textContaining('Send anything'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a destination survives crossing the breakpoint',
+        (tester) async {
+      // The window can now be dragged between the two layouts freely, so the
+      // shells have to agree about where you are rather than each keeping its
+      // own idea of it.
+      await _pumpApp(tester, size: _desktop, collections: [_collection()]);
+      await tester.tap(find.text('Transfers'));
+      await tester.pump();
+
+      await tester.binding.setSurfaceSize(_phone);
+      await tester.pumpWidget(const MyApp());
+      await tester.pump();
+
+      expect(find.byType(TransfersScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('home is the welcome, collections is the list', () {
