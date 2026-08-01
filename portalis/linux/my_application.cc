@@ -47,7 +47,12 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "portalis");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // Open — and stay — on the desktop side of the layout breakpoint
+  // (kDesktopBreakpoint, 1000pt, in lib/screens/root_shell.dart): narrower
+  // than that and the app renders its phone layout. The minimum is what the
+  // three-pane shell needs to hold sidebar, list and inspector at once.
+  gtk_window_set_default_size(window, 1280, 840);
+  gtk_widget_set_size_request(GTK_WIDGET(window), 1024, 720);
   gtk_widget_show(GTK_WIDGET(window));
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();

@@ -15,6 +15,11 @@ import 'user_screen.dart';
 ///
 /// Chosen on available width, never on `Platform`: a narrow window on a Mac
 /// should get the phone layout, and a wide tablet should get the desktop one.
+///
+/// The desktop runners open above this and refuse to be dragged below it, so
+/// the desktop app is never in the phone layout by accident — see the sizes in
+/// `macos/Runner/MainFlutterWindow.swift`, `linux/my_application.cc` and
+/// `windows/runner/`. Change one and change the others.
 const kDesktopBreakpoint = 1000.0;
 
 /// App root. Three destinations on mobile — Collections, Transfers, You —

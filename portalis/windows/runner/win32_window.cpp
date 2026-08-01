@@ -197,6 +197,21 @@ Win32Window::MessageHandler(HWND hwnd,
 
       return 0;
     }
+    case WM_GETMINMAXINFO: {
+      // Floor the window at the width the three-pane desktop layout needs —
+      // below kDesktopBreakpoint (1000pt, lib/screens/root_shell.dart) the app
+      // falls back to its phone layout. Scaled per-monitor, since the sizes
+      // here are logical pixels but MINMAXINFO is in physical ones.
+      auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      const double scale_factor =
+          FlutterDesktopGetDpiForMonitor(
+              MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)) /
+          96.0;
+      info->ptMinTrackSize.x = Scale(1024, scale_factor);
+      info->ptMinTrackSize.y = Scale(720, scale_factor);
+      return 0;
+    }
+
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {
