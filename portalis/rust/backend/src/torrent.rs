@@ -127,6 +127,21 @@ pub(crate) async fn bt_listen_port() -> anyhow::Result<Option<u16>> {
     native::bt_listen_port().await
 }
 
+/// The BitTorrent listen port if it has *ever* been read in this run, without
+/// touching the session.
+///
+/// The port is fixed for the life of the process, but the only way to ask for
+/// it — `session()` — blocks while librqbit starts up (DHT bootstrap, UPnP
+/// probe, re-reading persisted torrents). `collab_sync` therefore only waits a
+/// couple of seconds for it and sends `None` on timeout, and a sync message
+/// without a port leaves the other side with no direct address to fetch media
+/// from: it falls back to DHT, which on a LAN behind one NAT typically never
+/// resolves. Caching turns that into a once-per-run race instead of one that
+/// can be lost on every single exchange.
+pub(crate) fn bt_listen_port_cached() -> Option<u16> {
+    native::bt_listen_port_cached()
+}
+
 /// Adds a torrent by bare info-hash with explicit peer-address hints —
 /// `collab_sync.rs`'s learned "who has this collection's media" addresses
 /// go straight to librqbit as `initial_peers`, so a LAN fetch connects to
@@ -500,10 +515,24 @@ mod native {
         Ok(())
     }
 
+    /// 0 = not yet known. The port never changes once the session is up, so a
+    /// plain atomic is enough — see `torrent::bt_listen_port_cached`.
+    static BT_LISTEN_PORT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
     pub(super) async fn bt_listen_port() -> anyhow::Result<Option<u16>> {
         let port = session().await?.tcp_listen_port();
+        if let Some(port) = port {
+            BT_LISTEN_PORT.store(port as u32, std::sync::atomic::Ordering::Relaxed);
+        }
         crate::log::clog!("torrent", "bt_listen_port: {port:?}");
         Ok(port)
+    }
+
+    pub(super) fn bt_listen_port_cached() -> Option<u16> {
+        match BT_LISTEN_PORT.load(std::sync::atomic::Ordering::Relaxed) {
+            0 => None,
+            port => Some(port as u16),
+        }
     }
 
     pub(super) async fn forget_torrent(info_hash_hex: &str) -> anyhow::Result<()> {

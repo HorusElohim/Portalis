@@ -171,11 +171,23 @@ class Collection {
   /// socket is listening for them.
   bool get isSharing => state == 'seeding' && media.isNotEmpty;
 
+  /// A fetch has been started but no peer has served the metadata yet, so
+  /// there is nothing to measure — not even a total size.
+  ///
+  /// Worth its own state because it is otherwise identical to "nobody has
+  /// asked for this yet": both show zero bytes of zero. Telling them apart is
+  /// the difference between "the app is looking for the other device" and
+  /// "nothing is happening".
+  bool get isConnecting => state == 'connecting';
+
   /// Energy for this collection's card, by what it is genuinely doing.
   GlowLevel get glow {
     if (downloadMbps > 0 || uploadMbps > 0) {
       return (downloadMbps + uploadMbps) > 4 ? GlowLevel.vivid : GlowLevel.active;
     }
+    // Reaching for a peer counts as alive — something is being attempted, and
+    // a dark card would read as nothing happening.
+    if (isConnecting) return GlowLevel.calm;
     // Shared and standing by: alive, but nothing is flowing.
     return isSharing ? GlowLevel.calm : GlowLevel.none;
   }
@@ -187,6 +199,7 @@ class Collection {
   String get subtitle {
     final count = media.length;
     final items = '$count item${count == 1 ? '' : 's'}';
+    if (isConnecting) return '$items · looking for a peer';
     return pendingMedia > 0 ? '$items · $pendingMedia to fetch' : items;
   }
 

@@ -173,6 +173,15 @@ pub async fn fetch_collection_media(collection_id: String) -> anyhow::Result<u32
     native::fetch_collection_media(collection_id).await
 }
 
+/// Re-attempts fetches the user has asked for that haven't landed yet.
+///
+/// Driven by `collab_sync`'s re-sync loop, since the thing that usually
+/// unblocks a stuck fetch is a sync exchange telling us where the seeder's
+/// BitTorrent session is. Internal, never bridged.
+pub(crate) async fn retry_pending_fetches() {
+    native::retry_pending_fetches().await
+}
+
 /// One full manifest sync with a peer, for a shared collection.
 pub async fn sync_collection(
     collection_id: String,
@@ -394,9 +403,21 @@ mod native {
         }
     }
 
-    fn state_for(totals: &Totals, pending_media: u32, media_len: usize) -> String {
+    fn state_for(
+        totals: &Totals,
+        pending_media: u32,
+        media_len: usize,
+        connecting: bool,
+    ) -> String {
         if media_len == 0 {
             "empty".to_string()
+        } else if connecting && totals.total_bytes == 0 {
+            // Distinct from "pending", which means nobody has asked for this
+            // media yet. "Connecting" means we are looking for the device that
+            // holds it — the two look identical from bytes alone (0 of 0), and
+            // conflating them is why a fetch in progress was indistinguishable
+            // from a fetch that never started.
+            "connecting".to_string()
         } else if pending_media > 0 && totals.total_bytes == 0 {
             "pending".to_string()
         } else if totals.progress() >= 1.0 && pending_media == 0 {
@@ -407,6 +428,10 @@ mod native {
     }
 
     pub(super) async fn list_collections() -> anyhow::Result<Vec<CollectionInfo>> {
+        // This is the app's heartbeat — it runs on the UI poll and stops when
+        // the app is backgrounded, which is exactly the signal the background
+        // re-sync loop uses to decide whether anyone is home.
+        crate::collab_sync::note_ui_activity();
         // Both halves of the join are gathered *before* taking the store
         // lock — `with_store`'s closure is synchronous and can't await.
         // Never *waits* for the engine. Constructing librqbit's session
@@ -461,6 +486,8 @@ mod native {
                 let mut media = Vec::new();
                 let mut pending_media = 0u32;
 
+                let mut connecting = false;
+
                 for entry in collection.manifest().entries() {
                     let hash = norm(&entry.info_hash.to_hex());
                     claimed.insert(hash.clone());
@@ -478,6 +505,7 @@ mod native {
                             // for the whole entry. Its real file list isn't
                             // knowable until the torrent's metadata arrives.
                             pending_media += 1;
+                            connecting |= is_fetching(&hash);
                             media.push(MediaInfo {
                                 name: entry.name.clone(),
                                 entry_name: entry.name.clone(),
@@ -506,7 +534,7 @@ mod native {
                     download_mbps: totals.download_mbps,
                     upload_mbps: totals.upload_mbps,
                     live_peers: totals.live_peers,
-                    state: state_for(&totals, pending_media, media.len()),
+                    state: state_for(&totals, pending_media, media.len(), connecting),
                     pending_media,
                     media,
                 });
@@ -537,7 +565,7 @@ mod native {
                 download_mbps: totals.download_mbps,
                 upload_mbps: totals.upload_mbps,
                 live_peers: totals.live_peers,
-                state: state_for(&totals, 0, media.len()),
+                state: state_for(&totals, 0, media.len(), false),
                 pending_media: 0,
                 media,
             });
@@ -635,6 +663,41 @@ mod native {
         let identity = crate::device::current_identity()?;
 
         let id = with_store(|collections| {
+            // Rejoining an invite you already hold must land on the collection
+            // you already have. Pushing a second record with the same
+            // rendezvous key used to look harmless — two entries in a list —
+            // but it silently broke sync forever: `apply_message` merges into
+            // the *first* record with a matching key, so everything a peer
+            // sent arrived in the older copy while the user watched the newer
+            // one stay empty. And rejoining is exactly what someone does when
+            // the first join appears not to have worked.
+            if let Some(existing) = collections
+                .iter_mut()
+                .find(|c| c.rendezvous_key().to_hex() == rendezvous_key_hex)
+            {
+                clog!(
+                    "collections",
+                    "join_collection: already joined as {:?} ({}) — reusing it",
+                    existing.name,
+                    existing.id
+                );
+                // The invite is the authority on the name; ours may predate a
+                // rename by the inviter.
+                existing.name = name.to_string();
+                if !existing
+                    .collaborators
+                    .iter()
+                    .any(|c| c.device_id == identity.device_id())
+                {
+                    existing.collaborators.push(Collaborator::new(
+                        identity.device_id(),
+                        display_name.clone(),
+                        Role::Member,
+                        now_unix_ms(),
+                    ));
+                }
+                return Ok(existing.id);
+            }
             let mut collection = Collection::join(name.to_string(), secret);
             collection.collaborators.push(Collaborator::new(
                 identity.device_id(),
@@ -646,7 +709,7 @@ mod native {
             collections.push(collection);
             Ok(id)
         })?;
-        clog!("collections", "join_collection: local record created, id={id}");
+        clog!("collections", "join_collection: local record is id={id}");
 
         // Best-effort first sync with the inviter, in the *background*. Each
         // candidate address can take up to the sync IO timeout to fail, and
@@ -655,12 +718,23 @@ mod native {
         // those addresses turn out to be reachable; whoever is looking at the
         // collection picks up the result once/if the sync lands.
         if peer_addrs.is_empty() {
-            clog!("collections", "join_collection: invite carried no addresses, no auto-sync");
+            clog!("collections", "join_collection: invite carried no addresses — nothing to \
+                 sync with. The inviting device couldn't start its sync listener (on Android \
+                 that means a build without the INTERNET permission); sync manually from the \
+                 collection screen using the address on its User screen.");
         } else {
+            // Recorded *before* the first attempt, so this is durable rather
+            // than one shot: the periodic re-sync keeps retrying these
+            // addresses for the life of the collection. That matters most on
+            // the very first attempt, which on iOS/macOS is the one the system
+            // spends raising a Local Network permission prompt — and therefore
+            // the one that fails.
+            crate::collab_sync::remember_sync_peers(&rendezvous_key_hex, peer_addrs.clone());
             tokio::spawn(async move {
                 match crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs).await {
                     Ok(()) => clog!("collections", "join_collection: background auto-sync succeeded"),
-                    Err(e) => clog!("collections", "join_collection: background auto-sync failed: {e:?}"),
+                    Err(e) => clog!("collections", "join_collection: first auto-sync failed \
+                         ({e:?}) — will keep retrying in the background"),
                 }
             });
         }
@@ -716,9 +790,105 @@ mod native {
         reload(&collection_id).await
     }
 
+    /// Info-hashes whose `add_torrent` is still running.
+    ///
+    /// librqbit's `add_torrent` for a bare info-hash **awaits metadata
+    /// resolution** — it connects to peers, pulls the `.torrent` info via
+    /// `ut_metadata`, and only then returns a handle (verified in 8.1.1's
+    /// `session.rs::add_torrent_internal`, which calls `resolve_magnet` with
+    /// no timeout of its own). If no peer answers, that await never finishes.
+    ///
+    /// Fetching used to `await` it directly, so a fetch that couldn't find the
+    /// seeder hung the FFI call forever: the Fetch button span, nothing
+    /// appeared in the session, and the entry sat at 0% with nothing to say
+    /// why. Tracking what is in flight lets the call return immediately
+    /// without stacking a second attempt on top of the first.
+    static FETCHING: std::sync::Mutex<Option<HashSet<String>>> = std::sync::Mutex::new(None);
+
+    /// Long enough for a slow DHT lookup to land, short enough that a fetch
+    /// which will never succeed can be retried in the same sitting.
+    const METADATA_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
+    /// `true` if this info-hash wasn't already being fetched.
+    fn begin_fetch(info_hash: &str) -> bool {
+        FETCHING
+            .lock()
+            .unwrap()
+            .get_or_insert_with(HashSet::new)
+            .insert(norm(info_hash))
+    }
+
+    fn end_fetch(info_hash: &str) {
+        if let Some(set) = FETCHING.lock().unwrap().as_mut() {
+            set.remove(&norm(info_hash));
+        }
+    }
+
+    fn is_fetching(info_hash: &str) -> bool {
+        FETCHING
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|set| set.contains(&norm(info_hash)))
+    }
+
+    /// Collections the user has asked to fetch and that still owe entries.
+    ///
+    /// Tapping "Fetch" used to be a single attempt: if no peer could be found
+    /// at that instant — which is the normal case moments after joining, before
+    /// the first sync has told us where the seeder's BitTorrent session is —
+    /// nothing ever tried again, and the collection sat at 0% looking broken.
+    /// A fetch is better understood as a standing intent than a one-off
+    /// command, so it is remembered and retried on the sync tick until every
+    /// entry has actually landed.
+    static FETCH_REQUESTED: std::sync::Mutex<Option<HashSet<String>>> =
+        std::sync::Mutex::new(None);
+
+    fn note_fetch_requested(collection_id: &str) {
+        FETCH_REQUESTED
+            .lock()
+            .unwrap()
+            .get_or_insert_with(HashSet::new)
+            .insert(collection_id.to_string());
+    }
+
+    fn forget_fetch_request(collection_id: &str) {
+        if let Some(set) = FETCH_REQUESTED.lock().unwrap().as_mut() {
+            set.remove(collection_id);
+        }
+    }
+
+    /// Re-attempts every outstanding fetch. Called from the sync loop, right
+    /// after an exchange that may just have taught us where a peer is.
+    pub(super) async fn retry_pending_fetches() {
+        let requested: Vec<String> = FETCH_REQUESTED
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default();
+        for collection_id in requested {
+            match fetch_pending(&collection_id).await {
+                Ok(0) => {}
+                Ok(n) => clog!("collections", "retry: started {n} fetch(es) for {collection_id}"),
+                // A collection deleted while a fetch was outstanding lands
+                // here; dropping the request stops it retrying forever.
+                Err(e) => {
+                    clog!("collections", "retry: {collection_id} failed ({e:#}), giving up on it");
+                    forget_fetch_request(&collection_id);
+                }
+            }
+        }
+    }
+
     pub(super) async fn fetch_collection_media(collection_id: String) -> anyhow::Result<u32> {
         clog!("collections", "fetch_collection_media: id={collection_id}");
-        let id = CollectionId::from_string(&collection_id)?;
+        note_fetch_requested(&collection_id);
+        fetch_pending(&collection_id).await
+    }
+
+    async fn fetch_pending(collection_id: &str) -> anyhow::Result<u32> {
+        let id = CollectionId::from_string(collection_id)?;
         let (rendezvous_key_hex, info_hashes) = read_store(|collections| {
             let collection = collections
                 .iter()
@@ -748,17 +918,70 @@ mod native {
             .filter(|h| !already_present.contains(&norm(h)))
             .collect();
 
-        let peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
+        if pending.is_empty() {
+            // Everything the manifest lists is in the session now, so the
+            // standing request is satisfied and must stop being retried.
+            forget_fetch_request(collection_id);
+            return Ok(0);
+        }
+
+        let mut peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
+        if peers.is_empty() {
+            // Without a direct address librqbit has only the DHT to go on, and
+            // two devices behind one NAT rarely reach each other that way —
+            // the lookup returns the router's public address, which most
+            // routers won't loop back inside. One sync first is what turns a
+            // fetch that would hang into one that connects: the peer's reply
+            // carries its BitTorrent listen port.
+            let known = crate::collab_sync::known_sync_peers(&rendezvous_key_hex);
+            if known.is_empty() {
+                clog!("collections", "fetch_collection_media: no peer addresses known at all \
+                     — this collection has never completed a sync, so there is nobody to \
+                     fetch from yet");
+            } else {
+                clog!("collections", "fetch_collection_media: no BitTorrent peer known yet, \
+                     syncing with {} known address(es) first to learn one", known.len());
+                if let Err(e) = crate::collab_sync::sync_with_any(&rendezvous_key_hex, &known).await
+                {
+                    clog!("collections", "fetch_collection_media: that sync failed ({e:#}) — \
+                         falling back to DHT discovery, which may not resolve on a LAN");
+                }
+                peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
+            }
+        }
         clog!(
             "collections",
-            "fetch_collection_media: {} entries, {} still to fetch, {} learned peer(s)={peers:?}",
+            "fetch_collection_media: {} entries, {} still to fetch, {} peer hint(s)={peers:?}",
             info_hashes.len(),
             pending.len(),
             peers.len()
         );
         let mut added = 0u32;
         for info_hash in pending {
-            crate::torrent::add_info_hash_with_peers(info_hash, peers.clone()).await?;
+            if !begin_fetch(info_hash) {
+                clog!("collections", "fetch_collection_media: {info_hash} is already being \
+                     fetched, leaving it alone");
+                continue;
+            }
+            // Spawned, never awaited — see FETCHING. The count returned is
+            // what was *started*; progress shows up in the list as the
+            // torrents resolve.
+            let hash = info_hash.clone();
+            let peers = peers.clone();
+            tokio::spawn(async move {
+                let outcome =
+                    tokio::time::timeout(METADATA_TIMEOUT, crate::torrent::add_info_hash_with_peers(&hash, peers))
+                        .await;
+                end_fetch(&hash);
+                match outcome {
+                    Ok(Ok(info)) => clog!("collections", "fetch: {} resolved, {} byte(s) across \
+                         {} file(s)", hash, info.total_bytes, info.files.len()),
+                    Ok(Err(e)) => clog!("collections", "fetch: {hash} failed: {e:#}"),
+                    Err(_) => clog!("collections", "fetch: {hash} found no peer holding this \
+                         media within {METADATA_TIMEOUT:?} — is the other device still running, \
+                         on this network, and showing the collection? Tap fetch again to retry."),
+                }
+            });
             added += 1;
         }
         Ok(added)
@@ -783,6 +1006,10 @@ mod native {
         // The pasted value may itself be a comma-separated list — that's how
         // a sync address is displayed on the other device.
         let peer_addrs: Vec<String> = peer_addr.split(',').map(str::to_string).collect();
+        // Typed in once, remembered from then on — the periodic re-sync picks
+        // these up, so a manual sync is a one-time introduction rather than
+        // something to repeat every time the collection changes.
+        crate::collab_sync::remember_sync_peers(&rendezvous_key_hex, peer_addrs.clone());
         crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs).await?;
         reload(&collection_id).await
     }
@@ -922,10 +1149,17 @@ mod native {
 
             // Fully downloaded, but another entry hasn't been fetched at all
             // — that's still "downloading", not "seeding".
-            assert_eq!(state_for(&complete, 1, 2), "downloading");
-            assert_eq!(state_for(&complete, 0, 1), "seeding");
-            assert_eq!(state_for(&Totals::new(), 3, 3), "pending");
-            assert_eq!(state_for(&Totals::new(), 0, 0), "empty");
+            assert_eq!(state_for(&complete, 1, 2, false), "downloading");
+            assert_eq!(state_for(&complete, 0, 1, false), "seeding");
+            assert_eq!(state_for(&Totals::new(), 3, 3, false), "pending");
+            assert_eq!(state_for(&Totals::new(), 0, 0, false), "empty");
+            // A fetch is running but no metadata has arrived, so there are
+            // still no bytes to report — indistinguishable from "pending"
+            // without this.
+            assert_eq!(state_for(&Totals::new(), 3, 3, true), "connecting");
+            // Once anything is actually moving, that is the more useful thing
+            // to say.
+            assert_eq!(state_for(&complete, 1, 2, true), "downloading");
         }
 
         #[test]

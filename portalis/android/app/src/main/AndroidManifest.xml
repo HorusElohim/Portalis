@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sockets. The Flutter template only declares this in the debug and
+         profile manifests (for the tooling's own hot-reload channel), so a
+         *release* build shipped without it: every bind and connect the Rust
+         backend makes — the BitTorrent session, the manifest-sync listener,
+         public-IP discovery — failed with EACCES, and sharing appeared to do
+         nothing at all while debug builds on the same device worked. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="portalis"
         android:name="${applicationName}"

@@ -31,6 +31,9 @@ class CollectionRow extends StatelessWidget {
     final live = collection.downloadMbps > 0 || collection.uploadMbps > 0;
     final accent = torrent ? AppColors.ember : AppColors.signal;
     final downloading = collection.state == 'downloading';
+    // No metadata has arrived, so there is no total to measure against — an
+    // indeterminate bar is the honest shape for "reaching out to a peer".
+    final connecting = collection.isConnecting;
 
     return SurfaceCard(
       onTap: onTap,
@@ -102,12 +105,14 @@ class CollectionRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: monoLabel(size: 11, letterSpacing: 0.2),
                 ),
-                if (downloading) ...[
+                if (downloading || connecting) ...[
                   const SizedBox(height: 9),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(99),
                     child: LinearProgressIndicator(
-                      value: collection.progress.clamp(0.0, 1.0),
+                      value: connecting
+                          ? null
+                          : collection.progress.clamp(0.0, 1.0),
                       minHeight: 5,
                       backgroundColor: AppColors.borderStrong,
                       valueColor: AlwaysStoppedAnimation(accent),
