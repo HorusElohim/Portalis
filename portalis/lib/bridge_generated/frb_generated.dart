@@ -759,6 +759,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_u_64(raw);
+  }
+
+  @protected
   CollaboratorInfo dco_decode_collaborator_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -775,8 +781,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CollectionInfo dco_decode_collection_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
     return CollectionInfo(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -792,7 +798,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       uploadMbps: dco_decode_f_64(arr[11]),
       livePeers: dco_decode_u_32(arr[12]),
       pendingMedia: dco_decode_u_32(arr[13]),
-      state: dco_decode_String(arr[14]),
+      etaSecs: dco_decode_opt_box_autoadd_u_64(arr[14]),
+      state: dco_decode_String(arr[15]),
     );
   }
 
@@ -951,6 +958,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
   TorrentFile dco_decode_torrent_file(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1057,6 +1070,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
   CollaboratorInfo sse_decode_collaborator_info(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_deviceId = sse_decode_String(deserializer);
@@ -1085,6 +1104,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_uploadMbps = sse_decode_f_64(deserializer);
     var var_livePeers = sse_decode_u_32(deserializer);
     var var_pendingMedia = sse_decode_u_32(deserializer);
+    var var_etaSecs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_state = sse_decode_String(deserializer);
     return CollectionInfo(
         id: var_id,
@@ -1101,6 +1121,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         uploadMbps: var_uploadMbps,
         livePeers: var_livePeers,
         pendingMedia: var_pendingMedia,
+        etaSecs: var_etaSecs,
         state: var_state);
   }
 
@@ -1330,6 +1351,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   TorrentFile sse_decode_torrent_file(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
@@ -1443,6 +1475,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_collaborator_info(
       CollaboratorInfo self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1469,6 +1507,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.uploadMbps, serializer);
     sse_encode_u_32(self.livePeers, serializer);
     sse_encode_u_32(self.pendingMedia, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.etaSecs, serializer);
     sse_encode_String(self.state, serializer);
   }
 
@@ -1645,6 +1684,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_64(self, serializer);
     }
   }
 

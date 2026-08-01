@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'bridge_generated/collections.dart' as bridge;
 import 'theme.dart';
+import 'ui/formatters.dart';
 export 'theme.dart' show GlowLevel;
 
 export 'bridge_generated/collections.dart' show CollectionKind;
@@ -108,6 +109,7 @@ class Collection {
     this.uploadMbps = 0.0,
     this.livePeers = 0,
     this.pendingMedia = 0,
+    this.etaSecs,
     this.state = '',
   });
 
@@ -126,6 +128,7 @@ class Collection {
         uploadMbps: c.uploadMbps,
         livePeers: c.livePeers,
         pendingMedia: c.pendingMedia,
+        etaSecs: c.etaSecs?.toInt(),
         state: c.state,
       );
 
@@ -153,6 +156,20 @@ class Collection {
 
   /// Manifest entries not yet fetched — see [MediaItem.fetched].
   final int pendingMedia;
+
+  /// Seconds until this finishes downloading at the current rate, or null
+  /// when there is nothing honest to say — nothing left to fetch, or nothing
+  /// moving to extrapolate from. Computed in Rust so every surface that shows
+  /// a countdown shows the same one.
+  final int? etaSecs;
+
+  /// `2h 14m left`, or null when there is no estimate. Uploads never have
+  /// one: seeding has no endpoint, and a peer's remaining bytes aren't
+  /// visible from here.
+  String? get etaLabel {
+    final secs = etaSecs;
+    return secs == null ? null : '${formatEta(secs)} left';
+  }
 
   /// `seeding` / `downloading` / `pending` / `empty`, decided in Rust so both
   /// kinds of collection describe themselves the same way.
@@ -200,6 +217,11 @@ class Collection {
     final count = media.length;
     final items = '$count item${count == 1 ? '' : 's'}';
     if (isConnecting) return '$items · looking for a peer';
+    // While something is actually arriving, when it lands is the most useful
+    // second fact — more so than how many entries are still queued, which the
+    // countdown already accounts for.
+    final eta = etaLabel;
+    if (eta != null) return '$items · $eta';
     return pendingMedia > 0 ? '$items · $pendingMedia to fetch' : items;
   }
 
@@ -210,7 +232,11 @@ class Collection {
   /// seeding: `livePeers` is remote peers only, so a healthy collection this
   /// device just created would otherwise read as zero copies alive.
   String get copiesLabel {
-    if (!isComplete) return '${(progress * 100).round()}% · $peersLabel';
+    if (!isComplete) {
+      final eta = etaLabel;
+      final done = '${(progress * 100).round()}%';
+      return eta == null ? '$done · $peersLabel' : '$done · $eta · $peersLabel';
+    }
     return livePeers == 0
         ? 'Seeding · this device'
         : 'Seeding · this device + $peersLabel';

@@ -180,7 +180,7 @@ class _TransferRow extends StatelessWidget {
                 ? '${plural(collection.pendingMedia, 'item')} to fetch'
                 : '${formatBytes(collection.downloadedBytes)} / '
                     '${formatBytes(collection.totalBytes)} · '
-                    '${collection.peersLabel}',
+                    '${collection.etaLabel ?? collection.peersLabel}',
             style: monoLabel(size: 10.5, color: AppColors.textDim,
                 letterSpacing: 0.2),
           ),

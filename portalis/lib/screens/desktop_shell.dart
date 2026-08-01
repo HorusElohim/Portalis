@@ -607,6 +607,27 @@ class _Inspector extends StatelessWidget {
                 collection.subtitle,
                 style: const TextStyle(fontSize: 13, color: AppColors.textDim),
               ),
+              // The inspector is where someone goes to ask "how long?", and it
+              // was the one detail surface with no progress on it at all.
+              if (!collection.isComplete && collection.totalBytes > 0) ...[
+                const SizedBox(height: 11),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: collection.progress.clamp(0.0, 1.0),
+                    minHeight: 5,
+                    backgroundColor: AppColors.borderStrong,
+                    valueColor: AlwaysStoppedAnimation(
+                      collection.isShared ? AppColors.signal : AppColors.ember,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  collection.copiesLabel,
+                  style: monoLabel(size: 10.5, letterSpacing: 0.2),
+                ),
+              ],
               const SizedBox(height: 18),
               if (collection.collaborators.isNotEmpty) ...[
                 Text('COLLABORATORS', style: monoLabel(size: 9.5)),

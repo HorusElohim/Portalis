@@ -16,6 +16,7 @@ import 'package:portalis/services/collections.dart';
 import 'package:portalis/services/navigation.dart';
 import 'package:portalis/services/settings_service.dart';
 import 'package:portalis/theme.dart';
+import 'package:portalis/ui/ui.dart';
 
 /// A phone-sized window — below [kDesktopBreakpoint], so the mobile layout.
 const _phone = Size(390, 844);
@@ -36,6 +37,7 @@ Collection _collection({
   List<MediaItem> media = const [],
   int totalBytes = 0,
   int downloadedBytes = 0,
+  int? etaSecs,
 }) =>
     Collection(
       id: id,
@@ -50,6 +52,7 @@ Collection _collection({
       uploadMbps: uploadMbps,
       livePeers: livePeers,
       pendingMedia: pendingMedia,
+      etaSecs: etaSecs,
       state: state,
     );
 
@@ -185,6 +188,54 @@ void main() {
       await tester.pump();
 
       expect(find.byType(TransfersScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('how long is left', () {
+    test('reads coarser the further out it is', () {
+      // Seconds matter when there are seconds left and are noise when there
+      // are hours.
+      expect(formatEta(45), '45s');
+      expect(formatEta(200), '3m 20s');
+      expect(formatEta(8040), '2h 14m');
+      // Past a day, a precise figure extrapolated from five seconds of
+      // throughput would be false precision.
+      expect(formatEta(90000), 'over a day');
+    });
+
+    testWidgets('a downloading collection says when it lands', (tester) async {
+      await _pumpApp(
+        tester,
+        collections: [
+          _collection(
+            state: 'downloading',
+            totalBytes: 1000,
+            downloadedBytes: 400,
+            downloadMbps: 1,
+            etaSecs: 8040,
+          ),
+        ],
+      );
+      await _openCollections(tester);
+
+      expect(find.textContaining('2h 14m left'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a stalled or finished collection claims nothing',
+        (tester) async {
+      // No rate means no basis for an estimate, and a number meaning "never"
+      // is worse than no number.
+      await _pumpApp(
+        tester,
+        collections: [
+          _collection(state: 'downloading', totalBytes: 1000, downloadedBytes: 400),
+        ],
+      );
+      await _openCollections(tester);
+
+      expect(find.textContaining('left'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

@@ -352,7 +352,9 @@ class LiveTransferCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   '${_size(collection.downloadedBytes)} / '
-                  '${_size(collection.totalBytes)}',
+                  '${_size(collection.totalBytes)}'
+                  '${collection.etaLabel == null ? '' : ' · ${collection.etaLabel}'}',
+                  overflow: TextOverflow.ellipsis,
                   style: monoLabel(
                       size: 11, color: AppColors.textDim, letterSpacing: 0.2),
                 ),

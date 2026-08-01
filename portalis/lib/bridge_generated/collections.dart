@@ -7,6 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'torrent.dart';
 
+// These functions are ignored because they are not marked as `pub`: `retry_pending_fetches`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Every collection this device knows about, from both sources, joined.
@@ -139,6 +140,15 @@ class CollectionInfo {
   /// Manifest entries with no local torrent yet — "known but not fetched".
   final int pendingMedia;
 
+  /// Seconds until the download finishes at the current rate, or `None`
+  /// when there is nothing meaningful to say: nothing left to fetch, or
+  /// nothing moving to extrapolate from.
+  ///
+  /// Downloads only. Seeding has no endpoint to count down to — a peer's
+  /// remaining bytes are their business and not visible from here — so an
+  /// upload "ETA" would be a fabricated number.
+  final BigInt? etaSecs;
+
   /// Coarse status for display: `seeding` / `downloading` / `pending` /
   /// `empty`. Derived here rather than in the UI so both kinds of
   /// collection describe themselves the same way.
@@ -159,6 +169,7 @@ class CollectionInfo {
     required this.uploadMbps,
     required this.livePeers,
     required this.pendingMedia,
+    this.etaSecs,
     required this.state,
   });
 
@@ -178,6 +189,7 @@ class CollectionInfo {
       uploadMbps.hashCode ^
       livePeers.hashCode ^
       pendingMedia.hashCode ^
+      etaSecs.hashCode ^
       state.hashCode;
 
   @override
@@ -199,6 +211,7 @@ class CollectionInfo {
           uploadMbps == other.uploadMbps &&
           livePeers == other.livePeers &&
           pendingMedia == other.pendingMedia &&
+          etaSecs == other.etaSecs &&
           state == other.state;
 }
 

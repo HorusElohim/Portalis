@@ -929,6 +929,7 @@ impl SseDecode for crate::collections::CollectionInfo {
         let mut var_uploadMbps = <f64>::sse_decode(deserializer);
         let mut var_livePeers = <u32>::sse_decode(deserializer);
         let mut var_pendingMedia = <u32>::sse_decode(deserializer);
+        let mut var_etaSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_state = <String>::sse_decode(deserializer);
         return crate::collections::CollectionInfo {
             id: var_id,
@@ -945,6 +946,7 @@ impl SseDecode for crate::collections::CollectionInfo {
             upload_mbps: var_uploadMbps,
             live_peers: var_livePeers,
             pending_media: var_pendingMedia,
+            eta_secs: var_etaSecs,
             state: var_state,
         };
     }
@@ -1190,6 +1192,17 @@ impl SseDecode for Option<u32> {
     }
 }
 
+impl SseDecode for Option<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for crate::torrent::TorrentFile {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1389,6 +1402,7 @@ impl flutter_rust_bridge::IntoDart for crate::collections::CollectionInfo {
             self.upload_mbps.into_into_dart().into_dart(),
             self.live_peers.into_into_dart().into_dart(),
             self.pending_media.into_into_dart().into_dart(),
+            self.eta_secs.into_into_dart().into_dart(),
             self.state.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -1627,6 +1641,7 @@ impl SseEncode for crate::collections::CollectionInfo {
         <f64>::sse_encode(self.upload_mbps, serializer);
         <u32>::sse_encode(self.live_peers, serializer);
         <u32>::sse_encode(self.pending_media, serializer);
+        <Option<u64>>::sse_encode(self.eta_secs, serializer);
         <String>::sse_encode(self.state, serializer);
     }
 }
@@ -1811,6 +1826,16 @@ impl SseEncode for Option<u32> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <u32>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u64>::sse_encode(value, serializer);
         }
     }
 }

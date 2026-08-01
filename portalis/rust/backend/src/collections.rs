@@ -74,6 +74,14 @@ pub struct CollectionInfo {
     pub live_peers: u32,
     /// Manifest entries with no local torrent yet — "known but not fetched".
     pub pending_media: u32,
+    /// Seconds until the download finishes at the current rate, or `None`
+    /// when there is nothing meaningful to say: nothing left to fetch, or
+    /// nothing moving to extrapolate from.
+    ///
+    /// Downloads only. Seeding has no endpoint to count down to — a peer's
+    /// remaining bytes are their business and not visible from here — so an
+    /// upload "ETA" would be a fabricated number.
+    pub eta_secs: Option<u64>,
     /// Coarse status for display: `seeding` / `downloading` / `pending` /
     /// `empty`. Derived here rather than in the UI so both kinds of
     /// collection describe themselves the same way.
@@ -401,6 +409,31 @@ mod native {
                 (self.downloaded_bytes as f64 / self.total_bytes as f64).clamp(0.0, 1.0)
             }
         }
+
+        /// Remaining bytes over the current rate.
+        ///
+        /// This is the same arithmetic librqbit does internally
+        /// (`SpeedEstimator::add_snapshot` stores `remaining / bps`), against
+        /// the same smoothed five-second figure it reports as `mbps` — its own
+        /// `time_remaining` is unreachable from here because
+        /// `DurationWithHumanReadable` keeps its `Duration` private. Doing it
+        /// here is better anyway: a collection spans several torrents, and
+        /// what someone waiting wants is one number for the whole thing, not
+        /// one per torrent.
+        fn eta_secs(&self) -> Option<u64> {
+            let remaining = self.total_bytes.checked_sub(self.downloaded_bytes)?;
+            if remaining == 0 {
+                return None;
+            }
+            let bytes_per_second = self.download_mbps * 1024.0 * 1024.0;
+            // No rate means no basis for an estimate. Saying nothing beats
+            // showing a number that means "forever".
+            if bytes_per_second <= 0.0 {
+                return None;
+            }
+            let seconds = remaining as f64 / bytes_per_second;
+            seconds.is_finite().then(|| seconds.ceil() as u64)
+        }
     }
 
     fn state_for(
@@ -536,6 +569,7 @@ mod native {
                     live_peers: totals.live_peers,
                     state: state_for(&totals, pending_media, media.len(), connecting),
                     pending_media,
+                    eta_secs: totals.eta_secs(),
                     media,
                 });
             }
@@ -567,6 +601,7 @@ mod native {
                 live_peers: totals.live_peers,
                 state: state_for(&totals, 0, media.len(), false),
                 pending_media: 0,
+                eta_secs: totals.eta_secs(),
                 media,
             });
         }
@@ -1160,6 +1195,31 @@ mod native {
             // Once anything is actually moving, that is the more useful thing
             // to say.
             assert_eq!(state_for(&complete, 1, 2, true), "downloading");
+        }
+
+        #[test]
+        fn eta_is_remaining_bytes_over_the_current_rate() {
+            let mut totals = Totals::new();
+            // 100 MiB total, half done, moving at 1 MiB/s => 50s left.
+            totals.add(&torrent("aa", vec![("a", 100 * 1024 * 1024, 50 * 1024 * 1024)]));
+            totals.download_mbps = 1.0;
+
+            assert_eq!(totals.eta_secs(), Some(50));
+        }
+
+        #[test]
+        fn eta_is_absent_when_there_is_nothing_honest_to_say() {
+            // Stalled: a rate of zero extrapolates to "never", and a number
+            // meaning never is worse than no number.
+            let mut stalled = Totals::new();
+            stalled.add(&torrent("aa", vec![("a", 100, 10)]));
+            assert_eq!(stalled.eta_secs(), None);
+
+            // Complete: nothing left to wait for, whatever the rate.
+            let mut done = Totals::new();
+            done.add(&torrent("bb", vec![("b", 100, 100)]));
+            done.download_mbps = 5.0;
+            assert_eq!(done.eta_secs(), None);
         }
 
         #[test]
