@@ -1,7 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models.dart';
 import '../services/collections.dart';
@@ -15,7 +14,7 @@ import 'settings_screen.dart';
 import 'share_screen.dart';
 import 'user_screen.dart';
 
-/// The wide-window layout: sidebar, list, inspector.
+/// The wide-window layout: sidebar, list, and whatever is being looked at.
 ///
 /// Same model and the same widgets as mobile — only the arrangement differs.
 /// Reached from [RootShell] on width alone, so resizing the window moves
@@ -122,34 +121,53 @@ class _DesktopShellState extends State<DesktopShell> {
           // Transfers/People/Settings meant losing sight of your own
           // collections just to change a setting — on a screen wide enough to
           // show both, there is no reason to.
-          final secondary = _pane == _Pane.collections ? null : _centre();
-          final collections = SafeArea(
-            child: _CollectionsPane(
-              selectedId: _selected?.id,
-              onSelect: (id) {
-                setState(() => _selectedId = id);
-                // Picking a collection means you want to look at it, so any
-                // secondary pane steps aside.
-                _select(_Pane.collections);
-              },
-            ),
-          );
+          // Whatever is being looked at: the chosen collection, or People,
+          // Settings, You. The list stays on the left in every case — on a
+          // screen this wide there is no reason to lose sight of it.
+          final detail = _pane == _Pane.collections ? _collectionView() : _centre();
           return Row(
             children: [
               _Sidebar(pane: _pane, onPane: _select),
-              if (secondary == null)
-                Expanded(child: collections)
-              else
-                // Fixed while something else is open, so the list doesn't
-                // reflow every time a secondary pane appears.
-                SizedBox(width: 360, child: collections),
-              if (secondary != null) Expanded(child: secondary),
-              if (_pane == _Pane.collections && _selected != null)
-                _Inspector(collection: _selected!),
+              SizedBox(
+                // Fixed, so the list does not reflow every time the thing
+                // beside it changes.
+                width: 360,
+                child: SafeArea(
+                  child: _CollectionsPane(
+                    selectedId: _selected?.id,
+                    onSelect: (id) {
+                      setState(() => _selectedId = id);
+                      _select(_Pane.collections);
+                    },
+                  ),
+                ),
+              ),
+              Expanded(child: detail),
             ],
           );
         },
       ),
+    );
+  }
+
+  /// A collection is opened by being clicked, and it opens *here* — beside the
+  /// list it was chosen from. It used to take a button in a side panel that
+  /// pushed a full-screen route over the sidebar, the list and all, so looking
+  /// inside a collection cost you the other two panes.
+  Widget _collectionView() {
+    final collection = _selected;
+    if (collection == null) {
+      return const Center(
+        child: Text('Nothing selected.',
+            style: TextStyle(fontSize: 13, color: AppColors.textDim)),
+      );
+    }
+    // Keyed, so choosing another collection starts a fresh screen rather than
+    // carrying the previous one's open disclosure across.
+    return CollectionScreen(
+      key: ValueKey(collection.id),
+      collection: collection,
+      embedded: true,
     );
   }
 
@@ -793,147 +811,6 @@ class _PeoplePane extends StatelessWidget {
                 ),
         ),
       ],
-    );
-  }
-}
-
-class _Inspector extends StatelessWidget {
-  const _Inspector({required this.collection});
-
-  final Collection collection;
-
-  @override
-  Widget build(BuildContext context) {
-    final code = collection.inviteCode;
-    return Container(
-      width: 314,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceSunken,
-        border: Border(left: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CanvasTitle(collection.name, size: 22, maxLines: 2),
-              const SizedBox(height: 5),
-              Text(
-                collection.isShared
-                    ? 'SHARED WITH ${collection.collaborators.length}'
-                    : 'TORRENT',
-                style: monoLabel(size: 10.5, letterSpacing: 0.6),
-              ),
-              const SizedBox(height: 18),
-              if (code != null) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: PrimaryAction(
-                        label: 'Copy invite key',
-                        trailingChevron: false,
-                        onTap: () {
-                          Clipboard.setData(ClipboardData(text: code));
-                          showToast(context, 'Invite code copied',
-                              severity: ToastSeverity.success);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: QrImageView(
-                      data: code,
-                      version: QrVersions.auto,
-                      size: 180,
-                      backgroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
-              Text('CONTENTS', style: monoLabel(size: 9.5)),
-              const SizedBox(height: 10),
-              Text(
-                collection.subtitle,
-                style: const TextStyle(fontSize: 13, color: AppColors.textDim),
-              ),
-              // The inspector is where someone goes to ask "how long?", and it
-              // was the one detail surface with no progress on it at all.
-              if (!collection.isComplete && collection.totalBytes > 0) ...[
-                const SizedBox(height: 11),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: collection.progress.clamp(0.0, 1.0),
-                    minHeight: 5,
-                    backgroundColor: AppColors.borderStrong,
-                    valueColor: AlwaysStoppedAnimation(
-                      collection.isShared ? AppColors.signal : AppColors.ember,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  collection.copiesLabel,
-                  style: monoLabel(size: 10.5, letterSpacing: 0.2),
-                ),
-              ],
-              const SizedBox(height: 18),
-              if (collection.collaborators.isNotEmpty) ...[
-                Text('COLLABORATORS', style: monoLabel(size: 9.5)),
-                const SizedBox(height: 11),
-                for (final p in collection.collaborators)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 11),
-                    child: Row(
-                      children: [
-                        Avatar(initials: p.initials, size: 28),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Text(
-                            p.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        if (p.isAdmin)
-                          Text('ADMIN', style: monoLabel(size: 9.5)),
-                      ],
-                    ),
-                  ),
-                // No per-peer transfer rates: collaborators come from the
-                // signed manifest, throughput is per-torrent, and nothing
-                // maps one to the other.
-              ],
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CollectionScreen(collection: collection),
-                  ),
-                ),
-                child: const Text('Open collection'),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Files are read from where they already live. Nothing is '
-                'copied to a server.',
-                style: TextStyle(
-                    fontSize: 12, height: 1.45, color: AppColors.textDim),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

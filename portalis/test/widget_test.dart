@@ -174,6 +174,26 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('clicking a collection opens it beside the list',
+        (tester) async {
+      // It used to take a button in a side panel that pushed a full-screen
+      // route over the sidebar, the list and all — so looking inside a
+      // collection cost you the other two panes.
+      await _pumpApp(tester, size: _desktop, collections: [
+        _collection(id: 'a', name: 'Iceland'),
+        _collection(id: 'b', name: 'Studio'),
+      ]);
+
+      expect(find.text('Open collection'), findsNothing);
+      await tester.tap(find.text('Studio').first);
+      await tester.pump();
+
+      // The collection is on screen, and so is the list it came from.
+      expect(find.byType(CollectionScreen), findsOneWidget);
+      expect(find.text('Iceland'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a destination survives crossing the breakpoint',
         (tester) async {
       // The window can now be dragged between the two layouts freely, so the

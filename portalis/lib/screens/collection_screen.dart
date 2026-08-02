@@ -24,9 +24,18 @@ import 'media_viewer_screen.dart';
 /// while this screen is open, and it re-reads from [Collections] so those
 /// land without a manual back-and-forward.
 class CollectionScreen extends StatefulWidget {
-  const CollectionScreen({super.key, required this.collection});
+  const CollectionScreen({
+    super.key,
+    required this.collection,
+    this.embedded = false,
+  });
+
+  /// Set when this is a pane of the desktop shell rather than a pushed screen.
+  /// There is nothing to go back to — the list it was chosen from is beside
+  /// it — so the back button and the pop-on-delete both go away.
 
   final Collection collection;
+  final bool embedded;
 
   @override
   State<CollectionScreen> createState() => _CollectionScreenState();
@@ -275,7 +284,9 @@ class _CollectionScreenState extends State<CollectionScreen> {
     setState(() => _busy = true);
     try {
       await Collections.instance.delete(_collection.id);
-      if (mounted) Navigator.of(context).pop();
+      // Embedded, the list beside us simply drops it and the selection moves
+      // on; there is no route to leave.
+      if (mounted && !widget.embedded) Navigator.of(context).pop();
     } catch (e) {
       _toast('Couldn\'t remove this collection: $e');
       if (mounted) setState(() => _busy = false);
@@ -303,7 +314,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
                   // in the backend, so there's nothing to render one from.
                   Row(
                     children: [
-                      NavBackButton(onTap: () => Navigator.of(context).pop()),
+                      if (!widget.embedded)
+                        NavBackButton(onTap: () => Navigator.of(context).pop()),
                       const Spacer(),
                       if (adminCount > 0)
                         Text(
