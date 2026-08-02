@@ -135,7 +135,7 @@ pub async fn list_collections() -> anyhow::Result<Vec<CollectionInfo>> {
 /// the ambiguity that made a freshly-launched app look broken. Never blocks —
 /// `sync_address`/`ensure_listener` warms the session in the background.
 pub async fn engine_ready() -> bool {
-    crate::torrent::session_started()
+    crate::substrate::current().ready()
 }
 
 /// Creates a new shared collection (empty) and persists it. This device
@@ -493,14 +493,8 @@ mod native {
         // after launch could hang for seconds with the collection names
         // already sitting on disk. `ensure_listener` warms the session in the
         // background, and a later poll picks it up.
-        let torrents = if crate::torrent::session_started() {
-            crate::torrent::list_torrents().await.unwrap_or_else(|e| {
-                clog!("collections", "list_collections: torrent session unavailable ({e:#})");
-                Vec::new()
-            })
-        } else {
-            Vec::new()
-        };
+        let content = crate::substrate::current();
+        let torrents = if content.ready() { content.holdings().await } else { Vec::new() };
         let addrs = current_sync_addresses();
 
         // Self-heal this device's own collaborator records. Collections
@@ -807,7 +801,7 @@ mod native {
         // the backend README). The random suffix keeps each batch's directory
         // distinct even when two batches share a label.
         let batch_dir_name = format!("{label}-{}", uuid::Uuid::new_v4());
-        let torrent_info = crate::torrent::create_collection(batch_dir_name, files).await?;
+        let torrent_info = crate::substrate::current().publish(batch_dir_name, files).await?;
         clog!(
             "collections",
             "add_media_to_collection: seeded torrent info_hash={}",
@@ -940,104 +934,73 @@ mod native {
         fetch_pending(&collection_id).await
     }
 
+    /// What the manifest lists that this device does not hold.
+    ///
+    /// No peer lookup here any more: a convergence pass reconciles before it
+    /// pursues, so by the time this runs the addresses are as good as they are
+    /// going to get. The inline sync this used to do was a second, differently
+    /// paced copy of the loop's first half.
     async fn fetch_pending(collection_id: &str) -> anyhow::Result<u32> {
+        let (key, wanted) = manifest_of(collection_id)?;
+        let missing = missing_from(&wanted).await;
+        if missing.is_empty() {
+            forget_fetch_request(collection_id);
+            return Ok(0);
+        }
+        Ok(start_acquiring(&key, missing))
+    }
+
+    fn manifest_of(collection_id: &str) -> anyhow::Result<(String, Vec<String>)> {
         let id = CollectionId::from_string(collection_id)?;
-        let (rendezvous_key_hex, info_hashes) = read_store(|collections| {
+        read_store(|collections| {
             let collection = collections
                 .iter()
                 .find(|c| c.id == id)
                 .ok_or_else(|| anyhow::anyhow!("no such collection"))?;
             Ok((
                 collection.rendezvous_key().to_hex(),
-                collection
-                    .manifest()
-                    .entries()
-                    .map(|e| e.info_hash.to_hex())
-                    .collect::<Vec<_>>(),
+                collection.manifest().entries().map(|e| e.info_hash.to_hex()).collect(),
             ))
-        })?;
-        // Only entries the session doesn't already hold. Re-adding a fetched
-        // torrent is harmless (`overwrite: true`) but pointless, and counting
-        // it made the returned number disagree with the "Fetch N" the user
-        // pressed — N counts *pending* entries.
-        let already_present: HashSet<String> = crate::torrent::list_torrents()
+        })
+    }
+
+    async fn missing_from(wanted: &[String]) -> Vec<String> {
+        let held: HashSet<String> = crate::substrate::current()
+            .holdings()
             .await
-            .unwrap_or_default()
             .iter()
             .map(|t| norm(&t.info_hash))
             .collect();
-        let pending: Vec<&String> = info_hashes
-            .iter()
-            .filter(|h| !already_present.contains(&norm(h)))
-            .collect();
+        wanted.iter().filter(|h| !held.contains(&norm(h))).cloned().collect()
+    }
 
-        if pending.is_empty() {
-            // Everything the manifest lists is in the session now, so the
-            // standing request is satisfied and must stop being retried.
-            forget_fetch_request(collection_id);
-            return Ok(0);
-        }
+    /// Spawned, never awaited — see FETCHING. Returns what was started.
+    fn start_acquiring(rendezvous_key_hex: &str, missing: Vec<String>) -> u32 {
+        let peers = crate::collab_sync::learned_bt_peers(rendezvous_key_hex);
+        clog!("collections", "fetch: {} missing, {} peer hint(s)={peers:?}", missing.len(), peers.len());
+        missing.into_iter().filter(|handle| begin_fetch(handle)).map(|handle| {
+            tokio::spawn(acquire(handle, peers.clone()));
+        }).count() as u32
+    }
 
-        let mut peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
-        if peers.is_empty() {
-            // Without a direct address librqbit has only the DHT to go on, and
-            // two devices behind one NAT rarely reach each other that way —
-            // the lookup returns the router's public address, which most
-            // routers won't loop back inside. One sync first is what turns a
-            // fetch that would hang into one that connects: the peer's reply
-            // carries its BitTorrent listen port.
-            let known = crate::collab_sync::known_sync_peers(&rendezvous_key_hex);
-            if known.is_empty() {
-                clog!("collections", "fetch_collection_media: no peer addresses known at all \
-                     — this collection has never completed a sync, so there is nobody to \
-                     fetch from yet");
-            } else {
-                clog!("collections", "fetch_collection_media: no BitTorrent peer known yet, \
-                     syncing with {} known address(es) first to learn one", known.len());
-                if let Err(e) = crate::collab_sync::sync_with_any(&rendezvous_key_hex, &known).await
-                {
-                    clog!("collections", "fetch_collection_media: that sync failed ({e:#}) — \
-                         falling back to DHT discovery, which may not resolve on a LAN");
-                }
-                peers = crate::collab_sync::learned_bt_peers(&rendezvous_key_hex);
-            }
+    async fn acquire(handle: String, peers: Vec<std::net::SocketAddr>) {
+        let outcome = tokio::time::timeout(
+            METADATA_TIMEOUT,
+            crate::substrate::current().acquire(&handle, peers),
+        )
+        .await;
+        end_fetch(&handle);
+        report(&handle, outcome);
+    }
+
+    fn report(handle: &str, outcome: Result<anyhow::Result<TorrentInfo>, tokio::time::error::Elapsed>) {
+        match outcome {
+            Ok(Ok(info)) => clog!("collections", "fetch: {handle} resolved, {} file(s)", info.files.len()),
+            Ok(Err(e)) => clog!("collections", "fetch: {handle} failed: {e:#}"),
+            Err(_) => clog!("collections", "fetch: {handle} found nobody holding it within \
+                 {METADATA_TIMEOUT:?} — is the other device running, on this network, and \
+                 showing the collection? Tapping fetch again retries."),
         }
-        clog!(
-            "collections",
-            "fetch_collection_media: {} entries, {} still to fetch, {} peer hint(s)={peers:?}",
-            info_hashes.len(),
-            pending.len(),
-            peers.len()
-        );
-        let mut added = 0u32;
-        for info_hash in pending {
-            if !begin_fetch(info_hash) {
-                clog!("collections", "fetch_collection_media: {info_hash} is already being \
-                     fetched, leaving it alone");
-                continue;
-            }
-            // Spawned, never awaited — see FETCHING. The count returned is
-            // what was *started*; progress shows up in the list as the
-            // torrents resolve.
-            let hash = info_hash.clone();
-            let peers = peers.clone();
-            tokio::spawn(async move {
-                let outcome =
-                    tokio::time::timeout(METADATA_TIMEOUT, crate::torrent::add_info_hash_with_peers(&hash, peers))
-                        .await;
-                end_fetch(&hash);
-                match outcome {
-                    Ok(Ok(info)) => clog!("collections", "fetch: {} resolved, {} byte(s) across \
-                         {} file(s)", hash, info.total_bytes, info.files.len()),
-                    Ok(Err(e)) => clog!("collections", "fetch: {hash} failed: {e:#}"),
-                    Err(_) => clog!("collections", "fetch: {hash} found no peer holding this \
-                         media within {METADATA_TIMEOUT:?} — is the other device still running, \
-                         on this network, and showing the collection? Tap fetch again to retry."),
-                }
-            });
-            added += 1;
-        }
-        Ok(added)
     }
 
     pub(super) async fn sync_collection(
@@ -1124,7 +1087,7 @@ mod native {
             for info_hash in orphaned {
                 // Files stay on disk either way — `forget_torrent` is
                 // librqbit's "forget", not "delete".
-                if let Err(e) = crate::torrent::forget_torrent(&info_hash).await {
+                if let Err(e) = crate::substrate::current().release(&info_hash).await {
                     // An entry that was never fetched has no torrent to
                     // forget, which is the common case, not an error.
                     clog!("collections", "delete_collection: {info_hash} wasn't in the                          session ({e:#})");
@@ -1134,7 +1097,7 @@ mod native {
             crate::collab_sync::forget_collection_peers(&rendezvous_key_hex);
             return Ok(());
         }
-        crate::torrent::forget_torrent(&collection_id).await
+        crate::substrate::current().release(&collection_id).await
     }
 
     pub(super) async fn sync_address() -> anyhow::Result<String> {
@@ -1202,6 +1165,66 @@ mod native {
             assert!(!listed[0].media[0].fetched);
             // Nobody is listening, so an invite honestly carries no address.
             assert!(listed[0].invite_code.is_some());
+        }
+
+        /// Two entries, one already held: only the other is asked for, and
+        /// asking twice does not stack a second attempt on the first.
+        #[tokio::test]
+        async fn fetching_asks_only_for_what_is_missing_and_only_once() {
+            let _temp = crate::paths::redirect_to_temp();
+            crate::collab_store::forget_cache_for_test();
+            let content = std::sync::Arc::new(crate::substrate::Recorded::default());
+            *content.held.lock().unwrap() = vec!["aa".repeat(20)];
+            let _double = crate::substrate::use_double(content.clone());
+            let id = seeded_with(&["aa".repeat(20), "bb".repeat(20)]).await;
+
+            assert_eq!(fetch_collection_media(id.clone()).await.unwrap(), 1);
+            // In flight, so the second tap adds nothing.
+            assert_eq!(fetch_collection_media(id).await.unwrap(), 0);
+
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            assert_eq!(*content.acquired.lock().unwrap(), vec!["bb".repeat(20)]);
+        }
+
+        /// Deleting releases the content nothing else claims, and leaves what
+        /// another collection still lists — the manifest is a grow-only set
+        /// keyed by handle, so two collections may hold the same entry.
+        #[tokio::test]
+        async fn deleting_releases_only_what_no_other_collection_lists() {
+            let _temp = crate::paths::redirect_to_temp();
+            crate::collab_store::forget_cache_for_test();
+            let content = std::sync::Arc::new(crate::substrate::Recorded::default());
+            let _double = crate::substrate::use_double(content.clone());
+            let shared = "cc".repeat(20);
+            let doomed = seeded_with(&[shared.clone(), "dd".repeat(20)]).await;
+            seeded_with(std::slice::from_ref(&shared)).await;
+
+            delete_collection(doomed).await.unwrap();
+
+            assert_eq!(*content.released.lock().unwrap(), vec!["dd".repeat(20)]);
+        }
+
+        /// A collection carrying these entries, signed by this device.
+        async fn seeded_with(handles: &[String]) -> String {
+            let identity = crate::device::current_identity().unwrap();
+            let created = create_collection("Trip".into()).await.unwrap();
+            let id = CollectionId::from_string(&created.id).unwrap();
+            with_store(|collections| {
+                let collection = collections.iter_mut().find(|c| c.id == id).unwrap();
+                for handle in handles {
+                    let bytes: [u8; 20] = hex::decode(handle).unwrap().try_into().unwrap();
+                    collection.add_manifest_entry(ManifestEntry::new_signed(
+                        InfoHash::from_bytes(bytes),
+                        "batch".into(),
+                        None,
+                        &identity,
+                        1,
+                    ));
+                }
+                Ok(())
+            })
+            .unwrap();
+            created.id
         }
 
         #[test]

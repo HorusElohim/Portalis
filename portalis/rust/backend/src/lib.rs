@@ -4,6 +4,8 @@ mod domain;
 mod log;
 /// Where persisted state lives — one place, so tests can move it.
 mod paths;
+/// What moves the bytes — see docs/future-engine.md.
+mod substrate;
 /// One JSON document, read whole or written whole.
 mod vault;
 // Private and NOT part of tool/frb_build.sh's --rust-input, same reason as

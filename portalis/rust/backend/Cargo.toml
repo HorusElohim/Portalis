@@ -11,6 +11,9 @@ serde = { version = "1.0", features = ["derive"] }
 flutter_rust_bridge = "=2.11.1"
 tokio = { version = "1", features = ["rt"] }
 anyhow = "1.0"
+# Object-safe async methods, so a port can be an Arc<dyn Trait> and a test can
+# swap it. See docs/future-engine.md.
+async-trait = "0.1"
 
 # Domain layer: device identity (signing) and content-addressing (rendezvous
 # keys, manifest entry ids). Pure Rust, no OS-specific bits — safe on every
