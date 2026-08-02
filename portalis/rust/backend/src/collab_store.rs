@@ -360,7 +360,10 @@ mod tests {
         assert_eq!(reloaded.collaborators[0].display_name, "Maya");
         assert!(reloaded.collaborators[0].is_admin());
         assert_eq!(reloaded.manifest().len(), 1);
-        assert!(reloaded.manifest().contains(&InfoHash::from_bytes([3; 20])));
+        assert_eq!(
+            reloaded.manifest().entries().next().unwrap().info_hash.to_hex(),
+            InfoHash::from_bytes([3; 20]).to_hex()
+        );
     }
 
     #[test]

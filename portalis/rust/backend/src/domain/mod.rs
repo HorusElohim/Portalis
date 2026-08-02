@@ -14,4 +14,3 @@ pub(crate) mod collection;
 pub(crate) mod identity;
 pub(crate) mod invite;
 pub(crate) mod manifest;
-pub(crate) mod media_item;

@@ -53,6 +53,11 @@ mod native {
 
     static CACHE: Mutex<Option<DeviceIdentityInfo>> = Mutex::new(None);
 
+    #[cfg(test)]
+    pub(super) fn forget_cache_for_test() {
+        *CACHE.lock().unwrap() = None;
+    }
+
     fn identity_file() -> PathBuf {
         crate::paths::state_dir().join("identity.json")
     }
@@ -140,3 +145,20 @@ mod native {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Losing this file loses the identity every signature was made under —
+    /// there is no recovery, so the round trip is worth asserting on disk.
+    #[test]
+    fn the_identity_survives_a_reload() {
+        let _temp = crate::paths::redirect_to_temp();
+        let first = native::load_or_create().unwrap().0.device_id();
+
+        native::forget_cache_for_test();
+
+        assert_eq!(native::load_or_create().unwrap().0.device_id(), first);
+    }
+}

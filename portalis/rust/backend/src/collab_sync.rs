@@ -1239,6 +1239,19 @@ mod tests {
     }
 
     #[test]
+    fn peers_survive_a_restart_and_go_when_their_collection_does() {
+        let _temp = crate::paths::redirect_to_temp();
+        let key = "c".repeat(64);
+
+        remember_sync_peers(&key, ["192.168.1.9:47821".to_string()]);
+        *KNOWN_SYNC_PEERS.lock().unwrap() = None; // as a relaunch would find it
+
+        assert_eq!(known_sync_peers(&key), vec!["192.168.1.9:47821".to_string()]);
+        forget_collection_peers(&key);
+        assert!(known_sync_peers(&key).is_empty());
+    }
+
+    #[test]
     fn remembering_a_peer_twice_adds_it_once_and_the_set_stays_bounded() {
         // Every re-sync tick re-records the address it just used, so without
         // the "genuinely new" answer this would rewrite sync_peers.json

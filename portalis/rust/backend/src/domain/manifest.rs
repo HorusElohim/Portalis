@@ -162,6 +162,11 @@ impl Manifest {
         true
     }
 
+    /// Not called in production yet — `apply_message` adds entries one at a
+    /// time so it can name the one it refused. Kept because the four tests
+    /// below are the proof that this model converges at all, and step 4 of
+    /// docs/future-engine.md makes this the path production takes.
+    #[allow(dead_code)]
     /// CRDT merge: union of both sets, keyed by info-hash. Commutative,
     /// associative, and idempotent — merging the same manifest twice, or in
     /// either order, converges to the same result. Invalid entries in
@@ -176,22 +181,22 @@ impl Manifest {
         self.entries.values()
     }
 
-    pub fn contains(&self, info_hash: &InfoHash) -> bool {
-        self.entries.contains_key(info_hash)
-    }
-
     pub fn len(&self) -> usize {
         self.entries.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Test-only reach into the map, so `contains` need not exist in the
+    /// production API for the sake of an assertion.
+    impl Manifest {
+        fn holds(&self, info_hash: [u8; 20]) -> bool {
+            self.entries.contains_key(&InfoHash::from_bytes(info_hash))
+        }
+    }
 
     fn entry(identity: &DeviceIdentity, seed: u8) -> ManifestEntry {
         ManifestEntry::new_signed(
@@ -220,7 +225,7 @@ mod tests {
         let mut manifest = Manifest::new();
 
         assert!(!manifest.add(tampered));
-        assert!(manifest.is_empty());
+        assert_eq!(manifest.len(), 0);
     }
 
     #[test]
@@ -245,8 +250,8 @@ mod tests {
         a.merge(&b);
 
         assert_eq!(a.len(), 2);
-        assert!(a.contains(&InfoHash::from_bytes([1; 20])));
-        assert!(a.contains(&InfoHash::from_bytes([2; 20])));
+        assert!(a.holds([1; 20]));
+        assert!(a.holds([2; 20]));
     }
 
     #[test]
@@ -264,7 +269,7 @@ mod tests {
 
         assert_eq!(a_then_b.len(), b_then_a.len());
         for entry in a_then_b.entries() {
-            assert!(b_then_a.contains(&entry.info_hash));
+            assert!(b_then_a.holds(entry.info_hash.as_bytes()));
         }
     }
 
@@ -312,6 +317,6 @@ mod tests {
         let mut clean = Manifest::new();
         clean.merge(&poisoned);
 
-        assert!(clean.is_empty());
+        assert_eq!(clean.len(), 0);
     }
 }

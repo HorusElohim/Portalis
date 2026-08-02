@@ -93,12 +93,6 @@ impl Collection {
         &self.manifest
     }
 
-    /// Merge manifest entries received from a peer during the join/sync
-    /// handshake described in the backend README.
-    pub fn merge_manifest(&mut self, other: &Manifest) {
-        self.manifest.merge(other);
-    }
-
     /// Returns `true` iff the entry was validly signed and newly added.
     pub fn add_manifest_entry(&mut self, entry: ManifestEntry) -> bool {
         self.manifest.add(entry)

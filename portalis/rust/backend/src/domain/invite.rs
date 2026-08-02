@@ -56,10 +56,6 @@ impl std::fmt::Debug for RendezvousKey {
 }
 
 impl RendezvousKey {
-    pub fn as_bytes(&self) -> [u8; 32] {
-        self.0
-    }
-
     pub fn to_hex(&self) -> String {
         hex::encode(self.0)
     }
@@ -74,8 +70,8 @@ mod tests {
         let secret = InviteSecret::generate();
 
         assert_eq!(
-            secret.derive_rendezvous_key().as_bytes(),
-            secret.derive_rendezvous_key().as_bytes()
+            secret.derive_rendezvous_key().to_hex(),
+            secret.derive_rendezvous_key().to_hex()
         );
     }
 
