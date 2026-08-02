@@ -361,6 +361,26 @@ class _CollectionScreenState extends State<CollectionScreen> {
                               label: collection.copiesLabel,
                               fontSize: 12,
                             ),
+                            // The bytes, the rate and the countdown, here
+                            // rather than behind the info button. They are the
+                            // reason anyone opens a collection mid-transfer,
+                            // and a pushed screen is a poor place for numbers
+                            // that change every second.
+                            if (collection.totalBytes > 0 ||
+                                collection.downloadMbps > 0 ||
+                                collection.uploadMbps > 0) ...[
+                              const SizedBox(height: 10),
+                              TransferFacts(
+                                progress: collection.progress,
+                                downloadedBytes: collection.downloadedBytes,
+                                totalBytes: collection.totalBytes,
+                                downloadMbps: collection.downloadMbps,
+                                uploadMbps: collection.uploadMbps,
+                                livePeers: collection.livePeers,
+                                etaLabel: collection.etaLabel,
+                                color: collection.hue,
+                              ),
+                            ],
                             const SizedBox(height: 14),
                             _Collaborators(
                               collection: collection,

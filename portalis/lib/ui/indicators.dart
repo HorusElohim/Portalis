@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'formatters.dart';
 
 /// Pulsing "live copies" indicator dot, used next to a copies label.
 class LiveDot extends StatefulWidget {
@@ -245,4 +246,112 @@ class _PerimeterProgressPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PerimeterProgressPainter oldDelegate) =>
       oldDelegate.progress != progress || oldDelegate.color != color;
+}
+
+/// The live numbers for one transfer: a bar, what is done, and what is
+/// happening right now.
+///
+/// Every screen that showed progress used to reach for a different subset of
+/// these and lay them out its own way — and the fullest set of them was a
+/// screen away, behind a Details push, frozen at the value it had when that
+/// screen was opened. This is the one block, and it is fed straight from the
+/// polling cache, so it ticks wherever it appears.
+///
+/// Facts that aren't there are omitted rather than rendered as zero: a
+/// stalled transfer has no rate worth a line, and an entry with no metadata
+/// yet has no total to be a fraction of. A zero on screen reads as a
+/// measurement, not as an absence.
+class TransferFacts extends StatelessWidget {
+  const TransferFacts({
+    super.key,
+    required this.progress,
+    required this.downloadedBytes,
+    required this.totalBytes,
+    this.downloadMbps = 0,
+    this.uploadMbps = 0,
+    this.livePeers = 0,
+    this.etaLabel,
+    this.color = AppColors.signal,
+    this.pendingLabel,
+  });
+
+  final double progress;
+  final int downloadedBytes;
+  final int totalBytes;
+  final double downloadMbps;
+  final double uploadMbps;
+  final int livePeers;
+
+  /// Already-formatted, e.g. `2h 14m left` — see `Collection.etaLabel`.
+  final String? etaLabel;
+  final Color color;
+
+  /// What to say when there is no total yet, e.g. `Not fetched yet`. Without
+  /// one, the size line is simply left out.
+  final String? pendingLabel;
+
+  bool get _isComplete => totalBytes > 0 && progress >= 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final moving = downloadMbps > 0 || uploadMbps > 0;
+
+    final size = totalBytes > 0
+        ? '${formatBytes(downloadedBytes)} of ${formatBytes(totalBytes)}'
+            ' · ${(progress * 100).toStringAsFixed(0)}%'
+        : pendingLabel;
+
+    // Rates only while something is actually moving; peers whenever any are
+    // connected, since "who is this coming from" is worth knowing even at a
+    // standstill.
+    final activity = <String>[
+      if (downloadMbps > 0) '↓ ${formatRate(downloadMbps)}',
+      if (uploadMbps > 0) '↑ ${formatRate(uploadMbps)}',
+      if (livePeers > 0) plural(livePeers, 'peer'),
+      if (etaLabel != null) etaLabel!,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // A full bar under a finished file is noise — it says "100%" twice.
+        if (totalBytes > 0 && !_isComplete) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 4,
+              backgroundColor: AppColors.borderStrong,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (size != null)
+          Text(size, style: monoLabel(size: 11, letterSpacing: 0.2)),
+        if (activity.isNotEmpty) ...[
+          if (size != null) const SizedBox(height: 4),
+          Row(
+            children: [
+              if (moving) ...[
+                LiveDot(color: color, size: 5),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  activity.join(' · '),
+                  overflow: TextOverflow.ellipsis,
+                  style: monoLabel(
+                    size: 11,
+                    color: moving ? color : AppColors.textDim,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
 }

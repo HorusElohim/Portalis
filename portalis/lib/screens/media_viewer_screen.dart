@@ -6,9 +6,9 @@ import 'package:video_player/video_player.dart';
 
 import '../media/formats.dart';
 import '../models.dart';
+import '../services/collections.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
-import 'media_details_screen.dart';
 
 class MediaViewerScreen extends StatefulWidget {
   const MediaViewerScreen({
@@ -17,6 +17,10 @@ class MediaViewerScreen extends StatefulWidget {
     required this.media,
   });
 
+  /// Seeds, not sources of truth. Both are re-read from [Collections] on every
+  /// rebuild so the figures on screen tick while a file downloads — held by
+  /// value they froze at whatever they were when the tile was tapped, which is
+  /// precisely when they are least interesting.
   final Collection collection;
   final MediaItem media;
 
@@ -28,23 +32,43 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   VideoPlayerController? _videoController;
   bool _videoFailed = false;
 
+  /// The technical rows, shown in place. They used to be a pushed screen —
+  /// two taps and a screen transition to read an info hash, and a third to get
+  /// back to the picture.
+  bool _showDetails = false;
+
+  Collection get _collection =>
+      Collections.instance.byId(widget.collection.id) ?? widget.collection;
+
+  /// Matched on info-hash *and* name: one manifest entry can hold several
+  /// files, so the hash alone doesn't identify a file.
+  MediaItem get _media {
+    for (final m in _collection.media) {
+      if (m.infoHash == widget.media.infoHash && m.label == widget.media.label) {
+        return m;
+      }
+    }
+    return widget.media;
+  }
+
+  /// The path the current controller was built for, so [_syncVideo] can tell
+  /// a genuine change from another identical poll.
+  String? _playingPath;
+
   @override
   void initState() {
     super.initState();
-    _maybeInitVideo();
-  }
-
-  @override
-  void didUpdateWidget(covariant MediaViewerScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.media.localPath != widget.media.localPath) {
-      _disposeVideo();
-      _maybeInitVideo();
-    }
+    _syncVideo();
+    // Not `didUpdateWidget`: nothing rebuilds this widget with new arguments
+    // any more — the file arrives through the cache, so that is what has to be
+    // watched. A video that finishes downloading while it is open now starts
+    // playing instead of staying a thumbnail until the screen is reopened.
+    Collections.instance.addListener(_syncVideo);
   }
 
   @override
   void dispose() {
+    Collections.instance.removeListener(_syncVideo);
     _disposeVideo();
     super.dispose();
   }
@@ -54,13 +78,20 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   /// handle them inconsistently, so they open externally instead of showing
   /// a black frame here.
   bool get _isPlayableVideo =>
-      widget.media.isReady &&
-      MediaFormats.resolve(widget.media.label).preview ==
-          PreviewSupport.player;
+      _media.isReady &&
+      MediaFormats.resolve(_media.label).preview == PreviewSupport.player;
+
+  void _syncVideo() {
+    final path = _isPlayableVideo ? _media.localPath : null;
+    if (path == _playingPath) return;
+    _disposeVideo();
+    _playingPath = path;
+    if (path != null) _maybeInitVideo();
+  }
 
   void _maybeInitVideo() {
     if (!_isPlayableVideo) return;
-    final controller = VideoPlayerController.file(File(widget.media.localPath!));
+    final controller = VideoPlayerController.file(File(_media.localPath!));
     _videoController = controller;
     controller.initialize().then((_) {
       if (mounted) setState(() {});
@@ -73,23 +104,32 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     _videoController?.dispose();
     _videoController = null;
     _videoFailed = false;
+    _playingPath = null;
   }
 
   Future<void> _openExternally() async {
-    final path = widget.media.localPath;
+    final path = _media.localPath;
     if (path == null) return;
     final ok = await launchUrl(Uri.file(path));
     if (!ok && mounted) {
-      showToast(context, 'Couldn\'t open ${widget.media.label}',
+      showToast(context, 'Couldn\'t open ${_media.label}',
           severity: ToastSeverity.error);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final collection = widget.collection;
-    final media = widget.media;
-    final peerLabel = collection.peersLabel;
+    // Rebuilt on every poll, so everything below is the current answer rather
+    // than the answer at the moment this screen opened.
+    return ListenableBuilder(
+      listenable: Collections.instance,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
+    final collection = _collection;
+    final media = _media;
 
     return Scaffold(
       backgroundColor: AppColors.viewerBg,
@@ -115,15 +155,9 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                         const SizedBox(width: 8),
                       ],
                       PillButton(
-                        label: 'Details',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => MediaDetailsScreen(
-                              collection: collection,
-                              media: media,
-                            ),
-                          ),
-                        ),
+                        label: _showDetails ? 'Less' : 'Details',
+                        onTap: () =>
+                            setState(() => _showDetails = !_showDetails),
                       ),
                     ],
                   ),
@@ -150,13 +184,47 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                     ),
                     const SizedBox(height: 3),
                     Text(
+                      // Where the file lives, and nothing else: the peer count
+                      // and the rates belong to the live block below, and
+                      // saying them twice made neither one authoritative.
                       media.isReady
-                          ? '${collection.name} · streams from $peerLabel'
-                          : '${collection.name} · downloading, $peerLabel connected',
+                          ? collection.name
+                          : '${collection.name} · downloading',
                       style: const TextStyle(
                         fontSize: 11.5,
                         color: AppColors.textDim,
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Always on screen, never behind a tap: this is the whole
+                    // reason someone opens a file that is still arriving.
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TransferFacts(
+                        progress: media.progress,
+                        downloadedBytes: media.downloadedBytes,
+                        totalBytes: media.sizeBytes,
+                        downloadMbps: collection.downloadMbps,
+                        uploadMbps: collection.uploadMbps,
+                        livePeers: collection.livePeers,
+                        etaLabel: collection.etaLabel,
+                        color: collection.hue,
+                        pendingLabel: media.fetched
+                            ? null
+                            : 'Not fetched — size unknown until it starts',
+                      ),
+                    ),
+                    // AnimatedSize over a conditional child, not a cross-fade:
+                    // a cross-fade keeps the hidden half in the tree, laying
+                    // out and rebuilding rows nobody is looking at on every
+                    // poll.
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: _showDetails
+                          ? _Details(collection: collection, media: media)
+                          : const SizedBox(width: double.infinity),
                     ),
                     const SizedBox(height: 14),
                   ],
@@ -170,7 +238,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   }
 
   Widget _buildPreview() {
-    final media = widget.media;
+    final media = _media;
     final controller = _videoController;
 
     if (_isPlayableVideo && !_videoFailed && controller != null && controller.value.isInitialized) {
@@ -218,6 +286,51 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                   ),
                 ),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The rows that used to be a screen of their own: identifiers and state,
+/// worth having but not worth looking at every time. Live like everything
+/// else here.
+class _Details extends StatelessWidget {
+  const _Details({required this.collection, required this.media});
+
+  final Collection collection;
+  final MediaItem media;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('DETAILS'),
+          const SizedBox(height: 6),
+          InfoRow(label: 'Collection', value: collection.name),
+          // The batch this file was added as — several files share one, and
+          // it is the only place that grouping is visible from here.
+          if (media.entryLabel != media.label)
+            InfoRow(label: 'Added as', value: media.entryLabel),
+          InfoRow(
+            label: 'State',
+            value: collection.state.isEmpty ? 'Unknown' : collection.state,
+          ),
+          if (media.sizeBytes > 0)
+            InfoRow(label: 'Size', value: formatBytesPrecise(media.sizeBytes)),
+          // The info hash of the *torrent this file came from*: a shared
+          // collection has one per manifest entry, so it belongs to the file,
+          // not the collection.
+          if (media.infoHash.isNotEmpty)
+            InfoRow(
+              label: 'Info hash',
+              value: media.infoHash,
+              monospace: true,
+              copyable: true,
             ),
         ],
       ),

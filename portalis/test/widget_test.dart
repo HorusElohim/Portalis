@@ -7,6 +7,7 @@ import 'package:portalis/screens/collection_details_screen.dart';
 import 'package:portalis/screens/home_screen.dart';
 import 'package:portalis/screens/collection_screen.dart';
 import 'package:portalis/screens/join_collection_screen.dart';
+import 'package:portalis/screens/media_viewer_screen.dart';
 import 'package:portalis/screens/root_shell.dart';
 import 'package:portalis/screens/settings_screen.dart';
 import 'package:portalis/screens/share_screen.dart';
@@ -660,6 +661,72 @@ void main() {
       expect(entries.last.fetched, isFalse);
       expect(entries.last.totalBytes, 0);
       expect(entries.last.progress, 0.0);
+    });
+
+    testWidgets('the viewer carries its own details and stays live',
+        (tester) async {
+      // Reading a file's size used to cost two taps and a screen transition,
+      // and the screen it landed on held a snapshot taken when the tile was
+      // tapped — so the numbers stopped moving exactly when they mattered.
+      const media = MediaItem(
+        label: 'clip.mp4',
+        entryLabel: 'Beach day',
+        infoHash: 'aa',
+        sizeBytes: 1000,
+        downloadedBytes: 400,
+        progress: 0.4,
+      );
+      final collection = _collection(
+        state: 'downloading',
+        media: const [media],
+        totalBytes: 1000,
+        downloadedBytes: 400,
+        downloadMbps: 2,
+        livePeers: 3,
+      );
+      Collections.instance.debugSeed([collection]);
+      await tester.binding.setSurfaceSize(const Size(390, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(MaterialApp(
+        home: MediaViewerScreen(collection: collection, media: media),
+      ));
+      await tester.pump();
+
+      // On screen without asking: how much of it is here.
+      expect(find.textContaining('400 B of 1 KB'), findsOneWidget);
+      expect(find.textContaining('3 peers'), findsOneWidget);
+
+      // The rest is a disclosure, not a destination — no route is pushed.
+      expect(find.text('Info hash'), findsNothing);
+      await tester.tap(find.text('Details'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Info hash'), findsOneWidget);
+      expect(find.byType(MediaViewerScreen), findsOneWidget);
+
+      // And it follows the cache rather than the arguments it was built with.
+      Collections.instance.debugSeed([
+        _collection(
+          state: 'downloading',
+          media: const [
+            MediaItem(
+              label: 'clip.mp4',
+              entryLabel: 'Beach day',
+              infoHash: 'aa',
+              sizeBytes: 1000,
+              downloadedBytes: 900,
+              progress: 0.9,
+            ),
+          ],
+          totalBytes: 1000,
+          downloadedBytes: 900,
+          downloadMbps: 2,
+          livePeers: 3,
+        ),
+      ]);
+      await tester.pump();
+
+      expect(find.textContaining('900 B of 1 KB'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('details degrades when the collection is unavailable',
