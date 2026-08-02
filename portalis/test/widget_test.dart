@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/main.dart';
 import 'package:portalis/models.dart';
 import 'package:portalis/screens/add_torrent_screen.dart';
-import 'package:portalis/screens/collection_details_screen.dart';
 import 'package:portalis/screens/home_screen.dart';
 import 'package:portalis/screens/collection_screen.dart';
 import 'package:portalis/screens/join_collection_screen.dart';
@@ -729,17 +728,64 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('details degrades when the collection is unavailable',
+    testWidgets('identifiers are a disclosure, not a destination',
         (tester) async {
-      Collections.instance.debugSeed([]);
-      await tester.binding.setSurfaceSize(_phone);
+      // They were a pushed screen whose only remaining content was a type, a
+      // state and an id — everything on it that moved is now on the screen
+      // itself.
+      final collection = _collection(state: 'seeding');
+      Collections.instance.debugSeed([collection]);
+      await tester.binding.setSurfaceSize(const Size(390, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(const MaterialApp(
-        home: CollectionDetailsScreen(collectionId: 'does-not-exist'),
+      await tester.pumpWidget(MaterialApp(
+        home: CollectionScreen(collection: collection),
       ));
       await tester.pump();
 
-      expect(find.textContaining('no longer available'), findsOneWidget);
+      expect(find.text('Collection id'), findsNothing);
+      await tester.tap(find.byTooltip('Details'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Collection id'), findsOneWidget);
+      expect(find.byType(CollectionScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('contents are grouped by the batch they arrived in',
+        (tester) async {
+      // A collection grows one signed manifest entry at a time; the grid used
+      // to flatten that away, so what arrived together — and from whom — was
+      // invisible.
+      final collection = _collection(
+        state: 'downloading',
+        collaborators: const [Collaborator(deviceId: 'dev1', name: 'Mark')],
+        media: const [
+          MediaItem(
+              label: 'a.jpg', entryLabel: 'Beach day', infoHash: 'aa',
+              sizeBytes: 2000, downloadedBytes: 2000, progress: 1, addedBy: 'dev1'),
+          MediaItem(
+              label: 'b.jpg', entryLabel: 'Beach day', infoHash: 'aa',
+              sizeBytes: 2000, downloadedBytes: 2000, progress: 1, addedBy: 'dev1'),
+          MediaItem(
+              label: 'later', entryLabel: 'Sunday', infoHash: 'bb',
+              fetched: false, addedBy: 'dev1'),
+        ],
+      );
+      Collections.instance.debugSeed([collection]);
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(MaterialApp(
+        home: CollectionScreen(collection: collection),
+      ));
+      await tester.pump();
+
+      // The batch label, its size, and the collaborator who signed it.
+      expect(find.text('Beach day'), findsOneWidget);
+      expect(find.textContaining('2 files'), findsOneWidget);
+      expect(find.textContaining('from Mark'), findsWidgets);
+      // And each file says what it is without being opened.
+      expect(find.text('a.jpg'), findsOneWidget);
+      expect(find.text('Sunday'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

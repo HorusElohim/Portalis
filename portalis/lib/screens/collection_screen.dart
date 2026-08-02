@@ -11,7 +11,6 @@ import '../models.dart';
 import '../services/collections.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
-import 'collection_details_screen.dart';
 import 'media_viewer_screen.dart';
 
 /// One collection, of either kind. Everything here now comes from the single
@@ -35,6 +34,11 @@ class CollectionScreen extends StatefulWidget {
 
 class _CollectionScreenState extends State<CollectionScreen> {
   bool _busy = false;
+
+  /// The identifiers, shown in place. They were a pushed screen whose only
+  /// remaining content was a type, a state and an id — everything else on it
+  /// now lives on this screen, live.
+  bool _showDetails = false;
 
   /// The live version, falling back to the one we were pushed with if it has
   /// since been deleted (the screen pops in that case).
@@ -311,16 +315,18 @@ class _CollectionScreenState extends State<CollectionScreen> {
                           ),
                         ),
                       IconButton(
-                        tooltip: 'Details',
-                        icon: const Icon(Icons.info_outline,
-                            size: 18, color: AppColors.textDim),
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => CollectionDetailsScreen(
-                              collectionId: collection.id,
-                            ),
-                          ),
+                        tooltip: _showDetails ? 'Hide details' : 'Details',
+                        icon: Icon(
+                          _showDetails
+                              ? Icons.info_rounded
+                              : Icons.info_outline,
+                          size: 18,
+                          color: _showDetails
+                              ? AppColors.signalSoft
+                              : AppColors.textDim,
                         ),
+                        onPressed: () =>
+                            setState(() => _showDetails = !_showDetails),
                       ),
                       IconButton(
                         tooltip: 'Remove from this device',
@@ -381,6 +387,14 @@ class _CollectionScreenState extends State<CollectionScreen> {
                                 color: collection.hue,
                               ),
                             ],
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.topCenter,
+                              child: _showDetails
+                                  ? _Identifiers(collection: collection)
+                                  : const SizedBox(width: double.infinity),
+                            ),
                             const SizedBox(height: 14),
                             _Collaborators(
                               collection: collection,
@@ -401,7 +415,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                                 ),
                               )
                             else
-                              _MediaGrid(collection: collection),
+                              _Contents(collection: collection),
                             const SizedBox(height: 12),
                           ],
                         ),
@@ -452,6 +466,48 @@ class _CollectionScreenState extends State<CollectionScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// What a collection *is*, as opposed to what it is doing: the rows worth
+/// having once and rarely again. Everything that changes second to second is
+/// on the screen itself.
+class _Identifiers extends StatelessWidget {
+  const _Identifiers({required this.collection});
+
+  final Collection collection;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InfoRow(
+            label: 'Type',
+            value: collection.isShared
+                ? 'Shared — invite-based, can grow'
+                : 'Torrent — fixed contents',
+          ),
+          InfoRow(
+            label: 'State',
+            value: collection.state.isEmpty ? 'Unknown' : collection.state,
+          ),
+          if (collection.uploadedBytes > 0)
+            InfoRow(
+              label: 'Uploaded',
+              value: formatBytesPrecise(collection.uploadedBytes),
+            ),
+          InfoRow(
+            label: collection.isShared ? 'Collection id' : 'Info hash',
+            value: collection.id,
+            monospace: true,
+            copyable: true,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -542,10 +598,114 @@ class _Collaborators extends StatelessWidget {
   }
 }
 
-class _MediaGrid extends StatelessWidget {
-  const _MediaGrid({required this.collection});
+/// What is actually in the collection, grouped the way it was contributed.
+///
+/// A collection grows one signed manifest entry at a time — a batch of files
+/// with an author and an info-hash — and the grid used to flatten that away
+/// entirely, leaving a wall of thumbnails with no indication of what arrived
+/// together or from whom. That structure was already modelled
+/// ([Collection.entries]) and simply never rendered.
+///
+/// Plain torrents skip the headers: there is exactly one entry and its label
+/// is the collection name already at the top of the screen, so a header would
+/// only repeat it.
+class _Contents extends StatelessWidget {
+  const _Contents({required this.collection});
 
   final Collection collection;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = collection.entries;
+    if (!collection.isShared || entries.length <= 1) {
+      return _MediaGrid(collection: collection, media: collection.media);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final entry in entries) ...[
+          _EntryHeader(collection: collection, entry: entry),
+          const SizedBox(height: 8),
+          _MediaGrid(collection: collection, media: entry.media),
+          const SizedBox(height: 18),
+        ],
+      ],
+    );
+  }
+}
+
+/// One batch: what it is called, how big it is, and who put it there.
+class _EntryHeader extends StatelessWidget {
+  const _EntryHeader({required this.collection, required this.entry});
+
+  final Collection collection;
+  final CollectionEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final author = entry.addedBy == null
+        ? null
+        : collection.collaborators
+            .where((c) => c.deviceId == entry.addedBy)
+            .firstOrNull;
+    final facts = <String>[
+      if (entry.fetched) plural(entry.media.length, 'file'),
+      if (entry.totalBytes > 0) formatBytes(entry.totalBytes),
+      // Naming the author is the point of a signed manifest; falling back to
+      // the device id would be noise, so an unknown one simply isn't claimed.
+      if (author != null) 'from ${author.name}',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                entry.label,
+                overflow: TextOverflow.ellipsis,
+                style: displayText(size: 13.5),
+              ),
+            ),
+            if (!entry.fetched) ...[
+              const SizedBox(width: 8),
+              StatusBadge(label: 'NOT FETCHED'),
+            ],
+          ],
+        ),
+        if (facts.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            facts.join(' · '),
+            overflow: TextOverflow.ellipsis,
+            style: monoLabel(size: 10, letterSpacing: 0.2),
+          ),
+        ],
+        // Only while this batch is mid-flight: a full bar under a finished
+        // one says "done" twice.
+        if (entry.fetched && entry.totalBytes > 0 && entry.progress < 1.0) ...[
+          const SizedBox(height: 7),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: entry.progress,
+              minHeight: 3,
+              backgroundColor: AppColors.borderStrong,
+              valueColor: AlwaysStoppedAnimation(collection.hue),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MediaGrid extends StatelessWidget {
+  const _MediaGrid({required this.collection, required this.media});
+
+  final Collection collection;
+  final List<MediaItem> media;
 
   @override
   Widget build(BuildContext context) {
@@ -554,59 +714,93 @@ class _MediaGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        mainAxisSpacing: 8,
+        mainAxisSpacing: 10,
         crossAxisSpacing: 8,
-        childAspectRatio: 1,
+        // Taller than square: the tile is the thumbnail *and* what the file is
+        // called. A grid of unlabelled squares meant opening a file to find
+        // out anything at all about it.
+        childAspectRatio: 0.76,
       ),
-      itemCount: collection.media.length,
+      itemCount: media.length,
       itemBuilder: (context, index) {
-        final m = collection.media[index];
-        return PerimeterProgress(
-          progress: m.progress,
-          color: collection.hue,
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            // Always-visible boundary, independent of the progress ring —
-            // otherwise a finished (or not-yet-started) tile has no outline
-            // at all, since the ring only paints while 0 < progress < 1.
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.border),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => MediaViewerScreen(
-                      collection: collection,
-                      media: m,
+        final m = media[index];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: PerimeterProgress(
+                progress: m.progress,
+                color: collection.hue,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  // Always-visible boundary, independent of the progress ring
+                  // — otherwise a finished (or not-yet-started) tile has no
+                  // outline at all, since the ring only paints while
+                  // 0 < progress < 1.
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MediaViewerScreen(
+                            collection: collection,
+                            media: m,
+                          ),
+                        ),
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          MediaThumbnail(media: m, borderRadius: 6),
+                          // "Known but not fetched": a peer signed this into
+                          // the manifest, we just don't have the bytes.
+                          // Distinct from "downloading" (the progress ring)
+                          // and "ready".
+                          if (!m.fetched)
+                            Container(
+                              color:
+                                  AppColors.surfaceDeep.withValues(alpha: 0.55),
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.cloud_download_outlined,
+                                size: 22,
+                                color: AppColors.signalSoft,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    MediaThumbnail(media: m, borderRadius: 6),
-                    // "Known but not fetched": a peer signed this into the
-                    // manifest, we just don't have the bytes. Distinct from
-                    // "downloading" (the progress ring) and "ready".
-                    if (!m.fetched)
-                      Container(
-                        color: AppColors.surfaceDeep.withValues(alpha: 0.55),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.cloud_download_outlined,
-                          size: 22,
-                          color: AppColors.signalSoft,
-                        ),
-                      ),
-                  ],
-                ),
               ),
             ),
-          ),
+            const SizedBox(height: 5),
+            Text(
+              m.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 10.5, height: 1.1),
+            ),
+            Text(
+              // What is known about it, in order of usefulness: still coming,
+              // how far along, or how big it turned out to be.
+              !m.fetched
+                  ? 'not fetched'
+                  : m.progress < 1.0
+                      ? '${(m.progress * 100).toStringAsFixed(0)}%'
+                      : m.sizeBytes > 0
+                          ? formatBytes(m.sizeBytes)
+                          : '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: monoLabel(size: 9.5, letterSpacing: 0.2),
+            ),
+          ],
         );
       },
     );

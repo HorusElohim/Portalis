@@ -86,7 +86,7 @@ class MediaThumbnail extends StatelessWidget {
           File(media.localPath!),
           fit: BoxFit.cover,
           errorBuilder: (context, error, stack) => PlaceholderTile(
-            label: media.label,
+            label: _typeLabel(media.label),
             borderRadius: borderRadius,
             kind: kindOf(media.label),
           ),
@@ -94,10 +94,23 @@ class MediaThumbnail extends StatelessWidget {
       );
     }
     return PlaceholderTile(
-      label: media.label,
+      label: _typeLabel(media.label),
       borderRadius: borderRadius,
       kind: kindOf(media.label),
     );
+  }
+
+  /// The file's *type*, not its name.
+  ///
+  /// A tile used to caption itself with the filename, which every surface
+  /// showing tiles now prints underneath them anyway — so the name appeared
+  /// twice, once truncated to nothing useful inside a 52pt square. The
+  /// extension is the one thing a placeholder can add that the caption below
+  /// it doesn't already say. Files with no extension get nothing rather than a
+  /// repeat of their name.
+  static String? _typeLabel(String name) {
+    final ext = extensionOf(name);
+    return ext.isEmpty ? null : ext.toUpperCase();
   }
 }
 
