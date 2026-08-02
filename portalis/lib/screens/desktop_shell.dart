@@ -1,18 +1,19 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-import '../bridge_generated/device.dart' as device_bridge;
 import '../models.dart';
 import '../services/collections.dart';
+import '../services/device_identity.dart';
 import '../services/navigation.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'collection_screen.dart';
-import 'home_screen.dart';
+import 'join_collection_screen.dart';
 import 'settings_screen.dart';
 import 'share_screen.dart';
-import 'transfers_screen.dart';
+import 'user_screen.dart';
 
 /// The wide-window layout: sidebar, list, inspector.
 ///
@@ -26,7 +27,16 @@ class DesktopShell extends StatefulWidget {
   State<DesktopShell> createState() => _DesktopShellState();
 }
 
-enum _Pane { home, collections, transfers, people, settings }
+/// Neither Transfers nor Home, unlike mobile — both are answers to questions
+/// this layout doesn't leave open.
+///
+/// Transfers showed the same collections a second time: every row already
+/// carries its own bar, rate and countdown, and the list is permanently on
+/// screen. Home was the welcome — what Portalis is, and the three ways to
+/// start something — which the sidebar now says outright with its own actions
+/// beside a list that is always visible. On a phone both earn their keep,
+/// because there the list is one destination among four and a row is small.
+enum _Pane { collections, people, you, settings }
 
 class _DesktopShellState extends State<DesktopShell> {
   _Pane _pane = _Pane.collections;
@@ -38,19 +48,21 @@ class _DesktopShellState extends State<DesktopShell> {
   /// freely between the desktop and phone layouts. It is also what makes
   /// Home's "go to Collections" link work here: it sets the tab, and nothing
   /// was listening.
+  /// Mobile's Home lands on Collections, which is what this layout puts in its
+  /// place. The tab itself is left alone in that case, so narrowing the window
+  /// again returns you to Home rather than stranding you somewhere you never
+  /// chose.
   static _Pane? _paneForTab(int tab) => switch (tab) {
-        0 => _Pane.home,
-        1 => _Pane.collections,
-        2 => _Pane.transfers,
-        // "You" has no desktop peer — identity lives in the sidebar chip and
-        // Settings — so it leaves the pane alone rather than guessing.
+        0 || 1 => _Pane.collections,
+        2 => _Pane.you,
         _ => null,
       };
 
   static int? _tabForPane(_Pane pane) => switch (pane) {
-        _Pane.home => 0,
         _Pane.collections => 1,
-        _Pane.transfers => 2,
+        _Pane.you => 2,
+        // No mobile peer: People is derived from collections, and Settings is
+        // reached through You there.
         _Pane.people || _Pane.settings => null,
       };
 
@@ -74,10 +86,16 @@ class _DesktopShellState extends State<DesktopShell> {
     }
   }
 
+  /// Selects a pane, or closes it if it is already open.
+  ///
+  /// Toggling matters now that Collections has no control of its own: the
+  /// collections are what the window shows when nothing is layered over them,
+  /// so tapping the open pane's button again is how you get back to them.
   void _select(_Pane pane) {
-    if (pane == _pane) return;
-    setState(() => _pane = pane);
-    final tab = _tabForPane(pane);
+    final next = pane == _pane ? _Pane.collections : pane;
+    if (next == _pane) return;
+    setState(() => _pane = next);
+    final tab = _tabForPane(next);
     if (tab != null) AppNavigation.tab.value = tab;
   }
 
@@ -137,10 +155,8 @@ class _DesktopShellState extends State<DesktopShell> {
 
   Widget _centre() {
     switch (_pane) {
-      case _Pane.home:
-        return const SafeArea(child: HomeScreen());
-      case _Pane.transfers:
-        return const SafeArea(child: TransfersScreen());
+      case _Pane.you:
+        return const SafeArea(child: UserScreen(embedded: true));
       case _Pane.people:
         return const SafeArea(child: _PeoplePane());
       case _Pane.settings:
@@ -161,7 +177,6 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final collections = Collections.instance.collections;
-    final moving = collections.where(TransfersScreen.isMoving).length;
     final people = <String>{
       for (final c in collections)
         for (final p in c.collaborators) p.deviceId,
@@ -179,33 +194,63 @@ class _Sidebar extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _IdentityChip(),
-              const SizedBox(height: 22),
+              // Who you are and how the app behaves, side by side and out of
+              // the way. Both were rows in the list below, competing for
+              // attention with the collections themselves — which is what
+              // someone actually came here to look at.
+              Row(
+                children: [
+                  Expanded(
+                    child: _IdentityChip(
+                      selected: pane == _Pane.you,
+                      onTap: () => onPane(_Pane.you),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  _HeaderButton(
+                    icon: Icons.people_outline,
+                    tooltip: 'People',
+                    selected: pane == _Pane.people,
+                    badge: people == 0 ? null : '$people',
+                    onTap: () => onPane(_Pane.people),
+                  ),
+                  const SizedBox(width: 2),
+                  _HeaderButton(
+                    icon: Icons.tune,
+                    tooltip: 'Settings',
+                    selected: pane == _Pane.settings,
+                    onTap: () => onPane(_Pane.settings),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
               // Desktop had no Home at all: the welcome — what Portalis is
               // and the three ways to start something — was reachable only by
               // narrowing the window into the phone layout. It is the same
               // destination as the mobile bar's first item, and carries the
               // same mark for the same reason: it is both where you are and
               // how you get back.
-              _navItem(_Pane.home, null, 'Home', null),
-              const SizedBox(height: 14),
               PrimaryAction(
                 label: 'New share',
                 icon: Icons.add,
                 trailingChevron: false,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ShareScreen()),
-                ),
+                onTap: () => _open(context, const ShareScreen()),
               ),
-              const SizedBox(height: 22),
-              _navItem(_Pane.collections, Icons.dashboard_outlined,
-                  'Collections', '${collections.length}'),
-              _navItem(_Pane.transfers, Icons.swap_horiz, 'Transfers',
-                  moving == 0 ? null : '$moving',
-                  countIsLive: moving > 0),
-              _navItem(_Pane.people, Icons.people_outline, 'People',
-                  people == 0 ? null : '$people'),
-              _navItem(_Pane.settings, Icons.tune, 'Settings', null),
+              const SizedBox(height: 8),
+              // The other ways in. Mobile offers all three from one FAB;
+              // desktop offered only this first one, so joining with an invite
+              // key or adding a magnet was reachable solely from inside the
+              // Home pane — which is not where anyone looks for an action.
+              _miniAction(context, Icons.link, 'Join with a key',
+                  const JoinCollectionScreen()),
+              const SizedBox(height: 14),
+              const _TorrentQuickAdd(),
+              const SizedBox(height: 20),
+              // No destination list at all. Collections is not a place you go
+              // — it is what this window *is*, permanently on the right — and
+              // the three things that aren't it are the header controls above,
+              // each of which toggles back to the collections when tapped
+              // again.
               const Spacer(),
               const _SessionRates(),
             ],
@@ -215,71 +260,94 @@ class _Sidebar extends StatelessWidget {
     );
   }
 
-  /// A null [icon] means the app's mark — see the Home item above.
-  Widget _navItem(_Pane p, IconData? icon, String label, String? count,
-      {bool countIsLive = false}) {
-    final selected = p == pane;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+  void _open(BuildContext context, Widget screen) => Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => screen));
+
+  /// A secondary way in.
+  Widget _miniAction(BuildContext context, IconData icon, String label,
+      Widget screen, {Color color = AppColors.signalSoft}) {
+    return Material(
+      color: AppColors.surfaceRaised,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _open(context, screen),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 17, color: color),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One of the header controls beside the identity chip.
+///
+/// People and Settings were rows in a destination list. Neither is a thing you
+/// look at the way a collection is — one is a derived directory, the other is
+/// how the engine behaves — and listing them put them at the same weight as
+/// the collections themselves. Up here they are what they are: controls, next
+/// to the other control that says who you are.
+///
+/// Tapping the active one returns to the collections, which is the only way
+/// back now that Collections has no button of its own.
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({
+    required this.icon,
+    required this.tooltip,
+    required this.selected,
+    required this.onTap,
+    this.badge,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// A count worth knowing without opening the pane, e.g. how many people.
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
       child: Material(
         color: selected ? AppColors.surfaceRaised : Colors.transparent,
         borderRadius: BorderRadius.circular(11),
         child: InkWell(
+          key: Key('header${tooltip}Button'),
           borderRadius: BorderRadius.circular(11),
-          onTap: () => onPane(p),
+          onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (icon == null)
-                  Opacity(
-                    // The mark is full colour; dimming it is what makes an
-                    // unselected item read as unselected, the same as the
-                    // glyphs beside it.
-                    opacity: selected ? 1 : 0.45,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.asset(
-                        'assets/PortalisNature.png',
-                        width: 17,
-                        height: 17,
-                        // Decoded at 3x its slot, not the source's 1254² —
-                        // permanent chrome must not park a full-resolution
-                        // bitmap in the cache.
-                        cacheWidth: 51,
-                        cacheHeight: 51,
-                        filterQuality: FilterQuality.medium,
-                      ),
-                    ),
-                  )
-                else
-                  Icon(icon,
-                      size: 17,
-                      color: selected ? AppColors.text : AppColors.textDim),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight:
-                          selected ? FontWeight.w600 : FontWeight.w400,
-                      color: selected ? AppColors.text : AppColors.textDim,
-                    ),
-                  ),
+                Icon(
+                  icon,
+                  size: 20,
+                  color: selected ? AppColors.text : AppColors.textDim,
                 ),
-                if (count != null)
-                  Text(
-                    count,
-                    // Mint only when the count represents movement.
-                    style: monoLabel(
-                      size: 11,
-                      color: countIsLive
-                          ? AppColors.signal
-                          : AppColors.textFaint,
-                      letterSpacing: 0,
-                    ),
-                  ),
+                if (badge != null) ...[
+                  const SizedBox(width: 5),
+                  Text(badge!,
+                      style: monoLabel(size: 10.5, letterSpacing: 0)),
+                ],
               ],
             ),
           ),
@@ -289,73 +357,264 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
+/// Adding a torrent, in the sidebar rather than through a screen.
+///
+/// A magnet link is one line of text and a `.torrent` is one file — the full
+/// screen exists to preview what a link *says* it contains before committing,
+/// which is worth a screen on a phone and is not worth losing the whole
+/// desktop layout for. The screen is still there behind the Home destination
+/// on mobile; this is the same two calls with no navigation at all.
+class _TorrentQuickAdd extends StatefulWidget {
+  const _TorrentQuickAdd();
+
+  @override
+  State<_TorrentQuickAdd> createState() => _TorrentQuickAddState();
+}
+
+class _TorrentQuickAddState extends State<_TorrentQuickAdd> {
+  final _controller = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _isValid => looksLikeMagnet(_controller.text);
+
+  Future<void> _run(Future<void> Function() action, String done) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await action();
+      if (!mounted) return;
+      _controller.clear();
+      showToast(context, done, severity: ToastSeverity.success);
+    } catch (e) {
+      // Shown here rather than as a toast: the field is still on screen with
+      // the text that failed, so the message belongs next to it.
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim();
+    if (text == null || text.isEmpty) return;
+    setState(() => _controller.text = text);
+  }
+
+  Future<void> _pickFile() async {
+    final result =
+        await FilePicker.pickFiles(withData: true, type: FileType.any);
+    final bytes = result?.files.single.bytes;
+    if (bytes == null) return;
+    await _run(
+      () => Collections.instance.addFromFileBytes(bytes),
+      'Torrent added — joining swarm',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('TORRENT'),
+        const SizedBox(height: 7),
+        TextField(
+          key: const Key('sidebarMagnetField'),
+          controller: _controller,
+          enabled: !_busy,
+          style: monoLabel(size: 11.5, color: AppColors.text, letterSpacing: 0),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'magnet: or info hash',
+            hintStyle: monoLabel(size: 11.5, letterSpacing: 0),
+            filled: true,
+            fillColor: AppColors.surface,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _isValid && !_busy
+              ? _run(
+                  () => Collections.instance.addFromMagnet(_controller.text.trim()),
+                  'Added — joining swarm',
+                )
+              : null,
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _button('Paste', onTap: _busy ? null : _paste),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _button(
+                'Add',
+                primary: true,
+                onTap: !_isValid || _busy
+                    ? null
+                    : () => _run(
+                          () => Collections.instance
+                              .addFromMagnet(_controller.text.trim()),
+                          'Added — joining swarm',
+                        ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Add a .torrent file',
+              child: _button(
+                null,
+                icon: Icons.attach_file,
+                onTap: _busy ? null : _pickFile,
+              ),
+            ),
+          ],
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              _error!,
+              style: monoLabel(
+                  size: 9.5, color: AppColors.danger, letterSpacing: 0.2),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _button(String? label,
+      {IconData? icon, VoidCallback? onTap, bool primary = false}) {
+    final enabled = onTap != null;
+    return Material(
+      color: primary && enabled
+          ? AppColors.signal
+          : AppColors.surfaceRaised,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+              horizontal: icon == null ? 6 : 11, vertical: 12),
+          child: Center(
+            child: icon != null
+                ? Icon(icon,
+                    size: 17,
+                    color: enabled ? AppColors.ember : AppColors.textFaint)
+                : Text(
+                    label!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: !enabled
+                          ? AppColors.textFaint
+                          : primary
+                              ? AppColors.onSignal
+                              : AppColors.text,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _IdentityChip extends StatefulWidget {
-  const _IdentityChip();
+  const _IdentityChip({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   State<_IdentityChip> createState() => _IdentityChipState();
 }
 
 class _IdentityChipState extends State<_IdentityChip> {
-  String? _nickname;
-
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final identity = await device_bridge.deviceIdentity();
-      if (mounted) setState(() => _nickname = identity.nickname);
-    } catch (_) {
-      // Backend unavailable — the chip stays neutral rather than inventing
-      // a name.
-    }
+    DeviceIdentity.instance.load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = _nickname;
+    return ListenableBuilder(
+      listenable: DeviceIdentity.instance,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
+    final name = DeviceIdentity.instance.info?.nickname;
     final peers = Collections.instance.collections
         .fold<int>(0, (s, c) => s + c.livePeers);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        children: [
-          Avatar(
-            initials: (name == null || name.isEmpty)
-                ? '·'
-                : name[0].toUpperCase(),
-            size: 30,
-            primary: true,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name ?? 'This device',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13.5, fontWeight: FontWeight.w600),
+    return Material(
+      color: widget.selected ? AppColors.surfaceRaised : Colors.transparent,
+      borderRadius: BorderRadius.circular(11),
+      child: InkWell(
+        key: const Key('identityChip'),
+        borderRadius: BorderRadius.circular(11),
+        onTap: widget.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Avatar(
+                initials: (name == null || name.isEmpty)
+                    ? '·'
+                    : name[0].toUpperCase(),
+                size: 30,
+                primary: true,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name ?? 'This device',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      peers == 0
+                          ? 'NO PEERS'
+                          : '$peers PEER${peers == 1 ? '' : 'S'}',
+                      style: monoLabel(
+                        size: 9.5,
+                        color:
+                            peers > 0 ? AppColors.signal : AppColors.textFaint,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  peers == 0
-                      ? 'NO PEERS'
-                      : '$peers PEER${peers == 1 ? '' : 'S'}',
-                  style: monoLabel(
-                    size: 9.5,
-                    color: peers > 0 ? AppColors.signal : AppColors.textFaint,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -403,7 +662,7 @@ class _CollectionsPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final collections = Collections.instance.collections;
     final error = Collections.instance.lastError;
-    final moving = collections.where(TransfersScreen.isMoving).length;
+    final moving = collections.where((c) => c.isMoving).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +672,7 @@ class _CollectionsPane extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Collections', style: displayText(size: 28)),
+              const CanvasTitle('Collections', size: 32),
               const SizedBox(height: 4),
               Text(
                 moving == 0
@@ -484,7 +743,7 @@ class _PeoplePane extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(28, 26, 28, 0),
-          child: Text('People', style: displayText(size: 28)),
+          child: const CanvasTitle('People', size: 32),
         ),
         Expanded(
           child: people.isEmpty
@@ -558,7 +817,7 @@ class _Inspector extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(collection.name, style: displayText(size: 20)),
+              CanvasTitle(collection.name, size: 22, maxLines: 2),
               const SizedBox(height: 5),
               Text(
                 collection.isShared

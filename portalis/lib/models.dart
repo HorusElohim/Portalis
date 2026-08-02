@@ -197,6 +197,18 @@ class Collection {
   /// "nothing is happening".
   bool get isConnecting => state == 'connecting';
 
+  /// The engine is doing work for this right now, or still owes work:
+  /// unfinished bytes, or a live rate in either direction. Seeding-but-idle
+  /// does not count — nothing is in flight.
+  ///
+  /// Lived on `TransfersScreen` as a static while that screen existed. It is a
+  /// fact about a collection, and three other places were already asking it.
+  bool get isMoving =>
+      downloadMbps > 0 ||
+      uploadMbps > 0 ||
+      state == 'downloading' ||
+      pendingMedia > 0;
+
   /// Energy for this collection's card, by what it is genuinely doing.
   GlowLevel get glow {
     if (downloadMbps > 0 || uploadMbps > 0) {

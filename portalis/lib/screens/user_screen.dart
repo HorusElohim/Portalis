@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../bridge_generated/device.dart' as bridge;
 import '../services/collections.dart';
+import '../services/device_identity.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'formats_screen.dart';
@@ -15,30 +16,31 @@ import 'settings_screen.dart';
 /// the session, so they're labelled as this session rather than implying a
 /// running total the backend never keeps.
 class UserScreen extends StatefulWidget {
-  const UserScreen({super.key});
+  const UserScreen({super.key, this.embedded = false});
+
+  /// Set when this is a pane of the desktop shell rather than a pushed screen.
+  /// Settings is its own sidebar destination there, so the row that opens it
+  /// would be a full-screen push over a layout that already has room for it.
+  final bool embedded;
 
   @override
   State<UserScreen> createState() => _UserScreenState();
 }
 
 class _UserScreenState extends State<UserScreen> {
-  bridge.DeviceIdentityInfo? _identity;
-  String? _error;
   String? _syncAddress;
+
+  bridge.DeviceIdentityInfo? get _identity => DeviceIdentity.instance.info;
+  String? get _error => DeviceIdentity.instance.lastError;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    DeviceIdentity.instance.load();
+    _loadSyncAddress();
   }
 
-  Future<void> _load() async {
-    try {
-      final identity = await bridge.deviceIdentity();
-      if (mounted) setState(() => _identity = identity);
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-    }
+  Future<void> _loadSyncAddress() async {
     // Separate from identity: fetching the sync address is what starts the
     // listener, making this device reachable for as long as the app runs.
     try {
@@ -59,8 +61,7 @@ class _UserScreenState extends State<UserScreen> {
     );
     if (result == null || result.isEmpty || !mounted) return;
     try {
-      final identity = await bridge.setNickname(nickname: result);
-      if (mounted) setState(() => _identity = identity);
+      await DeviceIdentity.instance.rename(result);
     } catch (e) {
       if (mounted) showToast(context, 'Couldn\'t rename: $e');
     }
@@ -68,13 +69,18 @@ class _UserScreenState extends State<UserScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final nickname = _identity?.nickname ?? '…';
-    final initials =
-        _identity != null && nickname.isNotEmpty ? nickname[0].toUpperCase() : '·';
-
     return ListenableBuilder(
-      listenable: Collections.instance,
+      listenable: Listenable.merge(
+        [Collections.instance, DeviceIdentity.instance],
+      ),
       builder: (context, _) {
+        // Read inside the builder, not above it: only the builder re-runs when
+        // the identity changes, so a name computed outside would still be the
+        // one from before the rename.
+        final nickname = _identity?.nickname ?? '…';
+        final initials = _identity != null && nickname.isNotEmpty
+            ? nickname[0].toUpperCase()
+            : '·';
         final collections = Collections.instance.collections;
         final sent = collections.fold<int>(0, (s, c) => s + c.uploadedBytes);
         final received =
@@ -98,7 +104,7 @@ class _UserScreenState extends State<UserScreen> {
                     children: [
                       Avatar(initials: initials, size: 76, primary: true),
                       const SizedBox(height: 16),
-                      Text(nickname, style: displayText(size: 26)),
+                      CanvasTitle(nickname, size: 30),
                       const SizedBox(height: 6),
                       Text(
                         _identity == null
@@ -263,30 +269,34 @@ class _UserScreenState extends State<UserScreen> {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-                  child: SurfaceCard(
-                    padding: const EdgeInsets.all(16),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const SettingsScreen()),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.tune, size: 19, color: AppColors.textDim),
-                        SizedBox(width: 13),
-                        Expanded(
-                          child: Text('Settings',
-                              style: TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                        Icon(Icons.chevron_right,
-                            size: 16, color: AppColors.textGhost),
-                      ],
+                // On desktop Settings is its own sidebar destination, so this
+                // row would push a full screen over a layout that already has
+                // a place to put it.
+                if (!widget.embedded)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                    child: SurfaceCard(
+                      padding: const EdgeInsets.all(16),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const SettingsScreen()),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.tune, size: 19, color: AppColors.textDim),
+                          SizedBox(width: 13),
+                          Expanded(
+                            child: Text('Settings',
+                                style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          Icon(Icons.chevron_right,
+                              size: 16, color: AppColors.textGhost),
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
                   child: Center(

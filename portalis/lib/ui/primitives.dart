@@ -142,3 +142,36 @@ class StatusBadge extends StatelessWidget {
     );
   }
 }
+
+/// A canvas heading. Uppercases here rather than at every call site, so the
+/// casing is a property of the style and not something each screen has to
+/// remember — and so a single edit takes it back if it ever stops earning it.
+class CanvasTitle extends StatelessWidget {
+  const CanvasTitle(
+    this.text, {
+    super.key,
+    this.size = 30,
+    this.color = AppColors.text,
+    this.height,
+    this.textAlign,
+    this.maxLines,
+  });
+
+  final String text;
+  final double size;
+  final Color color;
+  final double? height;
+  final TextAlign? textAlign;
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      textAlign: textAlign,
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      style: canvasTitle(size: size, color: color, height: height),
+    );
+  }
+}

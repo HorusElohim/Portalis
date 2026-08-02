@@ -61,8 +61,7 @@ class _FormatsScreenState extends State<FormatsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('File formats',
-                              style: displayText(size: 26, height: 1.1)),
+                          const CanvasTitle('File formats', size: 30),
                           const SizedBox(height: 6),
                           Text(
                             '${all.length} types · $viewable viewable in the '

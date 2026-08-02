@@ -69,10 +69,11 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 22),
-                      Text(
+                      const CanvasTitle(
                         'Send anything,\nstraight to a friend',
+                        size: 32,
                         textAlign: TextAlign.center,
-                        style: displayText(size: 28, height: 1.15),
+                        height: 1.02,
                       ),
                       const SizedBox(height: 10),
                       const Text(

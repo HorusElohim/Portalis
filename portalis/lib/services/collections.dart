@@ -16,6 +16,18 @@ bool get _hasPhotoGallery =>
     defaultTargetPlatform == TargetPlatform.iOS ||
     defaultTargetPlatform == TargetPlatform.android;
 
+/// Whether [Collections.addFromMagnet] will accept this — a magnet URI, or the
+/// bare 40-character info-hash librqbit's URL parser treats as one.
+///
+/// Lives here rather than in a screen because it is a fact about what the
+/// backend takes, and two surfaces now offer to add a torrent: the full screen
+/// and the desktop sidebar's inline field.
+bool looksLikeMagnet(String value) {
+  final v = value.trim();
+  return v.startsWith('magnet:?') ||
+      RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(v);
+}
+
 /// The app's single source of collections.
 ///
 /// Replaces the former `TorrentCollections` + `CollabCollections` pair, which

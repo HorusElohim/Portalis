@@ -32,12 +32,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
 
   String get _magnet => _magnetController.text.trim();
 
-  bool get _isValid {
-    final m = _magnet;
-    if (m.startsWith('magnet:?')) return true;
-    // The backend also accepts a bare 40-char hex info-hash.
-    return RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(m);
-  }
+  bool get _isValid => looksLikeMagnet(_magnet);
 
   String get _previewName {
     final dn = RegExp(r'[?&]dn=([^&]+)', caseSensitive: false)

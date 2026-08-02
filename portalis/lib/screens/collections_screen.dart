@@ -61,6 +61,8 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
         }
 
         final shown = _apply(all);
+        final down = all.fold<double>(0, (s, c) => s + c.downloadMbps);
+        final up = all.fold<double>(0, (s, c) => s + c.uploadMbps);
         return Stack(
           children: [
             PageBody(
@@ -72,14 +74,27 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Collections',
-                              style: displayText(size: 30, height: 1.1)),
+                          const CanvasTitle('Collections', size: 34),
                           const SizedBox(height: 5),
-                          Text(
-                            plural(all.length, 'collection'),
-                            style: const TextStyle(
-                                fontSize: 14, color: AppColors.textDim),
-                          ),
+                          // The aggregate Transfers used to carry. Stating it
+                          // here is what let that destination go: it was the
+                          // one fact this screen didn't already have.
+                          if (Collections.instance.liveRate > 0)
+                            Text(
+                              '${plural(all.where((c) => c.isMoving).length, 'transfer')}'
+                              ' · ↓ ${formatRate(down)} · ↑ ${formatRate(up)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: monoLabel(
+                                  size: 12,
+                                  color: AppColors.signal,
+                                  letterSpacing: 0.2),
+                            )
+                          else
+                            Text(
+                              plural(all.length, 'collection'),
+                              style: const TextStyle(
+                                  fontSize: 14, color: AppColors.textDim),
+                            ),
                         ],
                       ),
                     ),

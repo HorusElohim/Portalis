@@ -128,6 +128,32 @@ TextStyle displayText({
       height: height,
     );
 
+/// The big titles on a canvas — screen headings and the one name a screen is
+/// about. Uppercase, heavy, and tracked *in* rather than out, so a heading
+/// reads as a block rather than a sentence.
+///
+/// The tall/condensed look this is after really wants a condensed family;
+/// none is bundled, and a font the app doesn't ship would silently fall back
+/// to the system one — which is the bug this project already had once, when
+/// the theme named 'Inter' and nothing was ever loading it. So it is built
+/// from Space Grotesk at its heaviest, with the tracking and line height doing
+/// the rest. Drop a condensed `.ttf` in `fonts/` and this is the one place to
+/// point at it.
+TextStyle canvasTitle({
+  double size = 30,
+  Color color = AppColors.text,
+  double? height,
+}) =>
+    TextStyle(
+      fontFamily: AppFonts.display,
+      fontSize: size,
+      color: color,
+      fontWeight: FontWeight.w700,
+      // Proportional, not fixed: the same visual tightness at 20pt and 40pt.
+      letterSpacing: size * -0.025,
+      height: height ?? 0.98,
+    );
+
 class AppTheme {
   AppTheme._();
 

@@ -8,7 +8,6 @@ import '../ui/ui.dart';
 import 'desktop_shell.dart';
 import 'collections_screen.dart';
 import 'home_screen.dart';
-import 'transfers_screen.dart';
 import 'user_screen.dart';
 
 /// Width at or above which the app switches to the three-pane desktop layout.
@@ -24,8 +23,8 @@ import 'user_screen.dart';
 /// `linux/my_application.cc` and `windows/runner/`.
 const kDesktopBreakpoint = 1000.0;
 
-/// App root. Three destinations on mobile — Collections, Transfers, You —
-/// and a three-pane layout on a wide window.
+/// App root. Three destinations on mobile — Home, Collections, You — and a
+/// two-pane layout on a wide window.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
 
@@ -101,7 +100,6 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                           child: const [
                             HomeScreen(),
                             CollectionsScreen(),
-                            TransfersScreen(),
                             UserScreen(),
                           ][i],
                         ),
@@ -136,10 +134,15 @@ class AppBottomNav extends StatelessWidget {
   /// than a generic glyph — it is both "where you are" and "how you get
   /// back". Collections is its own peer beside it: Home answers "what can I
   /// do", Collections answers "what do I have".
+  ///
+  /// There is no Transfers destination. Every collection row carries its own
+  /// bar, rate and countdown, Collections filters to what is arriving, and its
+  /// header states the aggregate — so Transfers was the same collections in a
+  /// second place. Dropping it also gives the three that remain room to be
+  /// read: four labels at 375pt had to shrink to 9.5 to fit.
   static const items = [
     (icon: null, label: 'Home'),
     (icon: Icons.dashboard_outlined, label: 'Collections'),
-    (icon: Icons.swap_horiz, label: 'Transfers'),
     (icon: Icons.person_outline, label: 'You'),
   ];
 
@@ -180,13 +183,13 @@ class AppBottomNav extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(7),
                                 child: Image.asset(
                                   'assets/PortalisNature.png',
-                                  width: 21,
-                                  height: 21,
+                                  width: 24,
+                                  height: 24,
                                   // Decoded at 3× its slot, not the source's
                                   // 1254² — permanent chrome must not park a
                                   // full-resolution bitmap in the cache.
-                                  cacheWidth: 63,
-                                  cacheHeight: 63,
+                                  cacheWidth: 72,
+                                  cacheHeight: 72,
                                   filterQuality: FilterQuality.medium,
                                 ),
                               ),
@@ -194,18 +197,18 @@ class AppBottomNav extends StatelessWidget {
                           else
                             Icon(
                               items[i].icon,
-                              size: 21,
+                              size: 24,
                               // Selection is plain white, not mint — mint is
                               // reserved for data actually moving.
                               color: i == index
                                   ? AppColors.text
                                   : AppColors.textGhost,
                             ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 6),
                           Text(
                             items[i].label,
                             style: TextStyle(
-                              fontSize: 9.5,
+                              fontSize: 11.5,
                               fontWeight: i == index
                                   ? FontWeight.w600
                                   : FontWeight.w400,

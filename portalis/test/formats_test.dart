@@ -194,7 +194,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: FormatsScreen()));
       await tester.pump();
 
-      expect(find.text('File formats'), findsOneWidget);
+      expect(find.text('FILE FORMATS'), findsOneWidget);
       expect(find.text('JPEG image'), findsWidgets);
 
       // The screen is generated from the registry, so a type registered a
