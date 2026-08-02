@@ -2,6 +2,8 @@
 mod api; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 mod domain;
 mod log;
+/// Where persisted state lives — one place, so tests can move it.
+mod paths;
 // Private and NOT part of tool/frb_build.sh's --rust-input, same reason as
 // `domain` — see collab_store.rs's own module doc.
 mod collab_store;

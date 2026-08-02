@@ -260,10 +260,7 @@ static KNOWN_SYNC_PEERS: std::sync::Mutex<Option<PeerMap>> = std::sync::Mutex::n
 const MAX_PEERS_PER_COLLECTION: usize = 12;
 
 fn peers_file() -> std::path::PathBuf {
-    let base = dirs::config_dir()
-        .or_else(dirs::data_dir)
-        .unwrap_or_else(std::env::temp_dir);
-    base.join("Portalis").join("sync_peers.json")
+    crate::paths::state_dir().join("sync_peers.json")
 }
 
 fn with_peers<R>(f: impl FnOnce(&mut PeerMap) -> R) -> R {

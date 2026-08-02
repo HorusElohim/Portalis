@@ -127,10 +127,7 @@ pub(crate) fn collaborator_from_persisted(
 }
 
 fn store_file() -> PathBuf {
-    let base = dirs::config_dir()
-        .or_else(dirs::data_dir)
-        .unwrap_or_else(std::env::temp_dir);
-    let path = base.join("Portalis").join("collections.json");
+    let path = crate::paths::state_dir().join("collections.json");
     clog!("collab_store", "store_file: {path:?}");
     path
 }
@@ -231,6 +228,16 @@ fn save(collections: &[Collection]) -> anyhow::Result<()> {
 /// through here so a sync arriving mid-command can't clobber a half-written
 /// `collections.json`.
 static STORE: Mutex<Option<Vec<Collection>>> = Mutex::new(None);
+
+/// Drops the in-memory copy so the next access reloads from disk.
+///
+/// Only for the store test, which redirects `paths::state_dir` and needs the
+/// cache to forget whatever a previous access put there. Production has no
+/// reason to: the process owns the file for its lifetime.
+#[cfg(test)]
+pub(crate) fn forget_cache_for_test() {
+    *STORE.lock().unwrap() = None;
+}
 
 /// Lazily loads the store on first access. Callers go through
 /// [`read_store`] or [`with_store`] rather than this.
@@ -391,34 +398,104 @@ mod tests {
         }
     }
 
+    /// The store's whole lifecycle, against a real file.
+    ///
+    /// One test rather than several because the store is process-wide: two
+    /// tests exercising it would interleave. Everything it asserts was
+    /// previously unreachable — the old version of this test mirrored
+    /// `save`'s strategy against a temp path instead of calling `save`, so it
+    /// proved a property of `rename` and nothing about this module.
     #[test]
-    fn save_never_truncates_the_existing_file_before_the_new_one_is_complete() {
-        // The failure this guards against actually happened: a plain
-        // fs::write opens with O_TRUNC, so a full disk (or a crash) partway
-        // through left collections.json empty and every collection was lost.
-        // Writing to a sibling temp file and renaming means the real path
-        // only ever holds a complete document.
-        let dir = std::env::temp_dir().join(format!("portalis-save-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("collections.json");
-        std::fs::write(&path, b"{\"collections\":[]}").unwrap();
+    fn the_store_round_trips_through_a_real_file_and_never_truncates_it() {
+        let temp = crate::paths::redirect_to_temp();
+        forget_cache_for_test();
+        let identity = DeviceIdentity::generate();
+        let path = temp.path("collections.json");
 
-        // Mirror save()'s write strategy against this temp path.
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, b"{\"collections\":[{}]}").unwrap();
-        // Before the rename the original is still fully intact — that is the
-        // whole property. A truncating write would have emptied it by now.
-        assert_eq!(
-            std::fs::read(&path).unwrap(),
-            b"{\"collections\":[]}",
-            "the live file must stay untouched until the replacement is complete"
-        );
-        std::fs::rename(&tmp, &path).unwrap();
-        assert_eq!(std::fs::read(&path).unwrap(), b"{\"collections\":[{}]}");
-        assert!(!tmp.exists(), "rename must consume the temp file");
+        // A read of an empty store must not create the file. `read_store`
+        // exists precisely because every access used to write one.
+        read_store(|collections| Ok(assert!(collections.is_empty()))).unwrap();
+        assert!(!path.exists(), "reading must never write");
 
-        std::fs::remove_dir_all(&dir).ok();
+        with_store(|collections| Ok(collections.push(seeded(&identity, "Iceland")))).unwrap();
+        assert!(path.exists());
+
+        // Reload from disk, not from the cache: this is the restart path.
+        forget_cache_for_test();
+        read_store(|collections| {
+            assert_eq!(collections.len(), 1);
+            assert_eq!(collections[0].name, "Iceland");
+            // The entry survived with a signature that still verifies, which
+            // is what makes it acceptable to a peer.
+            assert_eq!(collections[0].manifest().len(), 1);
+            Ok(())
+        })
+        .unwrap();
+
+        // Renaming this device rewrites its collaborator record everywhere,
+        // and is a no-op — including no write — when the name already matches.
+        assert_eq!(rename_device(&identity.device_id(), "Maya").unwrap(), 1);
+        assert_eq!(rename_device(&identity.device_id(), "Maya").unwrap(), 0);
+        forget_cache_for_test();
+        read_store(|c| Ok(assert_eq!(c[0].collaborators[0].display_name, "Maya"))).unwrap();
+
+        // And the file is only ever replaced whole: a truncating write would
+        // have left this empty at some point, which is how a full disk
+        // destroyed the real store once.
+        assert!(!path.with_extension("json.tmp").exists());
+        assert!(serde_json::from_slice::<PersistedStore>(&std::fs::read(&path).unwrap()).is_ok());
     }
+
+    /// The property a full disk destroyed once, asserted against real code.
+    ///
+    /// A directory nothing can create files in is the same shape as a full
+    /// one: the sibling temp file cannot be written, so the save fails — and
+    /// the point is that it fails having left the previous document whole. A
+    /// truncating `fs::write` opens the destination itself, which empties it
+    /// before discovering it cannot finish.
+    #[cfg(unix)]
+    #[test]
+    fn a_write_that_cannot_complete_leaves_the_previous_store_intact() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = crate::paths::redirect_to_temp();
+        forget_cache_for_test();
+        let identity = DeviceIdentity::generate();
+        with_store(|c| Ok(c.push(seeded(&identity, "Iceland")))).unwrap();
+        let path = temp.path("collections.json");
+        let intact = std::fs::read(&path).unwrap();
+        let dir = path.parent().unwrap();
+
+        std::fs::set_permissions(dir, PermissionsExt::from_mode(0o500)).unwrap();
+        let result = with_store(|c| Ok(c.push(seeded(&identity, "Second"))));
+        std::fs::set_permissions(dir, PermissionsExt::from_mode(0o700)).unwrap();
+
+        assert!(result.is_err(), "an unwritable store must report, not swallow");
+        assert_eq!(std::fs::read(&path).unwrap(), intact);
+        // Worth being explicit: the in-memory copy did take the push, so the
+        // cache and the file now disagree until the next reload. That is
+        // today's behaviour, not an endorsement of it.
+    }
+
+    /// A collection with one signed entry and this device as its collaborator.
+    fn seeded(identity: &DeviceIdentity, name: &str) -> Collection {
+        let mut collection = Collection::new(name.into());
+        collection.collaborators.push(Collaborator::new(
+            identity.device_id(),
+            "Me".into(),
+            Role::Admin,
+            1,
+        ));
+        collection.add_manifest_entry(ManifestEntry::new_signed(
+            InfoHash::from_bytes([4; 20]),
+            "batch".into(),
+            None,
+            identity,
+            2,
+        ));
+        collection
+    }
+
+
 
     #[test]
     fn persisted_manifest_entries_still_verify_after_round_trip() {

@@ -54,10 +54,7 @@ mod native {
     static CACHE: Mutex<Option<DeviceIdentityInfo>> = Mutex::new(None);
 
     fn identity_file() -> PathBuf {
-        let base = dirs::config_dir()
-            .or_else(dirs::data_dir)
-            .unwrap_or_else(std::env::temp_dir);
-        base.join("Portalis").join("identity.json")
+        crate::paths::state_dir().join("identity.json")
     }
 
     pub(super) fn load_or_create() -> anyhow::Result<(DeviceIdentity, String)> {

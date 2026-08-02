@@ -150,10 +150,7 @@ mod native {
     static CACHE: Mutex<Option<EngineSettings>> = Mutex::new(None);
 
     fn settings_file() -> PathBuf {
-        let base = dirs::config_dir()
-            .or_else(dirs::data_dir)
-            .unwrap_or_else(std::env::temp_dir);
-        base.join("Portalis").join("settings.json")
+        crate::paths::state_dir().join("settings.json")
     }
 
     pub(super) fn load() -> anyhow::Result<EngineSettings> {
