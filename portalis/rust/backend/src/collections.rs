@@ -1049,17 +1049,72 @@ mod native {
         reload(&collection_id).await
     }
 
+    /// Which of a deleted collection's torrents should leave the session:
+    /// those no surviving collection still lists.
+    ///
+    /// The same info-hash can legitimately appear in two manifests — the
+    /// manifest is a grow-only set keyed by info-hash and nothing stops two
+    /// collections carrying the same entry — so forgetting a torrent purely
+    /// because one collection let go of it would stop seeding media another
+    /// collection is still showing.
+    fn hashes_to_forget(removed: &[String], survivors: &HashSet<String>) -> Vec<String> {
+        removed
+            .iter()
+            .filter(|h| !survivors.contains(&norm(h)))
+            .cloned()
+            .collect()
+    }
+
     pub(super) async fn delete_collection(collection_id: String) -> anyhow::Result<()> {
         clog!("collections", "delete_collection: id={collection_id}");
         // A shared collection's id is a UUID; a plain torrent's is its
         // info-hash. Which one it parses as tells us where it lives.
         if let Ok(id) = CollectionId::from_string(&collection_id) {
-            return with_store(|collections| {
-                let before = collections.len();
-                collections.retain(|c| c.id != id);
-                anyhow::ensure!(collections.len() != before, "no such collection");
-                Ok(())
-            });
+            let (rendezvous_key_hex, orphaned) = with_store(|collections| {
+                let Some(position) = collections.iter().position(|c| c.id == id) else {
+                    anyhow::bail!("no such collection");
+                };
+                let removed = collections.remove(position);
+                let removed_hashes: Vec<String> = removed
+                    .manifest()
+                    .entries()
+                    .map(|e| e.info_hash.to_hex())
+                    .collect();
+                let survivors: HashSet<String> = collections
+                    .iter()
+                    .flat_map(|c| c.manifest().entries())
+                    .map(|e| norm(&e.info_hash.to_hex()))
+                    .collect();
+                Ok((
+                    removed.rendezvous_key().to_hex(),
+                    hashes_to_forget(&removed_hashes, &survivors),
+                ))
+            })?;
+
+            // Deleting the record alone left every one of the collection's
+            // torrents in the session. Unclaimed, they resurfaced immediately
+            // as plain-torrent collections named after their batch directory
+            // (`<label>-<uuid>`) — so removing a collection appeared to
+            // replace it with a differently-named copy of itself, and
+            // librqbit's own persistence brought them back after a restart
+            // too.
+            clog!(
+                "collections",
+                "delete_collection: forgetting {} torrent(s) no other collection claims",
+                orphaned.len()
+            );
+            for info_hash in orphaned {
+                // Files stay on disk either way — `forget_torrent` is
+                // librqbit's "forget", not "delete".
+                if let Err(e) = crate::torrent::forget_torrent(&info_hash).await {
+                    // An entry that was never fetched has no torrent to
+                    // forget, which is the common case, not an error.
+                    clog!("collections", "delete_collection: {info_hash} wasn't in the                          session ({e:#})");
+                }
+            }
+            forget_fetch_request(&collection_id);
+            crate::collab_sync::forget_collection_peers(&rendezvous_key_hex);
+            return Ok(());
         }
         crate::torrent::forget_torrent(&collection_id).await
     }
@@ -1220,6 +1275,21 @@ mod native {
             done.add(&torrent("bb", vec![("b", 100, 100)]));
             done.download_mbps = 5.0;
             assert_eq!(done.eta_secs(), None);
+        }
+
+        #[test]
+        fn deleting_a_collection_forgets_only_torrents_nothing_else_claims() {
+            // The bug this guards: deleting a collection left its torrents in
+            // the session, where they immediately came back as plain-torrent
+            // collections named after their batch directory.
+            let removed = vec!["AABB".to_string(), "ccdd".to_string()];
+            let survivors: HashSet<String> = ["aabb".to_string()].into_iter().collect();
+
+            let forget = hashes_to_forget(&removed, &survivors);
+
+            // Still listed by another collection — it must keep seeding, and
+            // the case difference must not hide that.
+            assert_eq!(forget, vec!["ccdd".to_string()]);
         }
 
         #[test]

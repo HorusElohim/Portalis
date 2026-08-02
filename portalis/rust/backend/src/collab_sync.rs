@@ -411,6 +411,28 @@ fn is_self_address(addr: &str) -> bool {
     addr_port.parse::<u16>() == Ok(port) && lan_ips().iter().any(|ip| ip == host)
 }
 
+/// Drops everything remembered about how to reach a collection's peers.
+///
+/// Called when a collection is deleted: `sync_peers.json` is keyed by
+/// rendezvous key and nothing else would ever revisit that key, so without
+/// this it accumulates addresses for collections the user has thrown away.
+pub(crate) fn forget_collection_peers(rendezvous_key_hex: &str) {
+    with_peers(|peers| {
+        if peers.remove(rendezvous_key_hex).is_some() {
+            clog!(
+                "collab_sync",
+                "forgot every peer for rendezvous_key={}… — its collection is gone",
+                &rendezvous_key_hex[..8.min(rendezvous_key_hex.len())]
+            );
+            save_peers(peers);
+        }
+    });
+    PEER_FAILURES
+        .lock()
+        .unwrap()
+        .retain(|key, _| !key.starts_with(rendezvous_key_hex));
+}
+
 pub(crate) fn known_sync_peers(rendezvous_key_hex: &str) -> Vec<String> {
     with_peers(|peers| {
         peers
