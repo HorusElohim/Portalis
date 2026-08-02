@@ -39,7 +39,8 @@ enum _Pane { collections, people, you, settings }
 
 class _DesktopShellState extends State<DesktopShell> {
   _Pane _pane = _Pane.collections;
-  String? _selectedId;
+  /// The collection whose card is showing its contents, if any.
+  String? _openId;
 
   /// The two shells share a destination wherever they have one in common, so
   /// that resizing across the breakpoint leaves you where you were rather than
@@ -98,16 +99,11 @@ class _DesktopShellState extends State<DesktopShell> {
     if (tab != null) AppNavigation.tab.value = tab;
   }
 
-  Collection? get _selected {
-    final list = Collections.instance.collections;
-    if (list.isEmpty) return null;
-    for (final c in list) {
-      if (c.id == _selectedId) return c;
-    }
-    // Selection follows the data: if the selected collection is gone (or
-    // nothing has been picked yet), fall back to the first rather than
-    // showing an empty inspector beside a populated list.
-    return list.first;
+  /// Clicking an open collection closes it again — the card is the view, so
+  /// there is nothing else for a second click to mean.
+  void _open(String id) {
+    setState(() => _openId = _openId == id ? null : id);
+    _select(_Pane.collections);
   }
 
   @override
@@ -117,57 +113,24 @@ class _DesktopShellState extends State<DesktopShell> {
       body: ListenableBuilder(
         listenable: Collections.instance,
         builder: (context, _) {
-          // Collections stays on the left at all times. Swapping it out for
-          // Transfers/People/Settings meant losing sight of your own
-          // collections just to change a setting — on a screen wide enough to
-          // show both, there is no reason to.
-          // Whatever is being looked at: the chosen collection, or People,
-          // Settings, You. The list stays on the left in every case — on a
-          // screen this wide there is no reason to lose sight of it.
-          final detail = _pane == _Pane.collections ? _collectionView() : _centre();
+          // No second panel. A collection opens inside its own card, in
+          // the one list — a panel beside it was a second, thinner account
+          // of the same collection, and a button to get from one to the
+          // other.
           return Row(
             children: [
               _Sidebar(pane: _pane, onPane: _select),
-              SizedBox(
-                // Fixed, so the list does not reflow every time the thing
-                // beside it changes.
-                width: 360,
+              Expanded(
                 child: SafeArea(
-                  child: _CollectionsPane(
-                    selectedId: _selected?.id,
-                    onSelect: (id) {
-                      setState(() => _selectedId = id);
-                      _select(_Pane.collections);
-                    },
-                  ),
+                  child: _pane == _Pane.collections
+                      ? _CollectionsPane(openId: _openId, onOpen: _open)
+                      : _centre(),
                 ),
               ),
-              Expanded(child: detail),
             ],
           );
         },
       ),
-    );
-  }
-
-  /// A collection is opened by being clicked, and it opens *here* — beside the
-  /// list it was chosen from. It used to take a button in a side panel that
-  /// pushed a full-screen route over the sidebar, the list and all, so looking
-  /// inside a collection cost you the other two panes.
-  Widget _collectionView() {
-    final collection = _selected;
-    if (collection == null) {
-      return const Center(
-        child: Text('Nothing selected.',
-            style: TextStyle(fontSize: 13, color: AppColors.textDim)),
-      );
-    }
-    // Keyed, so choosing another collection starts a fresh screen rather than
-    // carrying the previous one's open disclosure across.
-    return CollectionScreen(
-      key: ValueKey(collection.id),
-      collection: collection,
-      embedded: true,
     );
   }
 
@@ -671,10 +634,10 @@ class _SessionRates extends StatelessWidget {
 }
 
 class _CollectionsPane extends StatelessWidget {
-  const _CollectionsPane({required this.selectedId, required this.onSelect});
+  const _CollectionsPane({required this.openId, required this.onOpen});
 
-  final String? selectedId;
-  final ValueChanged<String> onSelect;
+  final String? openId;
+  final ValueChanged<String> onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -723,10 +686,21 @@ class _CollectionsPane extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
                     final c = collections[i];
+                    final open = c.id == openId;
                     return CollectionRow(
                       collection: c,
-                      selected: c.id == selectedId,
-                      onTap: () => onSelect(c.id),
+                      selected: open,
+                      onTap: () => onOpen(c.id),
+                      // The card *is* the view. Keyed by id so opening
+                      // another starts fresh rather than carrying the
+                      // previous one's disclosure across.
+                      detail: open
+                          ? CollectionDetail(
+                              key: ValueKey(c.id),
+                              collection: c,
+                              showHeading: false,
+                            )
+                          : null,
                     );
                   },
                 ),

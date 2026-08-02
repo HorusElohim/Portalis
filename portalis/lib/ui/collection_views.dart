@@ -19,21 +19,23 @@ class CollectionRow extends StatelessWidget {
     required this.collection,
     required this.onTap,
     this.selected = false,
+    this.detail,
   });
 
   final Collection collection;
   final VoidCallback onTap;
   final bool selected;
 
+  /// Shown inside this card, under the row. Where a window is wide enough,
+  /// opening a collection means this card growing to hold it — not a second
+  /// panel beside the list describing the same thing twice.
+  final Widget? detail;
+
   @override
   Widget build(BuildContext context) {
     final torrent = !collection.isShared;
     final live = collection.downloadMbps > 0 || collection.uploadMbps > 0;
     final accent = torrent ? AppColors.ember : AppColors.signal;
-    final downloading = collection.state == 'downloading';
-    // No metadata has arrived, so there is no total to measure against — an
-    // indeterminate bar is the honest shape for "reaching out to a peer".
-    final connecting = collection.isConnecting;
 
     return SurfaceCard(
       onTap: onTap,
@@ -57,7 +59,28 @@ class CollectionRow extends StatelessWidget {
           selected && collection.glow == GlowLevel.none
               ? AppColors.borderStrong
               : null,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row(),
+          if (detail != null) ...[
+            const Divider(height: 26, color: AppColors.border),
+            detail!,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row() {
+    final torrent = !collection.isShared;
+    final accent = torrent ? AppColors.ember : AppColors.signal;
+    final live = collection.downloadMbps > 0 || collection.uploadMbps > 0;
+    final downloading = collection.state == 'downloading';
+    // No metadata has arrived, so there is no total to measure against — an
+    // indeterminate bar is the honest shape for "reaching out to a peer".
+    final connecting = collection.isConnecting;
+    return Row(
         children: [
           SizedBox(
             width: 52,
@@ -134,8 +157,7 @@ class CollectionRow extends StatelessWidget {
             StatusBadge(label: 'SHARING', color: accent)
           else
             StatusBadge(label: collection.state.toUpperCase()),
-        ],
-      ),
+      ],
     );
   }
 }

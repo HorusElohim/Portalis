@@ -23,25 +23,54 @@ import 'media_viewer_screen.dart';
 /// constructed with: sync, fetch and add-media all change the collection
 /// while this screen is open, and it re-reads from [Collections] so those
 /// land without a manual back-and-forward.
-class CollectionScreen extends StatefulWidget {
-  const CollectionScreen({
+class CollectionDetail extends StatefulWidget {
+  const CollectionDetail({
     super.key,
     required this.collection,
-    this.embedded = false,
+    this.showHeading = true,
   });
 
-  /// Set when this is a pane of the desktop shell rather than a pushed screen.
-  /// There is nothing to go back to — the list it was chosen from is beside
-  /// it — so the back button and the pop-on-delete both go away.
-
   final Collection collection;
-  final bool embedded;
+
+  /// False where the name and item count are already on screen — in the
+  /// desktop list the row above this *is* the heading.
+  final bool showHeading;
 
   @override
-  State<CollectionScreen> createState() => _CollectionScreenState();
+  State<CollectionDetail> createState() => _CollectionDetailState();
 }
 
-class _CollectionScreenState extends State<CollectionScreen> {
+/// A collection on its own screen — the phone's way in, where there is no
+/// room to show it beside the list it came from. On desktop the same detail
+/// sits inside the collection's own card, with no second panel to carry it.
+class CollectionScreen extends StatelessWidget {
+  const CollectionScreen({super.key, required this.collection});
+
+  final Collection collection;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceDeep,
+      body: SafeArea(
+        child: PageBody(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                NavBackButton(onTap: () => Navigator.of(context).pop()),
+                CollectionDetail(collection: collection),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CollectionDetailState extends State<CollectionDetail> {
   bool _busy = false;
 
   /// The identifiers, shown in place. They were a pushed screen whose only
@@ -286,7 +315,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
       await Collections.instance.delete(_collection.id);
       // Embedded, the list beside us simply drops it and the selection moves
       // on; there is no route to leave.
-      if (mounted && !widget.embedded) Navigator.of(context).pop();
+      // The list simply drops it and the selection moves on.
+      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
       _toast('Couldn\'t remove this collection: $e');
       if (mounted) setState(() => _busy = false);
@@ -297,190 +327,149 @@ class _CollectionScreenState extends State<CollectionScreen> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Collections.instance,
-      builder: (context, _) {
-        final collection = _collection;
-        final shown = collection.collaborators.take(6).toList();
-        final remaining = collection.collaborators.length - shown.length;
-        final adminCount =
-            collection.collaborators.where((c) => c.isAdmin).length;
+      builder: (context, _) => _detail(_collection),
+    );
+  }
 
-        return Scaffold(
-          backgroundColor: AppColors.surfaceDeep,
-          body: SafeArea(
-            child: PageBody(
-              child: Column(
-                children: [
-                  // No cover image: collection artwork isn't modeled anywhere
-                  // in the backend, so there's nothing to render one from.
-                  Row(
-                    children: [
-                      if (!widget.embedded)
-                        NavBackButton(onTap: () => Navigator.of(context).pop()),
-                      const Spacer(),
-                      if (adminCount > 0)
-                        Text(
-                          '$adminCount admin${adminCount == 1 ? '' : 's'}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontFamily: 'monospace',
-                            color: AppColors.textDim,
-                          ),
-                        ),
-                      IconButton(
-                        tooltip: _showDetails ? 'Hide details' : 'Details',
-                        icon: Icon(
-                          _showDetails
-                              ? Icons.info_rounded
-                              : Icons.info_outline,
-                          size: 18,
-                          color: _showDetails
-                              ? AppColors.signalSoft
-                              : AppColors.textDim,
-                        ),
-                        onPressed: () =>
-                            setState(() => _showDetails = !_showDetails),
-                      ),
-                      IconButton(
-                        tooltip: 'Remove from this device',
-                        icon: const Icon(Icons.delete_outline,
-                            size: 18, color: AppColors.textDim),
-                        onPressed: _busy ? null : _delete,
-                      ),
-                    ],
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              collection.name,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              collection.isShared
-                                  ? 'Shared collection · ${collection.subtitle}'
-                                  : 'Torrent · ${collection.subtitle}',
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                fontFamily: 'monospace',
-                                color: AppColors.textDim,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            CopiesIndicator(
-                              color: collection.hue,
-                              label: collection.copiesLabel,
-                              fontSize: 12,
-                            ),
-                            // The bytes, the rate and the countdown, here
-                            // rather than behind the info button. They are the
-                            // reason anyone opens a collection mid-transfer,
-                            // and a pushed screen is a poor place for numbers
-                            // that change every second.
-                            if (collection.totalBytes > 0 ||
-                                collection.downloadMbps > 0 ||
-                                collection.uploadMbps > 0) ...[
-                              const SizedBox(height: 10),
-                              TransferFacts(
-                                progress: collection.progress,
-                                downloadedBytes: collection.downloadedBytes,
-                                totalBytes: collection.totalBytes,
-                                downloadMbps: collection.downloadMbps,
-                                uploadMbps: collection.uploadMbps,
-                                livePeers: collection.livePeers,
-                                etaLabel: collection.etaLabel,
-                                color: collection.hue,
-                              ),
-                            ],
-                            AnimatedSize(
-                              duration: const Duration(milliseconds: 180),
-                              curve: Curves.easeOutCubic,
-                              alignment: Alignment.topCenter,
-                              child: _showDetails
-                                  ? _Identifiers(collection: collection)
-                                  : const SizedBox(width: double.infinity),
-                            ),
-                            const SizedBox(height: 14),
-                            _Collaborators(
-                              collection: collection,
-                              shown: shown,
-                              remaining: remaining,
-                            ),
-                            const SizedBox(height: 12),
-                            if (collection.media.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 28),
-                                child: Center(
-                                  child: Text(
-                                    'Nothing in this collection yet.',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textDim),
-                                  ),
-                                ),
-                              )
-                            else
-                              _Contents(collection: collection),
-                            const SizedBox(height: 12),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_busy) const LinearProgressIndicator(minHeight: 2),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        // Invite/add/sync exist only for shared collections —
-                        // a plain torrent has no invite secret and its contents
-                        // are fixed forever by its info-hash.
-                        if (collection.isShared) ...[
-                          PillButton(
-                            label: 'Invite',
-                            icon: const Icon(Icons.people_alt_outlined,
-                                size: 16, color: AppColors.signalSoft),
-                            onTap: _busy ? null : _showInvite,
-                          ),
-                          PillButton(
-                            label: '＋ Add media',
-                            dim: true,
-                            onTap: _busy ? null : _addMedia,
-                          ),
-                          PillButton(
-                            label: 'Sync',
-                            dim: true,
-                            onTap: _busy ? null : _sync,
-                          ),
-                        ],
-                        if (collection.pendingMedia > 0)
-                          PillButton(
-                            label: 'Fetch ${collection.pendingMedia}',
-                            onTap: _busy ? null : _fetchPending,
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  Widget _detail(Collection collection) {
+    final shown = collection.collaborators.take(6).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _controls(collection),
+        if (widget.showHeading) ...[
+          Text(collection.name,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          Text(
+            collection.isShared
+                ? 'Shared collection · ${collection.subtitle}'
+                : 'Torrent · ${collection.subtitle}',
+            style: const TextStyle(
+                fontSize: 10.5, fontFamily: 'monospace', color: AppColors.textDim),
           ),
-        );
-      },
+          const SizedBox(height: 6),
+        ],
+        CopiesIndicator(
+          color: collection.hue,
+          label: collection.copiesLabel,
+          fontSize: 12,
+        ),
+        // The bytes, the rate and the countdown. They are the reason anyone
+        // opens a collection mid-transfer.
+        if (collection.totalBytes > 0 ||
+            collection.downloadMbps > 0 ||
+            collection.uploadMbps > 0) ...[
+          const SizedBox(height: 10),
+          TransferFacts(
+            progress: collection.progress,
+            downloadedBytes: collection.downloadedBytes,
+            totalBytes: collection.totalBytes,
+            downloadMbps: collection.downloadMbps,
+            uploadMbps: collection.uploadMbps,
+            livePeers: collection.livePeers,
+            etaLabel: collection.etaLabel,
+            color: collection.hue,
+          ),
+        ],
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _showDetails
+              ? _Identifiers(collection: collection)
+              : const SizedBox(width: double.infinity),
+        ),
+        const SizedBox(height: 14),
+        _Collaborators(
+          collection: collection,
+          shown: shown,
+          remaining: collection.collaborators.length - shown.length,
+        ),
+        const SizedBox(height: 14),
+        // Above the contents, not pinned below them: what you can do with a
+        // collection belongs with what it is, and a bar at the bottom of a
+        // card in a list would be a bar in the middle of the page.
+        _actions(collection),
+        if (_busy)
+          const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+        const SizedBox(height: 14),
+        if (collection.media.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 22),
+            child: Center(
+              child: Text('Nothing in this collection yet.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textDim)),
+            ),
+          )
+        else
+          _Contents(collection: collection),
+      ],
+    );
+  }
+
+  /// The two things that act on the collection itself rather than its
+  /// contents, kept out of the way at the top right.
+  Widget _controls(Collection collection) {
+    final admins = collection.collaborators.where((c) => c.isAdmin).length;
+    return Row(
+      children: [
+        if (admins > 0)
+          Text('$admins admin${admins == 1 ? '' : 's'}',
+              style: const TextStyle(
+                  fontSize: 10, fontFamily: 'monospace', color: AppColors.textDim)),
+        const Spacer(),
+        IconButton(
+          tooltip: _showDetails ? 'Hide details' : 'Details',
+          icon: Icon(_showDetails ? Icons.info_rounded : Icons.info_outline,
+              size: 18,
+              color: _showDetails ? AppColors.signalSoft : AppColors.textDim),
+          onPressed: () => setState(() => _showDetails = !_showDetails),
+        ),
+        IconButton(
+          tooltip: 'Remove from this device',
+          icon: const Icon(Icons.delete_outline,
+              size: 18, color: AppColors.textDim),
+          onPressed: _busy ? null : _delete,
+        ),
+      ],
+    );
+  }
+
+  Widget _actions(Collection collection) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        // Invite/add/sync exist only for shared collections — a plain torrent
+        // has no invite secret and its contents are fixed by its info-hash.
+        if (collection.isShared) ...[
+          PillButton(
+            label: 'Invite',
+            icon: const Icon(Icons.people_alt_outlined,
+                size: 16, color: AppColors.signalSoft),
+            onTap: _busy ? null : _showInvite,
+          ),
+          PillButton(
+            label: '＋ Add media',
+            dim: true,
+            onTap: _busy ? null : _addMedia,
+          ),
+          PillButton(label: 'Sync', dim: true, onTap: _busy ? null : _sync),
+        ],
+        if (collection.pendingMedia > 0)
+          PillButton(
+            label: 'Fetch ${collection.pendingMedia}',
+            onTap: _busy ? null : _fetchPending,
+          ),
+      ],
     );
   }
 }
+
 
 /// What a collection *is*, as opposed to what it is doing: the rows worth
 /// having once and rarely again. Everything that changes second to second is

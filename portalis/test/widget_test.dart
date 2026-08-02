@@ -174,23 +174,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('clicking a collection opens it beside the list',
-        (tester) async {
+    testWidgets('a collection opens inside its own card', (tester) async {
       // It used to take a button in a side panel that pushed a full-screen
-      // route over the sidebar, the list and all — so looking inside a
-      // collection cost you the other two panes.
+      // route over the sidebar, the list and all. Then it was a second panel
+      // beside the list — a thinner account of the same collection, plus a
+      // button to get from one to the other. The card is the view.
       await _pumpApp(tester, size: _desktop, collections: [
         _collection(id: 'a', name: 'Iceland'),
         _collection(id: 'b', name: 'Studio'),
       ]);
 
       expect(find.text('Open collection'), findsNothing);
+      expect(find.byType(CollectionDetail), findsNothing);
+
       await tester.tap(find.text('Studio').first);
       await tester.pump();
 
-      // The collection is on screen, and so is the list it came from.
-      expect(find.byType(CollectionScreen), findsOneWidget);
+      // Open in place: the whole list is still there around it.
+      expect(find.byType(CollectionDetail), findsOneWidget);
+      expect(find.text('Invite'), findsOneWidget);
       expect(find.text('Iceland'), findsWidgets);
+
+      // And clicking it again closes it — the card is the only view, so a
+      // second click has nothing else to mean.
+      await tester.tap(find.text('Studio').first);
+      await tester.pump();
+      expect(find.byType(CollectionDetail), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
