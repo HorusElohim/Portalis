@@ -523,6 +523,12 @@ fn apply_message(msg: &SyncMessage) -> anyhow::Result<bool> {
 
 static LISTENER: OnceCell<SocketAddr> = OnceCell::const_new();
 
+/// Where we are listening, if we are. Never starts anything — reading what
+/// the app knows about itself must not have a side effect on the network.
+pub(crate) fn listening_at() -> Option<SocketAddr> {
+    LISTENER.get().copied()
+}
+
 /// Starts the sync listener (idempotent) and returns its bound address.
 /// Binds an ephemeral port on all interfaces; each incoming connection is
 /// one complete sync exchange (read theirs → merge → reply with ours).

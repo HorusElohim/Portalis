@@ -61,6 +61,16 @@ Future<int> fetchCollectionMedia({required String collectionId}) =>
     RustLib.instance.api
         .crateCollectionsFetchCollectionMedia(collectionId: collectionId);
 
+/// Brings the engine up: the sync listener, the convergence loop, and the
+/// BitTorrent session warming in the background.
+///
+/// Explicit, because it used to happen as a side effect of the UI asking for
+/// the collection list — so the app's networking began when a screen first
+/// drew, and an invite generated before that drew carried no address for
+/// anyone to reach.
+Future<void> startEngine() =>
+    RustLib.instance.api.crateCollectionsStartEngine();
+
 /// Tells the engine whether anyone is looking, so it can stop reaching for
 /// the network when nobody is. Called from the app's lifecycle observer.
 Future<void> setActive({required bool active}) =>

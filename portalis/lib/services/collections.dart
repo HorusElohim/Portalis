@@ -76,6 +76,16 @@ class Collections extends ChangeNotifier {
 
   void start() {
     if (_timer != null) return;
+    // Bring the engine up before asking it anything. It used to come up as a
+    // side effect of the first question, which meant the answer to that
+    // question was taken before it was ready.
+    //
+    // Wrapped rather than awaited-and-caught: with no RustLib — every widget
+    // test — the bridge throws *before* returning a future, so catchError
+    // never sees it and the exception escapes into whatever called us. A
+    // microtask and not a Future(): the test binding counts the latter as a
+    // pending timer and fails the test that happened to be running.
+    unawaited(Future.microtask(bridge.startEngine).catchError((_) {}));
     unawaited(refresh());
     _schedule(_interval);
   }
@@ -97,7 +107,8 @@ class Collections extends ChangeNotifier {
     // Told, not inferred. The engine used to decide whether anyone was looking
     // by watching how recently this class had asked it for collections, which
     // made its network behaviour a side effect of how often a screen redrew.
-    unawaited(bridge.setActive(active: !paused).catchError((_) {}));
+    unawaited(
+        Future.microtask(() => bridge.setActive(active: !paused)).catchError((_) {}));
     if (paused) {
       _timer?.cancel();
       _timer = null;

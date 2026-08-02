@@ -190,6 +190,17 @@ pub(crate) async fn pursue_fetches() {
     native::pursue_fetches().await
 }
 
+/// Brings the engine up: the sync listener, the convergence loop, and the
+/// BitTorrent session warming in the background.
+///
+/// Explicit, because it used to happen as a side effect of the UI asking for
+/// the collection list — so the app's networking began when a screen first
+/// drew, and an invite generated before that drew carried no address for
+/// anyone to reach.
+pub async fn start_engine() -> anyhow::Result<()> {
+    crate::collab_sync::ensure_listener().await.map(|_| ())
+}
+
 /// Tells the engine whether anyone is looking, so it can stop reaching for
 /// the network when nobody is. Called from the app's lifecycle observer.
 pub async fn set_active(active: bool) {
@@ -245,9 +256,16 @@ mod native {
     /// Current sync endpoints to embed in invites: LAN always, public IP
     /// when discoverable. Starts the listener as a side effect, so a device
     /// that just generated an invite is already reachable.
-    async fn current_sync_addresses() -> Vec<String> {
-        let Ok(addr) = crate::collab_sync::ensure_listener().await else {
-            clog!("collections", "current_sync_addresses: listener wouldn't start, no addresses");
+    /// Where a peer can reach us, for embedding in an invite.
+    ///
+    /// Reads the listener rather than starting it. Listing collections used to
+    /// bring up a socket, probe UPnP and warm the BitTorrent session as a side
+    /// effect of the UI asking what exists — which is why nothing on this path
+    /// could be tested without a network, and why an invite generated in the
+    /// first second of a launch carried no addresses at all.
+    fn current_sync_addresses() -> Vec<String> {
+        let Some(addr) = crate::collab_sync::listening_at() else {
+            clog!("collections", "current_sync_addresses: not listening yet");
             return Vec::new();
         };
         // Every real interface address, not just the default route's — a VPN
@@ -483,7 +501,7 @@ mod native {
         } else {
             Vec::new()
         };
-        let addrs = current_sync_addresses().await;
+        let addrs = current_sync_addresses();
 
         // Self-heal this device's own collaborator records. Collections
         // created before the nickname was wired up (or before it was last
@@ -1120,7 +1138,7 @@ mod native {
     }
 
     pub(super) async fn sync_address() -> anyhow::Result<String> {
-        let addrs = current_sync_addresses().await;
+        let addrs = current_sync_addresses();
         anyhow::ensure!(!addrs.is_empty(), "couldn't start the sync listener");
         Ok(addrs.join(","))
     }
@@ -1129,6 +1147,62 @@ mod native {
     mod tests {
         use super::*;
         use crate::domain::identity::DeviceIdentity;
+
+        /// Joining, twice, against a real store — reachable at all only now
+        /// that listing has no network side effect.
+        ///
+        /// The second join is the bug: it used to push another record with the
+        /// same rendezvous key, and `apply_message` merges into the first
+        /// match — so everything a peer sent landed in the copy the user was
+        /// not looking at. Rejoining is exactly what someone does when the
+        /// first join appears not to have worked.
+        #[tokio::test]
+        async fn rejoining_lands_on_the_collection_you_already_have() {
+            let _temp = crate::paths::redirect_to_temp();
+            crate::collab_store::forget_cache_for_test();
+            let invite = invite_code_for(&Collection::new("Trip".into()), &[]);
+
+            let first = join_collection(invite.clone(), "Me".into()).await.unwrap();
+            let again = join_collection(invite, "Me".into()).await.unwrap();
+
+            assert_eq!(first.id, again.id);
+            assert_eq!(list_collections().await.unwrap().len(), 1);
+            // And we are in it once, not twice.
+            assert_eq!(again.collaborators.len(), 1);
+        }
+
+        /// A collection with nothing fetched still describes itself: the
+        /// entries are known because a peer signed them, and saying so is the
+        /// difference between "nothing here" and "nothing here yet".
+        #[tokio::test]
+        async fn a_manifest_with_no_local_content_lists_as_pending() {
+            let _temp = crate::paths::redirect_to_temp();
+            crate::collab_store::forget_cache_for_test();
+            let identity = crate::device::current_identity().unwrap();
+            let created = create_collection("Trip".into()).await.unwrap();
+            let id = CollectionId::from_string(&created.id).unwrap();
+            with_store(|collections| {
+                let collection = collections.iter_mut().find(|c| c.id == id).unwrap();
+                collection.add_manifest_entry(ManifestEntry::new_signed(
+                    InfoHash::from_bytes([8; 20]),
+                    "Beach day".into(),
+                    None,
+                    &identity,
+                    1,
+                ));
+                Ok(())
+            })
+            .unwrap();
+
+            let listed = list_collections().await.unwrap();
+
+            assert_eq!(listed[0].pending_media, 1);
+            assert_eq!(listed[0].state, "pending");
+            assert_eq!(listed[0].media[0].entry_name, "Beach day");
+            assert!(!listed[0].media[0].fetched);
+            // Nobody is listening, so an invite honestly carries no address.
+            assert!(listed[0].invite_code.is_some());
+        }
 
         #[test]
         fn invite_code_round_trips_through_the_exact_parser_join_uses() {
