@@ -34,8 +34,7 @@ pub(crate) fn current_identity() -> anyhow::Result<crate::domain::identity::Devi
 }
 
 mod native {
-    use std::path::PathBuf;
-    use std::sync::Mutex;
+        use std::sync::Mutex;
 
     use anyhow::Context;
     use serde::{Deserialize, Serialize};
@@ -58,52 +57,41 @@ mod native {
         *CACHE.lock().unwrap() = None;
     }
 
-    fn identity_file() -> PathBuf {
-        crate::paths::state_dir().join("identity.json")
+    fn vault() -> crate::vault::Vault {
+        crate::vault::Vault::named("identity.json")
     }
 
     pub(super) fn load_or_create() -> anyhow::Result<(DeviceIdentity, String)> {
-        let path = identity_file();
-        if let Ok(bytes) = std::fs::read(&path) {
-            let persisted: PersistedIdentity =
-                serde_json::from_slice(&bytes).context("parsing identity.json")?;
-            let key_bytes: [u8; 32] = hex::decode(&persisted.secret_key_hex)
-                .context("decoding stored secret key")?
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("stored secret key is not 32 bytes"))?;
-            let identity = DeviceIdentity::from_bytes(&key_bytes);
-            crate::log::clog!(
-                "device",
-                "load_or_create: loaded existing identity from {path:?}, device_id={}…",
-                &identity.device_id().to_hex()[..8]
-            );
-            return Ok((identity, persisted.nickname));
+        if let Some(persisted) = vault().read::<PersistedIdentity>()? {
+            return restore(persisted);
         }
 
         let identity = DeviceIdentity::generate();
         let nickname = "Me".to_string();
         crate::log::clog!(
             "device",
-            "load_or_create: no identity file at {path:?}, generated a new one, device_id={}…",
+            "no identity yet, generated one, device_id={}…",
             &identity.device_id().to_hex()[..8]
         );
         save(&identity, &nickname)?;
         Ok((identity, nickname))
     }
 
+    fn restore(persisted: PersistedIdentity) -> anyhow::Result<(DeviceIdentity, String)> {
+        let key: [u8; 32] = hex::decode(&persisted.secret_key_hex)
+            .context("decoding stored secret key")?
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("stored secret key is not 32 bytes"))?;
+        let identity = DeviceIdentity::from_bytes(&key);
+        crate::log::clog!("device", "restored identity {}…", &identity.device_id().to_hex()[..8]);
+        Ok((identity, persisted.nickname))
+    }
+
     fn save(identity: &DeviceIdentity, nickname: &str) -> anyhow::Result<()> {
-        let path = identity_file();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("creating {parent:?}"))?;
-        }
-        let persisted = PersistedIdentity {
+        vault().write(&PersistedIdentity {
             secret_key_hex: hex::encode(identity.to_bytes()),
             nickname: nickname.to_string(),
-        };
-        let bytes = serde_json::to_vec_pretty(&persisted)?;
-        std::fs::write(&path, bytes).with_context(|| format!("writing {path:?}"))?;
-        Ok(())
+        })
     }
 
     pub(super) fn device_identity() -> anyhow::Result<DeviceIdentityInfo> {

@@ -259,17 +259,14 @@ static KNOWN_SYNC_PEERS: std::sync::Mutex<Option<PeerMap>> = std::sync::Mutex::n
 /// address costs a [`CONNECT_TIMEOUT`] on every re-sync tick.
 const MAX_PEERS_PER_COLLECTION: usize = 12;
 
-fn peers_file() -> std::path::PathBuf {
-    crate::paths::state_dir().join("sync_peers.json")
+fn peers_vault() -> crate::vault::Vault {
+    crate::vault::Vault::named("sync_peers.json")
 }
 
 fn with_peers<R>(f: impl FnOnce(&mut PeerMap) -> R) -> R {
     let mut guard = KNOWN_SYNC_PEERS.lock().unwrap();
     if guard.is_none() {
-        let loaded = std::fs::read(peers_file())
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<PeerMap>(&bytes).ok())
-            .unwrap_or_default();
+        let loaded: PeerMap = peers_vault().read().ok().flatten().unwrap_or_default();
         clog!("collab_sync", "known sync peers: loaded {} collection(s)", loaded.len());
         *guard = Some(loaded);
     }
@@ -279,19 +276,9 @@ fn with_peers<R>(f: impl FnOnce(&mut PeerMap) -> R) -> R {
 /// Same atomic temp-file-then-rename as `collab_store::save`, for the same
 /// reason: a truncating write that fails halfway leaves nothing behind.
 fn save_peers(peers: &PeerMap) {
-    let path = peers_file();
-    let write = || -> anyhow::Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec(peers)?)?;
-        std::fs::rename(&tmp, &path)?;
-        Ok(())
-    };
-    if let Err(e) = write() {
-        // Non-fatal: peers stay in memory for this run, and a live collection
-        // keeps syncing. Only a restart would lose them.
+    // Non-fatal: peers stay in memory for this run and a live collection keeps
+    // syncing. Only a restart would lose them.
+    if let Err(e) = peers_vault().write(peers) {
         clog!("collab_sync", "couldn't persist known sync peers ({e:#})");
     }
 }

@@ -136,11 +136,9 @@ pub async fn set_engine_settings(settings: EngineSettings) -> anyhow::Result<boo
 }
 
 mod native {
-    use std::path::PathBuf;
-    use std::sync::Mutex;
+        use std::sync::Mutex;
 
-    use anyhow::Context;
-
+    
     use crate::log::clog;
 
     use super::EngineSettings;
@@ -149,46 +147,28 @@ mod native {
     /// disk on every call.
     static CACHE: Mutex<Option<EngineSettings>> = Mutex::new(None);
 
-    fn settings_file() -> PathBuf {
-        crate::paths::state_dir().join("settings.json")
+    fn vault() -> crate::vault::Vault {
+        crate::vault::Vault::named("settings.json")
     }
 
     pub(super) fn load() -> anyhow::Result<EngineSettings> {
         if let Some(cached) = CACHE.lock().unwrap().as_ref() {
             return Ok(cached.clone());
         }
-        let path = settings_file();
-        let settings = match std::fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .context("parsing settings.json")
-                .unwrap_or_else(|e| {
-                    // A corrupt file must not brick the engine — fall back to
-                    // defaults rather than refusing to start a session.
-                    clog!("settings", "load: {path:?} unreadable ({e:#}), using defaults");
-                    EngineSettings::default()
-                }),
-            Err(_) => {
-                clog!("settings", "load: no settings.json yet, using defaults");
-                EngineSettings::default()
-            }
-        };
+        // A corrupt file must not brick the engine — an unusable settings
+        // document falls back to defaults rather than refusing to start a
+        // session. Absence does the same, and needs no complaint.
+        let stored: Option<EngineSettings> = vault().read().unwrap_or_else(|e| {
+            clog!("settings", "load: unusable ({e:#}), using defaults");
+            None
+        });
+        let settings = stored.unwrap_or_default();
         *CACHE.lock().unwrap() = Some(settings.clone());
         Ok(settings)
     }
 
     fn save(settings: &EngineSettings) -> anyhow::Result<()> {
-        let path = settings_file();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| format!("creating {parent:?}"))?;
-        }
-        let bytes = serde_json::to_vec_pretty(settings)?;
-        // Atomic, same reasoning as collab_store::save: a truncating write
-        // that fails partway leaves nothing behind.
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, &bytes).with_context(|| format!("writing {tmp:?}"))?;
-        std::fs::rename(&tmp, &path).with_context(|| format!("replacing {path:?}"))?;
-        clog!("settings", "save: wrote {} bytes to {path:?}", bytes.len());
-        Ok(())
+        vault().write(settings)
     }
 
     /// Fields librqbit only reads when the session is constructed.

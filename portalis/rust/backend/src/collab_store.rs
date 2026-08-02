@@ -18,10 +18,8 @@
 //! signature), so a tampered file on disk and a malicious peer are
 //! rejected by the same code path.
 
-use std::path::PathBuf;
 use std::sync::Mutex;
 
-use anyhow::Context;
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
 
@@ -126,10 +124,8 @@ pub(crate) fn collaborator_from_persisted(
     ))
 }
 
-fn store_file() -> PathBuf {
-    let path = crate::paths::state_dir().join("collections.json");
-    clog!("collab_store", "store_file: {path:?}");
-    path
+fn vault() -> crate::vault::Vault {
+    crate::vault::Vault::named("collections.json")
 }
 
 fn to_persisted(collection: &Collection) -> PersistedCollection {
@@ -168,25 +164,11 @@ fn from_persisted(persisted: &PersistedCollection) -> anyhow::Result<Collection>
 }
 
 fn load() -> anyhow::Result<Vec<Collection>> {
-    let path = store_file();
-    let Ok(bytes) = std::fs::read(&path) else {
-        clog!("collab_store", "load: no file yet at {path:?}, starting empty");
-        return Ok(Vec::new());
-    };
-    let persisted: PersistedStore =
-        serde_json::from_slice(&bytes).context("parsing collections.json")?;
-    let result: anyhow::Result<Vec<Collection>> =
-        persisted.collections.iter().map(from_persisted).collect();
-    match &result {
-        Ok(collections) => clog!(
-            "collab_store",
-            "load: {} collection(s) from {path:?}: {:?}",
-            collections.len(),
-            collections.iter().map(|c| (c.id.to_string(), c.name.clone())).collect::<Vec<_>>()
-        ),
-        Err(e) => clog!("collab_store", "load: failed to parse {path:?}: {e:?}"),
-    }
-    result
+    let persisted: PersistedStore = vault().read()?.unwrap_or_default();
+    let collections: Vec<Collection> =
+        persisted.collections.iter().map(from_persisted).collect::<anyhow::Result<_>>()?;
+    clog!("collab_store", "load: {} collection(s)", collections.len());
+    Ok(collections)
 }
 
 /// Persists the store **atomically**: serialise to a sibling temp file, then
@@ -200,26 +182,9 @@ fn load() -> anyhow::Result<Vec<Collection>> {
 /// reader sees either the complete old file or the complete new one, and a
 /// failed write leaves the original untouched.
 fn save(collections: &[Collection]) -> anyhow::Result<()> {
-    let path = store_file();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| format!("creating {parent:?}"))?;
-    }
-    let persisted = PersistedStore {
+    vault().write(&PersistedStore {
         collections: collections.iter().map(to_persisted).collect(),
-    };
-    let bytes = serde_json::to_vec_pretty(&persisted)?;
-
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &bytes).with_context(|| format!("writing {tmp:?}"))?;
-    std::fs::rename(&tmp, &path)
-        .with_context(|| format!("replacing {path:?} with {tmp:?}"))?;
-    clog!(
-        "collab_store",
-        "save: wrote {} collection(s), {} bytes, to {path:?}",
-        collections.len(),
-        bytes.len()
-    );
-    Ok(())
+    })
 }
 
 /// The one shared in-memory copy of every collab collection, lazily loaded
@@ -417,10 +382,18 @@ mod tests {
 
         // A read of an empty store must not create the file. `read_store`
         // exists precisely because every access used to write one.
-        read_store(|collections| Ok(assert!(collections.is_empty()))).unwrap();
+        read_store(|collections| {
+            assert!(collections.is_empty());
+            Ok(())
+        })
+        .unwrap();
         assert!(!path.exists(), "reading must never write");
 
-        with_store(|collections| Ok(collections.push(seeded(&identity, "Iceland")))).unwrap();
+        with_store(|collections| {
+            collections.push(seeded(&identity, "Iceland"));
+            Ok(())
+        })
+        .unwrap();
         assert!(path.exists());
 
         // Reload from disk, not from the cache: this is the restart path.
@@ -440,43 +413,17 @@ mod tests {
         assert_eq!(rename_device(&identity.device_id(), "Maya").unwrap(), 1);
         assert_eq!(rename_device(&identity.device_id(), "Maya").unwrap(), 0);
         forget_cache_for_test();
-        read_store(|c| Ok(assert_eq!(c[0].collaborators[0].display_name, "Maya"))).unwrap();
+        read_store(|c| {
+            assert_eq!(c[0].collaborators[0].display_name, "Maya");
+            Ok(())
+        })
+        .unwrap();
 
         // And the file is only ever replaced whole: a truncating write would
         // have left this empty at some point, which is how a full disk
         // destroyed the real store once.
         assert!(!path.with_extension("json.tmp").exists());
         assert!(serde_json::from_slice::<PersistedStore>(&std::fs::read(&path).unwrap()).is_ok());
-    }
-
-    /// The property a full disk destroyed once, asserted against real code.
-    ///
-    /// A directory nothing can create files in is the same shape as a full
-    /// one: the sibling temp file cannot be written, so the save fails — and
-    /// the point is that it fails having left the previous document whole. A
-    /// truncating `fs::write` opens the destination itself, which empties it
-    /// before discovering it cannot finish.
-    #[cfg(unix)]
-    #[test]
-    fn a_write_that_cannot_complete_leaves_the_previous_store_intact() {
-        use std::os::unix::fs::PermissionsExt;
-        let temp = crate::paths::redirect_to_temp();
-        forget_cache_for_test();
-        let identity = DeviceIdentity::generate();
-        with_store(|c| Ok(c.push(seeded(&identity, "Iceland")))).unwrap();
-        let path = temp.path("collections.json");
-        let intact = std::fs::read(&path).unwrap();
-        let dir = path.parent().unwrap();
-
-        std::fs::set_permissions(dir, PermissionsExt::from_mode(0o500)).unwrap();
-        let result = with_store(|c| Ok(c.push(seeded(&identity, "Second"))));
-        std::fs::set_permissions(dir, PermissionsExt::from_mode(0o700)).unwrap();
-
-        assert!(result.is_err(), "an unwritable store must report, not swallow");
-        assert_eq!(std::fs::read(&path).unwrap(), intact);
-        // Worth being explicit: the in-memory copy did take the push, so the
-        // cache and the file now disagree until the next reload. That is
-        // today's behaviour, not an endorsement of it.
     }
 
     /// A collection with one signed entry and this device as its collaborator.

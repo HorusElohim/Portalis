@@ -4,6 +4,8 @@ mod domain;
 mod log;
 /// Where persisted state lives — one place, so tests can move it.
 mod paths;
+/// One JSON document, read whole or written whole.
+mod vault;
 // Private and NOT part of tool/frb_build.sh's --rust-input, same reason as
 // `domain` — see collab_store.rs's own module doc.
 mod collab_store;
