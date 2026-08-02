@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../bridge_generated/collections.dart' as bridge;
 import '../services/collections.dart';
 import '../services/settings_service.dart';
 import '../theme.dart';
@@ -150,6 +152,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
       showToast(context, 'Couldn\'t reset: $e',
           severity: ToastSeverity.error);
     }
+  }
+
+  /// Times `listCollections` across the Dart<->Rust bridge — the call the
+  /// UI polls every second (see `Collections._activeInterval`) and the one
+  /// `docs/future-engine.md` names as the app's actual performance cost:
+  /// every collection's full manifest, joined against the live session and
+  /// marshalled across FFI, on every tick.
+  static const _benchIterations = 10;
+
+  Future<void> _runBenchmark() async {
+    final samplesUs = <int>[];
+    int dtoCount = 0;
+    List<bridge.CollectionInfo> infos = const [];
+    try {
+      for (var i = 0; i < _benchIterations; i++) {
+        final sw = Stopwatch()..start();
+        infos = await bridge.listCollections();
+        sw.stop();
+        samplesUs.add(sw.elapsedMicroseconds);
+      }
+      dtoCount = infos.length +
+          infos.fold<int>(
+              0, (sum, c) => sum + c.media.length + c.collaborators.length);
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, 'Benchmark failed: $e', severity: ToastSeverity.error);
+      return;
+    }
+    if (!mounted) return;
+
+    final avgMs = samplesUs.reduce((a, b) => a + b) / samplesUs.length / 1000;
+    final minMs = samplesUs.reduce(math.min) / 1000;
+    final maxMs = samplesUs.reduce(math.max) / 1000;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('listCollections benchmark'),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$_benchIterations calls, ${infos.length} collection'
+                '${infos.length == 1 ? '' : 's'} each.',
+                style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Average    ${avgMs.toStringAsFixed(2)} ms\n'
+                'Min        ${minMs.toStringAsFixed(2)} ms\n'
+                'Max        ${maxMs.toStringAsFixed(2)} ms\n'
+                'Calls/sec  ${(1000 / avgMs).toStringAsFixed(1)}\n'
+                'DTOs/call  $dtoCount',
+                style: monoLabel(
+                    size: 12.5, color: AppColors.text, letterSpacing: 0),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -546,6 +619,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           label: 'Reset to defaults',
           dim: true,
           onTap: () => _confirmReset(s),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+        child: PillButton(
+          label: 'Run FFI benchmark',
+          dim: true,
+          onTap: _runBenchmark,
         ),
       ),
     ];
