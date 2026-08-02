@@ -31,7 +31,9 @@ serde_json = "1.0"
 # The manifest-sync mini-protocol (collab_sync.rs) needs real sockets and
 # timeouts on top of the base `rt` feature — native targets only, same
 # no-sockets-on-wasm32 reasoning as librqbit above.
-tokio = { version = "1", features = ["rt", "net", "io-util", "time", "macros"] }
+# `sync` is Notify, which wakes the convergence loop on a user action. It
+# compiles without it today only because librqbit happens to enable it.
+tokio = { version = "1", features = ["rt", "net", "io-util", "time", "macros", "sync"] }
 # Public-IP discovery for invite codes. Already in the dependency tree
 # (librqbit pulls the same version/features), so this adds no compilation —
 # it just lets us call it directly.

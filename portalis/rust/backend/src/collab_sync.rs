@@ -81,7 +81,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(15);
 /// The port the sync listener prefers, so a peer's saved address survives that
 /// peer restarting — see [`ensure_listener`]. Well inside the ephemeral range
 /// and not registered to anything; collisions fall back gracefully.
-const PREFERRED_SYNC_PORT: u16 = 47821;
+pub(crate) const PREFERRED_SYNC_PORT: u16 = 47821;
 
 /// Separate, much shorter budget for *establishing* a connection. An invite
 /// now carries every interface address the inviter had (see [`lan_ips`]), so
@@ -351,9 +351,9 @@ static PEER_FAILURES: std::sync::Mutex<std::collections::BTreeMap<String, u32>> 
 /// when some *other* address for the same collection is working. If everything
 /// is failing, the network is down rather than the addresses being wrong, and
 /// forgetting them all would orphan the collection permanently.
-const PRUNE_AFTER_FAILURES: u32 = 10;
+pub(crate) const PRUNE_AFTER_FAILURES: u32 = 10;
 
-fn note_peer_result(rendezvous_key_hex: &str, addr: &str, ok: bool) -> u32 {
+pub(crate) fn note_peer_result(rendezvous_key_hex: &str, addr: &str, ok: bool) -> u32 {
     let key = format!("{rendezvous_key_hex}|{addr}");
     let mut failures = PEER_FAILURES.lock().unwrap();
     if ok {
@@ -365,7 +365,7 @@ fn note_peer_result(rendezvous_key_hex: &str, addr: &str, ok: bool) -> u32 {
     *counter
 }
 
-fn forget_sync_peer(rendezvous_key_hex: &str, addr: &str) {
+pub(crate) fn forget_sync_peer(rendezvous_key_hex: &str, addr: &str) {
     with_peers(|peers| {
         let Some(set) = peers.get_mut(rendezvous_key_hex) else {
             return;
@@ -609,12 +609,9 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
                          manifest sync is unaffected, media fetches will rely on DHT"),
                 }
             });
-            // Keeps every joined collection in step from here on — see
-            // RESYNC_INTERVAL for why a single sync at join time was never
-            // enough. Started here so it exists exactly once, alongside the
-            // listener it depends on.
-            clog!("collab_sync", "re-syncing every {RESYNC_INTERVAL:?} while the app is in use");
-            tokio::spawn(resync_loop());
+            // Keeps every joined collection in step from here on. Started
+            // here so it exists exactly once, alongside the listener it needs.
+            crate::converge::start();
             Ok(addr)
         })
         .await
@@ -731,126 +728,6 @@ pub(crate) async fn sync_with(rendezvous_key_hex: &str, peer_addr: &str) -> anyh
                  with the same invite code first."
             )
         }
-    }
-}
-
-/// How often every collection is re-synced with every peer we know an address
-/// for.
-///
-/// A one-shot sync at join time — which is all this used to do — cannot work,
-/// for three separate reasons that all showed up as "sharing just doesn't":
-///
-/// 1. On iOS 14+ and macOS 15+ the *first* connection to a local address is
-///    what raises the system's Local Network permission prompt, and that
-///    connection fails while the user is deciding. With one attempt and no
-///    retry, the feature is structurally unable to work the first time it is
-///    ever used on those platforms.
-/// 2. A collection is grow-only and long-lived: anything a collaborator adds
-///    after you joined has no way to reach you if the only exchange happened
-///    at join.
-/// 3. The inviter never initiates at all, so it only ever learns what a peer
-///    pushes to it.
-const RESYNC_INTERVAL: Duration = Duration::from_secs(45);
-
-/// The re-sync loop runs only while someone is actually looking at the app.
-///
-/// `list_collections` is called on the UI's poll (every 1–5s while the app is
-/// foregrounded, never while it is backgrounded — see `Collections.setPaused`
-/// on the Dart side), which makes it a free liveness signal. Without this the
-/// loop would wake the radio every 45 seconds forever on a phone in a pocket,
-/// against a screen nobody is reading.
-static LAST_UI_ACTIVITY: std::sync::Mutex<Option<std::time::Instant>> =
-    std::sync::Mutex::new(None);
-
-pub(crate) fn note_ui_activity() {
-    *LAST_UI_ACTIVITY.lock().unwrap() = Some(std::time::Instant::now());
-}
-
-fn ui_is_active() -> bool {
-    // Generous relative to the 1–5s poll: one slow frame or a GC pause must
-    // not be read as "the app went away".
-    const IDLE_AFTER: Duration = Duration::from_secs(30);
-    LAST_UI_ACTIVITY
-        .lock()
-        .unwrap()
-        .is_some_and(|at| at.elapsed() < IDLE_AFTER)
-}
-
-/// Periodically re-syncs every collection with every address known for it.
-///
-/// Every peer is contacted, not just the first that answers: two collaborators
-/// can hold different entries, so stopping at the first success would leave
-/// the rest un-merged. Failures are expected and cheap — an unreachable
-/// address gives up after [`CONNECT_TIMEOUT`] — and are logged at most once
-/// per address per tick.
-async fn resync_loop() {
-    loop {
-        tokio::time::sleep(RESYNC_INTERVAL).await;
-        if !ui_is_active() {
-            continue;
-        }
-        let keys = match crate::collab_store::read_store(|collections| {
-            Ok(collections
-                .iter()
-                .map(|c| (c.name.clone(), c.rendezvous_key().to_hex()))
-                .collect::<Vec<_>>())
-        }) {
-            Ok(keys) => keys,
-            Err(e) => {
-                clog!("collab_sync", "resync: couldn't read the store ({e:#})");
-                continue;
-            }
-        };
-        for (name, key) in keys {
-            let peers = known_sync_peers(&key);
-            if peers.is_empty() {
-                continue;
-            }
-            // Also try each known host on the preferred port. A saved address
-            // can be dead while the same device is very much alive on a
-            // different port — either because it was remembered before the
-            // listener had a stable port, or because that run happened to fall
-            // back to an ephemeral one. Without this, two devices that both
-            // restarted could never find each other again without the user
-            // re-exchanging an invite.
-            let mut candidates = peers.clone();
-            for addr in &peers {
-                if let Some((host, _)) = addr.rsplit_once(':') {
-                    let preferred = format!("{host}:{PREFERRED_SYNC_PORT}");
-                    if !candidates.contains(&preferred) {
-                        candidates.push(preferred);
-                    }
-                }
-            }
-
-            let mut reachable = 0usize;
-            let mut stale = Vec::new();
-            for addr in &candidates {
-                let ok = sync_with(&key, addr).await.is_ok();
-                let failures = note_peer_result(&key, addr, ok);
-                if ok {
-                    reachable += 1;
-                } else if failures >= PRUNE_AFTER_FAILURES {
-                    stale.push(addr.clone());
-                }
-            }
-            // Only once something else is proven to work — see
-            // PRUNE_AFTER_FAILURES.
-            if reachable > 0 {
-                for addr in stale {
-                    forget_sync_peer(&key, &addr);
-                }
-            }
-            clog!(
-                "collab_sync",
-                "resync: {name:?} — {reachable}/{} address(es) reachable",
-                candidates.len()
-            );
-        }
-        // After the exchanges, not before: a sync is what teaches us where a
-        // peer's BitTorrent session is, and that is exactly what an
-        // outstanding fetch was missing.
-        crate::collections::retry_pending_fetches().await;
     }
 }
 

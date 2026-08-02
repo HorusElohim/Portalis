@@ -90,6 +90,10 @@ class Collections extends ChangeNotifier {
   void setPaused(bool paused) {
     if (_paused == paused) return;
     _paused = paused;
+    // Told, not inferred. The engine used to decide whether anyone was looking
+    // by watching how recently this class had asked it for collections, which
+    // made its network behaviour a side effect of how often a screen redrew.
+    unawaited(bridge.setActive(active: !paused).catchError((_) {}));
     if (paused) {
       _timer?.cancel();
       _timer = null;

@@ -11,6 +11,8 @@ mod vault;
 mod collab_store;
 // Real sockets — native targets only, like librqbit.
 mod collab_sync;
+/// The one loop — see docs/future-engine.md.
+mod converge;
 pub mod bridge;
 // Unconditional on every target — see torrent.rs's module doc for why
 // (flutter_rust_bridge's generated glue references this module regardless

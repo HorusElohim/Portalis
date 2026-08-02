@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'torrent.dart';
 
-// These functions are ignored because they are not marked as `pub`: `retry_pending_fetches`
+// These functions are ignored because they are not marked as `pub`: `pursue_fetches`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Every collection this device knows about, from both sources, joined.
@@ -60,6 +60,11 @@ Future<CollectionInfo> addMediaToCollection(
 Future<int> fetchCollectionMedia({required String collectionId}) =>
     RustLib.instance.api
         .crateCollectionsFetchCollectionMedia(collectionId: collectionId);
+
+/// Tells the engine whether anyone is looking, so it can stop reaching for
+/// the network when nobody is. Called from the app's lifecycle observer.
+Future<void> setActive({required bool active}) =>
+    RustLib.instance.api.crateCollectionsSetActive(active: active);
 
 /// One full manifest sync with a peer, for a shared collection.
 Future<CollectionInfo> syncCollection(

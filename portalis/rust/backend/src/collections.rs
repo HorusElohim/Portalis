@@ -183,11 +183,17 @@ pub async fn fetch_collection_media(collection_id: String) -> anyhow::Result<u32
 
 /// Re-attempts fetches the user has asked for that haven't landed yet.
 ///
-/// Driven by `collab_sync`'s re-sync loop, since the thing that usually
-/// unblocks a stuck fetch is a sync exchange telling us where the seeder's
-/// BitTorrent session is. Internal, never bridged.
-pub(crate) async fn retry_pending_fetches() {
-    native::retry_pending_fetches().await
+/// Driven by the convergence loop, since the thing that usually unblocks a
+/// stalled fetch is a sync exchange telling us where the seeder's content
+/// lives. Internal, never bridged.
+pub(crate) async fn pursue_fetches() {
+    native::pursue_fetches().await
+}
+
+/// Tells the engine whether anyone is looking, so it can stop reaching for
+/// the network when nobody is. Called from the app's lifecycle observer.
+pub async fn set_active(active: bool) {
+    crate::converge::set_active(active);
 }
 
 /// One full manifest sync with a peer, for a shared collection.
@@ -461,10 +467,6 @@ mod native {
     }
 
     pub(super) async fn list_collections() -> anyhow::Result<Vec<CollectionInfo>> {
-        // This is the app's heartbeat — it runs on the UI poll and stops when
-        // the app is backgrounded, which is exactly the signal the background
-        // re-sync loop uses to decide whether anyone is home.
-        crate::collab_sync::note_ui_activity();
         // Both halves of the join are gathered *before* taking the store
         // lock — `with_store`'s closure is synchronous and can't await.
         // Never *waits* for the engine. Constructing librqbit's session
@@ -758,20 +760,13 @@ mod native {
                  that means a build without the INTERNET permission); sync manually from the \
                  collection screen using the address on its User screen.");
         } else {
-            // Recorded *before* the first attempt, so this is durable rather
-            // than one shot: the periodic re-sync keeps retrying these
-            // addresses for the life of the collection. That matters most on
-            // the very first attempt, which on iOS/macOS is the one the system
-            // spends raising a Local Network permission prompt — and therefore
-            // the one that fails.
-            crate::collab_sync::remember_sync_peers(&rendezvous_key_hex, peer_addrs.clone());
-            tokio::spawn(async move {
-                match crate::collab_sync::sync_with_any(&rendezvous_key_hex, &peer_addrs).await {
-                    Ok(()) => clog!("collections", "join_collection: background auto-sync succeeded"),
-                    Err(e) => clog!("collections", "join_collection: first auto-sync failed \
-                         ({e:?}) — will keep retrying in the background"),
-                }
-            });
+            // Where the peers are is the durable part; reaching them is the
+            // loop's job. On iOS and macOS the very first connection to a LAN
+            // address is the one the system spends raising a permission
+            // prompt, and therefore the one that fails — which is exactly why
+            // this must not be a single attempt fired by the join.
+            crate::collab_sync::remember_sync_peers(&rendezvous_key_hex, peer_addrs);
+            crate::converge::now();
         }
         reload(&id.to_string()).await
     }
@@ -822,6 +817,7 @@ mod native {
             );
             Ok(())
         })?;
+        crate::converge::now();
         reload(&collection_id).await
     }
 
@@ -895,7 +891,7 @@ mod native {
 
     /// Re-attempts every outstanding fetch. Called from the sync loop, right
     /// after an exchange that may just have taught us where a peer is.
-    pub(super) async fn retry_pending_fetches() {
+    pub(super) async fn pursue_fetches() {
         let requested: Vec<String> = FETCH_REQUESTED
             .lock()
             .unwrap()
@@ -919,6 +915,10 @@ mod native {
     pub(super) async fn fetch_collection_media(collection_id: String) -> anyhow::Result<u32> {
         clog!("collections", "fetch_collection_media: id={collection_id}");
         note_fetch_requested(&collection_id);
+        // A pass reconciles before it pursues, so a collection with no known
+        // peer yet gets one found for it rather than needing its own lookup
+        // here. Returns what is outstanding, which is what "Fetch N" meant.
+        crate::converge::now();
         fetch_pending(&collection_id).await
     }
 
