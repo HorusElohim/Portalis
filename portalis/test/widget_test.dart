@@ -523,6 +523,23 @@ void main() {
   });
 
   group('polling cadence', () {
+    test('an unchanged poll notifies nobody', () async {
+      // A settled app polls for minutes without anything moving. Every one of
+      // those polls used to rebuild every widget listening to this.
+      // Whatever earlier tests left behind, one poll records it — the
+      // singleton is process-wide, so this cannot assume a starting point.
+      await Collections.instance.refresh();
+
+      var notifications = 0;
+      void count() => notifications++;
+      Collections.instance.addListener(count);
+      addTearDown(() => Collections.instance.removeListener(count));
+
+      await Collections.instance.refresh();
+
+      expect(notifications, 0);
+    });
+
     testWidgets('slows down when nothing is moving, speeds up when it does',
         (tester) async {
       // The single biggest power cost in an idle app was a one-second FFI

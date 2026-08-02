@@ -57,6 +57,10 @@ class Collections extends ChangeNotifier {
   /// though they were simply empty, which is why a freshly-launched app looked
   /// broken and it was never clear whether sharing had actually begun.
   bool engineReady = false;
+
+  /// Hash of what the last poll saw, so an identical one can be dropped
+  /// without allocating a description of it.
+  int? _lastSeen;
   Timer? _timer;
   Duration _interval = _activeInterval;
   bool _paused = false;
@@ -123,8 +127,11 @@ class Collections extends ChangeNotifier {
     stop();
     _collections = List.of(collections);
     lastError = error;
+    _lastSeen = null;
     notifyListeners();
   }
+
+  /// What the last poll saw, so an identical one can be dropped.
 
   Future<void> refresh() async {
     try {
@@ -139,7 +146,18 @@ class Collections extends ChangeNotifier {
       lastError = '$e';
     }
     _retuneInterval();
-    notifyListeners();
+    if (_changed()) notifyListeners();
+  }
+
+  /// True when this poll differs from the last one. A settled app polls for
+  /// minutes without anything moving, and every one of those polls used to
+  /// rebuild every widget listening to this.
+  bool _changed() {
+    final seen = Object.hashAll(
+        [lastError, engineReady, ..._collections.map((c) => c.signature)]);
+    if (seen == _lastSeen) return false;
+    _lastSeen = seen;
+    return true;
   }
 
   /// Aggregate throughput right now, in MB/s. Drives both the ambient

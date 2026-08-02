@@ -132,6 +132,25 @@ class Collection {
         state: c.state,
       );
 
+  /// Everything a rendering of this collection depends on, in one string.
+  ///
+  /// The poll returns the same answer for minutes at a time — a settled
+  /// collection's name, size, state and peers do not change — and the app was
+  /// rebuilding every widget that listens, once a second, on the strength of a
+  /// new object having been constructed. Comparing is cheap; rebuilding a tree
+  /// is not.
+  int get signature => Object.hash(
+        Object.hash(id, name, state, progress, totalBytes, downloadedBytes,
+            uploadedBytes, downloadMbps, uploadMbps, livePeers),
+        Object.hashAll([
+          pendingMedia,
+          etaSecs,
+          collaborators.length,
+          // Per-file, since a grid of tiles renders each one.
+          ...media.map((m) => Object.hash(m.label, m.downloadedBytes, m.fetched)),
+        ]),
+      );
+
   /// A shared collection's id, or a plain torrent's info-hash.
   final String id;
   final String name;
