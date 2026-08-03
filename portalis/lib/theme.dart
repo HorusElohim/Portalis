@@ -154,6 +154,28 @@ TextStyle canvasTitle({
       height: height ?? 0.98,
     );
 
+/// Poster-scale heading for a pane that's a destination in its own right —
+/// People, Settings — rather than one of several reached from the same nav
+/// (see [canvasTitle] for those). The extra presence comes from scale and a
+/// soft glow rather than a heavier cut: Space Grotesk's variable range tops
+/// out at the same 700 [canvasTitle] already uses.
+TextStyle impactTitle({
+  double size = 46,
+  Color color = AppColors.text,
+  Color glow = AppColors.signal,
+}) =>
+    TextStyle(
+      fontFamily: AppFonts.display,
+      fontSize: size,
+      color: color,
+      fontWeight: FontWeight.w700,
+      letterSpacing: size * -0.035,
+      height: 0.92,
+      shadows: [
+        Shadow(color: glow.withValues(alpha: 0.4), blurRadius: size * 0.5),
+      ],
+    );
+
 class AppTheme {
   AppTheme._();
 

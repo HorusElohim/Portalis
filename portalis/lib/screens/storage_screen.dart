@@ -18,10 +18,15 @@ import 'collection_screen.dart';
 /// collection still claims it, a real link to that collection rather than
 /// just a path.
 class StorageScreen extends StatefulWidget {
-  const StorageScreen({super.key, this.onBack});
+  const StorageScreen({super.key, this.embedded = false, this.onBack});
 
-  /// Called instead of popping a route — set when this replaces the desktop
-  /// shell's Settings pane rather than being pushed over it.
+  /// Set when this replaces the Settings pane in place on desktop rather
+  /// than being pushed over it — see [AdaptiveScreen].
+  final bool embedded;
+
+  /// Called instead of popping a route. Only meaningful when [embedded]:
+  /// there is no route to pop there, so the caller supplies its own
+  /// "collapse back to Settings" callback.
   final VoidCallback? onBack;
 
   @override
@@ -66,46 +71,39 @@ class _StorageScreenState extends State<StorageScreen> {
   int get _totalBytes =>
       _entries?.fold<int>(0, (sum, e) => sum + e.bytes.toInt()) ?? 0;
 
-  void _back() =>
-      widget.onBack != null ? widget.onBack!() : Navigator.of(context).pop();
-
   @override
   Widget build(BuildContext context) {
     final entries = _entries;
-    return Scaffold(
-      backgroundColor: AppColors.surfaceDeep,
-      body: SafeArea(
-        child: PageBody(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: NavBackButton(onTap: _back),
+    return AdaptiveScreen(
+      embedded: widget.embedded,
+      forceShowBack: true,
+      onBack: widget.onBack,
+      body: PageBody(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CanvasTitle('Storage', size: 30),
+                  const SizedBox(height: 6),
+                  Text(
+                    entries == null
+                        ? 'Reading the download folder…'
+                        : '${formatBytes(_totalBytes)} across '
+                            '${entries.length} item'
+                            '${entries.length == 1 ? '' : 's'}',
+                    style:
+                        const TextStyle(fontSize: 13, color: AppColors.textDim),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const CanvasTitle('Storage', size: 30),
-                    const SizedBox(height: 6),
-                    Text(
-                      entries == null
-                          ? 'Reading the download folder…'
-                          : '${formatBytes(_totalBytes)} across '
-                              '${entries.length} item'
-                              '${entries.length == 1 ? '' : 's'}',
-                      style: const TextStyle(
-                          fontSize: 13, color: AppColors.textDim),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Expanded(child: _body(entries)),
-            ],
-          ),
+            ),
+            const SizedBox(height: 14),
+            Expanded(child: _body(entries)),
+          ],
         ),
       ),
     );

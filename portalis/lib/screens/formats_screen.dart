@@ -16,10 +16,15 @@ import '../ui/ui.dart';
 /// on the way in, what can be viewed in-app, and what is handed to the
 /// system untouched.
 class FormatsScreen extends StatefulWidget {
-  const FormatsScreen({super.key, this.onBack});
+  const FormatsScreen({super.key, this.embedded = false, this.onBack});
 
-  /// Called instead of popping a route — set when this is shown in place of
-  /// the desktop shell's You pane rather than pushed over it.
+  /// Set when this replaces the You pane in place on desktop rather than
+  /// being pushed over it — see [AdaptiveScreen].
+  final bool embedded;
+
+  /// Called instead of popping a route. Only meaningful when [embedded]:
+  /// there is no route to pop there, so the caller supplies its own
+  /// "collapse back to You" callback.
   final VoidCallback? onBack;
 
   @override
@@ -45,86 +50,69 @@ class _FormatsScreenState extends State<FormatsScreen> {
     final viewable =
         all.where((f) => f.preview != PreviewSupport.externalOnly).length;
 
-    return Scaffold(
-      backgroundColor: AppColors.surfaceDeep,
-      body: SafeArea(
-        child: PageBody(
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
+    return AdaptiveScreen(
+      embedded: widget.embedded,
+      forceShowBack: true,
+      onBack: widget.onBack,
+      body: PageBody(
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: NavBackButton(
-                          onTap: widget.onBack ??
-                              () => Navigator.of(context).pop()),
+                    const CanvasTitle('File formats', size: 30),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${all.length} types · $viewable viewable in the '
+                      'app · $converted converted when shared',
+                      style: const TextStyle(
+                          fontSize: 13, height: 1.5, color: AppColors.textDim),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const CanvasTitle('File formats', size: 30),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${all.length} types · $viewable viewable in the '
-                            'app · $converted converted when shared',
-                            style: const TextStyle(
-                                fontSize: 13,
-                                height: 1.5,
-                                color: AppColors.textDim),
-                          ),
-                          const SizedBox(height: 14),
-                          _SearchField(
-                            onChanged: (v) => setState(() => _query = v),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: 14),
+                    _SearchField(
+                      onChanged: (v) => setState(() => _query = v),
                     ),
                   ],
                 ),
               ),
-              if (matches.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 40, 22, 0),
-                    child: Center(
-                      child: Text(
-                        'Nothing matches "$_query".\nUnlisted types are still '
-                        'shared byte-for-byte — they just open in your system '
-                        'app.',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            height: 1.6,
-                            color: AppColors.textDim),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                for (final kind in MediaKind.values)
-                  ..._kindSection(
-                      kind, matches.where((f) => f.kind == kind).toList()),
+            ),
+            if (matches.isEmpty)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
-                  child: Text(
-                    'Anything not listed is still shareable. Portalis never '
-                    'inspects or re-encodes a file unless a conversion is '
-                    'shown above — everything else is seeded exactly as it is '
-                    'on your disk.',
-                    style: const TextStyle(
-                        fontSize: 12,
-                        height: 1.6,
-                        color: AppColors.textFaint),
+                  padding: const EdgeInsets.fromLTRB(22, 40, 22, 0),
+                  child: Center(
+                    child: Text(
+                      'Nothing matches "$_query".\nUnlisted types are still '
+                      'shared byte-for-byte — they just open in your system '
+                      'app.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 13, height: 1.6, color: AppColors.textDim),
+                    ),
                   ),
                 ),
+              )
+            else
+              for (final kind in MediaKind.values)
+                ..._kindSection(
+                    kind, matches.where((f) => f.kind == kind).toList()),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
+                child: Text(
+                  'Anything not listed is still shareable. Portalis never '
+                  'inspects or re-encodes a file unless a conversion is '
+                  'shown above — everything else is seeded exactly as it is '
+                  'on your disk.',
+                  style: const TextStyle(
+                      fontSize: 12, height: 1.6, color: AppColors.textFaint),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

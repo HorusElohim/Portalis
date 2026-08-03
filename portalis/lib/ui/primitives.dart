@@ -175,3 +175,39 @@ class CanvasTitle extends StatelessWidget {
     );
   }
 }
+
+/// A poster-scale heading with a soft glow and an accent bar beneath it —
+/// see [impactTitle]. Reserved for [CanvasTitle]'s bigger sibling: a pane
+/// that's a destination in its own right rather than one of several peers.
+class ImpactTitle extends StatelessWidget {
+  const ImpactTitle(
+    this.text, {
+    super.key,
+    this.size = 46,
+    this.accent = AppColors.signal,
+  });
+
+  final String text;
+  final double size;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(text.toUpperCase(), style: impactTitle(size: size, glow: accent)),
+        const SizedBox(height: 10),
+        Container(
+          width: 44,
+          height: 5,
+          decoration: BoxDecoration(
+            color: accent,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+      ],
+    );
+  }
+}

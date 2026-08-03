@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models.dart';
 import '../services/collections.dart';
 import '../services/device_identity.dart';
 import '../services/navigation.dart';
@@ -10,6 +9,7 @@ import '../theme.dart';
 import '../ui/ui.dart';
 import 'collection_screen.dart';
 import 'join_collection_screen.dart';
+import 'people_screen.dart';
 import 'settings_screen.dart';
 import 'share_screen.dart';
 import 'user_screen.dart';
@@ -143,16 +143,22 @@ class _DesktopShellState extends State<DesktopShell> {
 
   Widget _centre() {
     switch (_pane) {
+      // `embedded: true` — see AdaptiveScreen. Each renders bare (no
+      // Scaffold, no SafeArea), relying on the one already established in
+      // build() above, so getting that right isn't something this switch or
+      // any one screen has to remember on its own.
       case _Pane.you:
-        return const SafeArea(child: UserScreen(embedded: true));
+        return const UserScreen(embedded: true);
       case _Pane.people:
-        return const SafeArea(child: _PeoplePane());
+        return const PeopleScreen(embedded: true);
       case _Pane.settings:
         return const SettingsScreen(embedded: true);
+      // Share and Join have their own Scaffold/SafeArea regardless of
+      // context — a one-shot action rather than a destination with an
+      // embedded/pushed duality, so AdaptiveScreen doesn't apply. Closing
+      // returns to the list they replaced, same as re-tapping an open header
+      // button.
       case _Pane.share:
-        // Has its own Scaffold/SafeArea, same as SettingsScreen above — no
-        // second wrapper needed. Closing returns to the list it replaced,
-        // same as re-tapping an open header button.
         return ShareScreen(onClose: () => _select(_Pane.collections));
       case _Pane.join:
         return JoinCollectionScreen(onClose: () => _select(_Pane.collections));
@@ -721,81 +727,5 @@ class _CollectionsPane extends StatelessWidget {
   }
 }
 
-/// Distinct collaborators across every collection, and where they appear.
-/// Derived — there is no peer directory in the backend.
-class _PeoplePane extends StatelessWidget {
-  const _PeoplePane();
-
-  @override
-  Widget build(BuildContext context) {
-    final byDevice = <String, ({Collaborator who, List<String> collections})>{};
-    for (final c in Collections.instance.collections) {
-      for (final p in c.collaborators) {
-        final entry = byDevice[p.deviceId];
-        if (entry == null) {
-          byDevice[p.deviceId] = (who: p, collections: [c.name]);
-        } else {
-          entry.collections.add(c.name);
-        }
-      }
-    }
-    final people = byDevice.values.toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 26, 28, 0),
-          child: const CanvasTitle('People', size: 32),
-        ),
-        Expanded(
-          child: people.isEmpty
-              ? const Center(
-                  child: Text(
-                    'Nobody yet. Collaborators appear once you share or join.',
-                    style: TextStyle(fontSize: 13, color: AppColors.textDim),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-                  itemCount: people.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) {
-                    final p = people[i];
-                    return SurfaceCard(
-                      child: Row(
-                        children: [
-                          Avatar(initials: p.who.initials, size: 32),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  p.who.isAdmin
-                                      ? '${p.who.name} · admin'
-                                      : p.who.name,
-                                  style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  p.collections.join(' · '),
-                                  overflow: TextOverflow.ellipsis,
-                                  style: monoLabel(
-                                      size: 10.5, letterSpacing: 0.2),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-}
+// PeopleScreen (see people_screen.dart) supplies this pane's content — it's
+// shared with the mobile push reached from the You tab.

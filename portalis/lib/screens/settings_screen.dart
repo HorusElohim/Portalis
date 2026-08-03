@@ -10,8 +10,6 @@ import '../theme.dart';
 import '../ui/ui.dart';
 import 'storage_screen.dart';
 
-
-
 /// Every setting the BitTorrent engine honours, and nothing else.
 ///
 /// Each control maps to a real librqbit `SessionOptions` field via
@@ -27,8 +25,10 @@ class SettingsScreen extends StatefulWidget {
     this.advanced = false,
   });
 
-  /// Rendered inside the desktop shell's centre pane: no Scaffold chrome and
-  /// no back button, because the sidebar is the navigation.
+  /// Rendered inside the desktop shell's centre pane rather than pushed —
+  /// see [AdaptiveScreen]. Still shows a back button while showing Advanced,
+  /// since collapsing that has nowhere else to happen; otherwise none,
+  /// because the sidebar is the navigation.
   final bool embedded;
 
   /// The engine internals, reached from "Network & engine". Same state class
@@ -73,45 +73,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// "Network & engine" used to always push a second [SettingsScreen] with
   /// `advanced: true` — a full-screen route over the desktop shell's sidebar
   /// and collection list even when this instance was already embedded in its
-  /// centre pane. Embedded, there is nowhere better for that route to go, so
-  /// it toggles this instance's own sections instead; pushed (mobile), the
-  /// drill-down keeps its own back-stack entry as before.
-  void _openAdvanced() {
-    if (widget.embedded) {
-      setState(() => _advanced = true);
-    } else {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const SettingsScreen(advanced: true)),
+  /// centre pane. [openNestedScreen] toggles this instance's own sections in
+  /// place instead when embedded; pushed (mobile), the drill-down keeps its
+  /// own back-stack entry as before.
+  void _openAdvanced() => openNestedScreen(
+        context,
+        embedded: widget.embedded,
+        showInPlace: () => setState(() => _advanced = true),
+        push: (_) => const SettingsScreen(advanced: true),
       );
-    }
-  }
 
-  /// Same reasoning as [_openAdvanced]: embedded, there's nowhere for a
-  /// pushed route to go but over the whole shell, so it swaps in place;
-  /// pushed (mobile), it's its own screen with its own back-stack entry.
-  void _openStorage() {
-    if (widget.embedded) {
-      setState(() => _showStorage = true);
-    } else {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const StorageScreen()),
+  void _openStorage() => openNestedScreen(
+        context,
+        embedded: widget.embedded,
+        showInPlace: () => setState(() => _showStorage = true),
+        push: (_) => StorageScreen(embedded: widget.embedded),
       );
-    }
-  }
 
-  /// Embedded and showing Advanced or Storage: collapse back to Basic in
-  /// place — there is no pushed route here to pop. Embedded and already
-  /// Basic: no back button at all, since the sidebar is the only way in or
-  /// out of this pane. Not embedded: always a real pushed screen, so always
-  /// pop.
-  bool get _showBackButton => !widget.embedded || _advanced || _showStorage;
-
+  /// Collapses Advanced back to Basic in place when embedded — there is no
+  /// pushed route here to pop. Not embedded, this instance only exists
+  /// because it was pushed (either as Advanced, or from the mobile You
+  /// screen), so it always pops.
   void _handleBack() {
     if (widget.embedded) {
-      setState(() {
-        _advanced = false;
-        _showStorage = false;
-      });
+      setState(() => _advanced = false);
     } else {
       Navigator.of(context).pop();
     }
@@ -286,65 +271,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     if (_showStorage) {
       return StorageScreen(
-          onBack: () => setState(() => _showStorage = false));
+        embedded: widget.embedded,
+        onBack: () => setState(() => _showStorage = false),
+      );
     }
-    return Scaffold(
-      backgroundColor: AppColors.surfaceDeep,
-      body: SafeArea(
-        child: PageBody(
-          child: ListenableBuilder(
-            listenable: _settings,
-            builder: (context, _) {
-              final s = _settings.settings;
-              return SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_showBackButton)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: NavBackButton(onTap: _handleBack),
-                      ),
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 6, 20, 6),
-                      child: Text(
-                        'Settings',
-                        style:
-                            TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    if (_settings.lastError != null)
-                      InfoBanner(
-                        color: const Color(0xFFEB5757),
-                        icon: Icons.error_outline,
-                        text: _settings.lastError!,
-                      ),
-                    if (_restartPending)
-                      const InfoBanner(
-                        color: AppColors.signalSoft,
-                        icon: Icons.restart_alt,
-                        text: 'Some changes apply the next time Portalis '
-                            'starts — the transfer engine reads them once, '
-                            'when it starts up.',
-                      ),
-                    if (s == null)
+    return AdaptiveScreen(
+      embedded: widget.embedded,
+      forceShowBack: _advanced,
+      onBack: _handleBack,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Only embedded (desktop) ever has room to spare — a pushed route
+          // on mobile is never wider than the phone running it.
+          final wide = widget.embedded && constraints.maxWidth >= 860;
+          return PageBody(
+            maxWidth: wide ? 1100 : 560,
+            child: ListenableBuilder(
+              listenable: _settings,
+              builder: (context, _) {
+                final s = _settings.settings;
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       const Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text(
-                          'Loading engine settings…',
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.textDim),
+                        padding: EdgeInsets.fromLTRB(20, 8, 20, 10),
+                        child: ImpactTitle('Settings'),
+                      ),
+                      if (_settings.lastError != null)
+                        InfoBanner(
+                          color: const Color(0xFFEB5757),
+                          icon: Icons.error_outline,
+                          text: _settings.lastError!,
                         ),
-                      )
-                    else
-                      ..._sections(s),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
+                      if (_restartPending)
+                        const InfoBanner(
+                          color: AppColors.signalSoft,
+                          icon: Icons.restart_alt,
+                          text: 'Some changes apply the next time Portalis '
+                              'starts — the transfer engine reads them once, '
+                              'when it starts up.',
+                        ),
+                      if (s == null)
+                        const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text(
+                            'Loading engine settings…',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textDim),
+                          ),
+                        )
+                      else
+                        _SectionsLayout(wide: wide, sections: _sections(s)),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }
@@ -761,8 +747,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
+/// Lays the section cards out in two columns once the pane is wide enough to
+/// hold them without stretching a single row's label and value apart — see
+/// [PageBody]'s doc for why that was worth avoiding in the first place.
+/// Round-robin rather than a true masonry: the sections are already ordered
+/// by how likely they are to matter, and alternating keeps that order
+/// reading left-to-right, top-to-bottom rather than top-half/bottom-half.
+class _SectionsLayout extends StatelessWidget {
+  const _SectionsLayout({required this.wide, required this.sections});
 
+  final bool wide;
+  final List<Widget> sections;
 
+  @override
+  Widget build(BuildContext context) {
+    if (!wide) return Column(children: sections);
+    final left = <Widget>[];
+    final right = <Widget>[];
+    for (var i = 0; i < sections.length; i++) {
+      (i.isEven ? left : right).add(sections[i]);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: Column(children: left)),
+        Expanded(child: Column(children: right)),
+      ],
+    );
+  }
+}
 
 /// A label/value row; tappable when [onTap] is given, read-only otherwise.
 

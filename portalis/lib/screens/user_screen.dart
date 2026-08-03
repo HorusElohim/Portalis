@@ -7,6 +7,7 @@ import '../services/device_identity.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'formats_screen.dart';
+import 'people_screen.dart';
 import 'settings_screen.dart';
 
 /// You — this device's identity and what it has moved.
@@ -31,8 +32,8 @@ class _UserScreenState extends State<UserScreen> {
   String? _syncAddress;
 
   /// Embedded (desktop) only: shows [FormatsScreen] in place of the profile
-  /// instead of pushing it over the shell's sidebar and list. Mobile keeps
-  /// the real push — see the "File formats" row's `onTap`.
+  /// instead of pushing it over the shell's sidebar and list — see
+  /// [openNestedScreen], which the "File formats" row's `onTap` calls.
   bool _showFormats = false;
 
   bridge.DeviceIdentityInfo? get _identity => DeviceIdentity.instance.info;
@@ -75,7 +76,10 @@ class _UserScreenState extends State<UserScreen> {
   @override
   Widget build(BuildContext context) {
     if (_showFormats) {
-      return FormatsScreen(onBack: () => setState(() => _showFormats = false));
+      return FormatsScreen(
+        embedded: widget.embedded,
+        onBack: () => setState(() => _showFormats = false),
+      );
     }
     return ListenableBuilder(
       listenable: Listenable.merge(
@@ -244,12 +248,12 @@ class _UserScreenState extends State<UserScreen> {
                   padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
                   child: SurfaceCard(
                     padding: const EdgeInsets.all(16),
-                    onTap: widget.embedded
-                        ? () => setState(() => _showFormats = true)
-                        : () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => const FormatsScreen()),
-                            ),
+                    onTap: () => openNestedScreen(
+                      context,
+                      embedded: widget.embedded,
+                      showInPlace: () => setState(() => _showFormats = true),
+                      push: (_) => const FormatsScreen(),
+                    ),
                     child: const Row(
                       children: [
                         Icon(Icons.category_outlined,
@@ -279,9 +283,49 @@ class _UserScreenState extends State<UserScreen> {
                     ),
                   ),
                 ),
-                // On desktop Settings is its own sidebar destination, so this
-                // row would push a full screen over a layout that already has
-                // a place to put it.
+                // On desktop People and Settings are their own sidebar
+                // destinations, so these rows would push a full screen over a
+                // layout that already has a place to put them.
+                if (!widget.embedded)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                    child: SurfaceCard(
+                      padding: const EdgeInsets.all(16),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const PeopleScreen()),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.people_outline,
+                              size: 19, color: AppColors.textDim),
+                          const SizedBox(width: 13),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('People',
+                                    style: TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 3),
+                                Text(
+                                  people == 0
+                                      ? 'Nobody yet'
+                                      : '$people across your collections',
+                                  style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: AppColors.textFaint),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right,
+                              size: 16, color: AppColors.textGhost),
+                        ],
+                      ),
+                    ),
+                  ),
                 if (!widget.embedded)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
