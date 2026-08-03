@@ -38,7 +38,11 @@ String? _unhex(String code) {
 /// addresses. The display name comes from this device's identity nickname
 /// instead of a second text field.
 class JoinCollectionScreen extends StatefulWidget {
-  const JoinCollectionScreen({super.key});
+  const JoinCollectionScreen({super.key, this.onClose});
+
+  /// Called instead of popping a route — set when this is embedded in the
+  /// desktop shell's centre pane rather than pushed over it.
+  final VoidCallback? onClose;
 
   @override
   State<JoinCollectionScreen> createState() => _JoinCollectionScreenState();
@@ -70,6 +74,12 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
     _codeController.dispose();
     super.dispose();
   }
+
+  /// Pops the pushed route, or — embedded in the desktop shell — hands
+  /// control back to whatever put this on screen.
+  void _close() => widget.onClose != null
+      ? widget.onClose!()
+      : Navigator.of(context).pop();
 
   /// `(name, addressCount)` when the code un-hexes to
   /// `<64-hex secret>:<name>[@addr1,addr2]`, else null.
@@ -123,7 +133,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
           .join(_codeController.text.trim(), _nickname);
       if (mounted) {
         FocusScope.of(context).unfocus();
-        Navigator.of(context).pop();
+        _close();
         showToast(
           context,
           'Joined "${collection.name}" — syncing in the background, it will '
@@ -151,7 +161,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: _close,
                   icon: const Icon(Icons.chevron_left,
                       size: 18, color: AppColors.textDim),
                   label: const Text('Back',

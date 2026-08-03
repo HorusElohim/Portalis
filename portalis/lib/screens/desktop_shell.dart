@@ -35,7 +35,13 @@ class DesktopShell extends StatefulWidget {
 /// start something — which the sidebar now says outright with its own actions
 /// beside a list that is always visible. On a phone both earn their keep,
 /// because there the list is one destination among four and a row is small.
-enum _Pane { collections, people, you, settings }
+///
+/// [share] and [join] are here for the same reason as the rest: whatever the
+/// centre pane shows, the sidebar and list stay put. They differ from
+/// [people]/[you]/[settings] only in how they're reached — a one-shot action
+/// in the sidebar rather than a persistent header button — `_select` doesn't
+/// otherwise distinguish them.
+enum _Pane { collections, people, you, settings, share, join }
 
 class _DesktopShellState extends State<DesktopShell> {
   _Pane _pane = _Pane.collections;
@@ -61,9 +67,10 @@ class _DesktopShellState extends State<DesktopShell> {
   static int? _tabForPane(_Pane pane) => switch (pane) {
         _Pane.collections => 1,
         _Pane.you => 2,
-        // No mobile peer: People is derived from collections, and Settings is
-        // reached through You there.
-        _Pane.people || _Pane.settings => null,
+        // No mobile peer: People is derived from collections, Settings is
+        // reached through You there, and Share/Join are their own pushed
+        // screens on mobile rather than a pane of anything.
+        _Pane.people || _Pane.settings || _Pane.share || _Pane.join => null,
       };
 
   @override
@@ -142,6 +149,13 @@ class _DesktopShellState extends State<DesktopShell> {
         return const SafeArea(child: _PeoplePane());
       case _Pane.settings:
         return const SettingsScreen(embedded: true);
+      case _Pane.share:
+        // Has its own Scaffold/SafeArea, same as SettingsScreen above — no
+        // second wrapper needed. Closing returns to the list it replaced,
+        // same as re-tapping an open header button.
+        return ShareScreen(onClose: () => _select(_Pane.collections));
+      case _Pane.join:
+        return JoinCollectionScreen(onClose: () => _select(_Pane.collections));
       case _Pane.collections:
         // Rendered directly in build(), since it is always on screen.
         return const SizedBox.shrink();
@@ -215,7 +229,7 @@ class _Sidebar extends StatelessWidget {
                 label: 'New share',
                 icon: Icons.add,
                 trailingChevron: false,
-                onTap: () => _open(context, const ShareScreen()),
+                onTap: () => onPane(_Pane.share),
               ),
               const SizedBox(height: 8),
               // The other ways in. Mobile offers all three from one FAB;
@@ -223,7 +237,7 @@ class _Sidebar extends StatelessWidget {
               // key or adding a magnet was reachable solely from inside the
               // Home pane — which is not where anyone looks for an action.
               _miniAction(context, Icons.link, 'Join with a key',
-                  const JoinCollectionScreen()),
+                  () => onPane(_Pane.join)),
               const SizedBox(height: 14),
               const _TorrentQuickAdd(),
               const SizedBox(height: 20),
@@ -241,18 +255,15 @@ class _Sidebar extends StatelessWidget {
     );
   }
 
-  void _open(BuildContext context, Widget screen) => Navigator.of(context)
-      .push(MaterialPageRoute(builder: (_) => screen));
-
   /// A secondary way in.
   Widget _miniAction(BuildContext context, IconData icon, String label,
-      Widget screen, {Color color = AppColors.signalSoft}) {
+      VoidCallback onTap, {Color color = AppColors.signalSoft}) {
     return Material(
       color: AppColors.surfaceRaised,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => _open(context, screen),
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 15),
           child: Row(

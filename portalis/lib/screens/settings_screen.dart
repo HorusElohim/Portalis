@@ -43,6 +43,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Timer? _storagePoll;
   bool _restartPending = false;
 
+  /// Which sections show. Starts from [SettingsScreen.advanced] but, when
+  /// embedded, toggles in place rather than through a second pushed
+  /// instance — see [_openAdvanced].
+  late bool _advanced = widget.advanced;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +63,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _storagePoll?.cancel();
     super.dispose();
+  }
+
+  /// "Network & engine" used to always push a second [SettingsScreen] with
+  /// `advanced: true` — a full-screen route over the desktop shell's sidebar
+  /// and collection list even when this instance was already embedded in its
+  /// centre pane. Embedded, there is nowhere better for that route to go, so
+  /// it toggles this instance's own sections instead; pushed (mobile), the
+  /// drill-down keeps its own back-stack entry as before.
+  void _openAdvanced() {
+    if (widget.embedded) {
+      setState(() => _advanced = true);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SettingsScreen(advanced: true)),
+      );
+    }
+  }
+
+  /// Embedded and showing Advanced: collapse back to Basic in place — there
+  /// is no pushed route here to pop. Embedded and already Basic: no back
+  /// button at all, since the sidebar is the only way in or out of this pane.
+  /// Not embedded: always a real pushed screen, so always pop.
+  bool get _showBackButton => !widget.embedded || _advanced;
+
+  void _handleBack() {
+    if (widget.embedded) {
+      setState(() => _advanced = false);
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _apply(EngineSettings next) async {
@@ -239,11 +274,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child:
-                          NavBackButton(onTap: () => Navigator.of(context).pop()),
-                    ),
+                    if (_showBackButton)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: NavBackButton(onTap: _handleBack),
+                      ),
                     const Padding(
                       padding: EdgeInsets.fromLTRB(20, 6, 20, 6),
                       child: Text(
@@ -289,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   List<Widget> _sections(EngineSettings s) =>
-      widget.advanced ? _advancedSections(s) : _basicSections(s);
+      _advanced ? _advancedSections(s) : _basicSections(s);
 
   /// What most people ever need: how fast, and whether to keep sharing.
   List<Widget> _basicSections(EngineSettings s) {
@@ -348,11 +383,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
         child: SurfaceCard(
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const SettingsScreen(advanced: true),
-            ),
-          ),
+          onTap: _openAdvanced,
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [

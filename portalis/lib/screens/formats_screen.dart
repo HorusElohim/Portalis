@@ -16,7 +16,11 @@ import '../ui/ui.dart';
 /// on the way in, what can be viewed in-app, and what is handed to the
 /// system untouched.
 class FormatsScreen extends StatefulWidget {
-  const FormatsScreen({super.key});
+  const FormatsScreen({super.key, this.onBack});
+
+  /// Called instead of popping a route — set when this is shown in place of
+  /// the desktop shell's You pane rather than pushed over it.
+  final VoidCallback? onBack;
 
   @override
   State<FormatsScreen> createState() => _FormatsScreenState();
@@ -54,7 +58,8 @@ class _FormatsScreenState extends State<FormatsScreen> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: NavBackButton(
-                          onTap: () => Navigator.of(context).pop()),
+                          onTap: widget.onBack ??
+                              () => Navigator.of(context).pop()),
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),

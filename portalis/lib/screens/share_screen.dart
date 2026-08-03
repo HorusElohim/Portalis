@@ -22,7 +22,11 @@ String _kindLabel(String name) => MediaFormats.resolve(name).label;
 /// Photos/Files/Folder pickers, a file list with per-item remove, and one
 /// Create & share action that seeds the new collection from this device.
 class ShareScreen extends StatefulWidget {
-  const ShareScreen({super.key});
+  const ShareScreen({super.key, this.onClose});
+
+  /// Called instead of popping a route — set when this is embedded in the
+  /// desktop shell's centre pane rather than pushed over it.
+  final VoidCallback? onClose;
 
   @override
   State<ShareScreen> createState() => _ShareScreenState();
@@ -102,6 +106,12 @@ class _ShareScreenState extends State<ShareScreen> {
     showToast(context, msg, severity: severity);
   }
 
+  /// Pops the pushed route, or — embedded in the desktop shell — hands
+  /// control back to whatever put this on screen.
+  void _close() => widget.onClose != null
+      ? widget.onClose!()
+      : Navigator.of(context).pop();
+
   Future<void> _createShare() async {
     final name = _nameController.text.trim();
     if (name.isEmpty || _files.isEmpty) return;
@@ -118,7 +128,7 @@ class _ShareScreenState extends State<ShareScreen> {
       await Collections.instance.createWithMedia(name, normalized);
       if (mounted) {
         FocusScope.of(context).unfocus();
-        Navigator.of(context).pop();
+        _close();
         _toastGlobal('"$name" is live — seeding from this device');
       }
     } catch (e) {
@@ -155,7 +165,7 @@ class _ShareScreenState extends State<ShareScreen> {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: _BackButton(onTap: () => Navigator.of(context).pop()),
+                child: _BackButton(onTap: _close),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),

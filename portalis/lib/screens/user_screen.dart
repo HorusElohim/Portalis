@@ -30,6 +30,11 @@ class UserScreen extends StatefulWidget {
 class _UserScreenState extends State<UserScreen> {
   String? _syncAddress;
 
+  /// Embedded (desktop) only: shows [FormatsScreen] in place of the profile
+  /// instead of pushing it over the shell's sidebar and list. Mobile keeps
+  /// the real push — see the "File formats" row's `onTap`.
+  bool _showFormats = false;
+
   bridge.DeviceIdentityInfo? get _identity => DeviceIdentity.instance.info;
   String? get _error => DeviceIdentity.instance.lastError;
 
@@ -69,6 +74,9 @@ class _UserScreenState extends State<UserScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showFormats) {
+      return FormatsScreen(onBack: () => setState(() => _showFormats = false));
+    }
     return ListenableBuilder(
       listenable: Listenable.merge(
         [Collections.instance, DeviceIdentity.instance],
@@ -236,10 +244,12 @@ class _UserScreenState extends State<UserScreen> {
                   padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
                   child: SurfaceCard(
                     padding: const EdgeInsets.all(16),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const FormatsScreen()),
-                    ),
+                    onTap: widget.embedded
+                        ? () => setState(() => _showFormats = true)
+                        : () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const FormatsScreen()),
+                            ),
                     child: const Row(
                       children: [
                         Icon(Icons.category_outlined,
