@@ -147,7 +147,8 @@ class Collection {
           etaSecs,
           collaborators.length,
           // Per-file, since a grid of tiles renders each one.
-          ...media.map((m) => Object.hash(m.label, m.downloadedBytes, m.fetched)),
+          ...media
+              .map((m) => Object.hash(m.label, m.downloadedBytes, m.fetched)),
         ]),
       );
 
@@ -231,7 +232,9 @@ class Collection {
   /// Energy for this collection's card, by what it is genuinely doing.
   GlowLevel get glow {
     if (downloadMbps > 0 || uploadMbps > 0) {
-      return (downloadMbps + uploadMbps) > 4 ? GlowLevel.vivid : GlowLevel.active;
+      return (downloadMbps + uploadMbps) > 4
+          ? GlowLevel.vivid
+          : GlowLevel.active;
     }
     // Reaching for a peer counts as alive — something is being attempted, and
     // a dark card would read as nothing happening.
@@ -256,8 +259,7 @@ class Collection {
     return pendingMedia > 0 ? '$items · $pendingMedia to fetch' : items;
   }
 
-  String get peersLabel =>
-      '$livePeers peer${livePeers == 1 ? '' : 's'}';
+  String get peersLabel => '$livePeers peer${livePeers == 1 ? '' : 's'}';
 
   /// The "live copies" line. Counts this device explicitly when it's
   /// seeding: `livePeers` is remote peers only, so a healthy collection this
@@ -317,11 +319,9 @@ class CollectionEntry {
   /// it's a single not-fetched placeholder standing for the whole entry.
   bool get fetched => media.any((m) => m.fetched);
 
-  int get totalBytes =>
-      media.fold(0, (sum, m) => sum + m.sizeBytes);
+  int get totalBytes => media.fold(0, (sum, m) => sum + m.sizeBytes);
 
-  int get downloadedBytes =>
-      media.fold(0, (sum, m) => sum + m.downloadedBytes);
+  int get downloadedBytes => media.fold(0, (sum, m) => sum + m.downloadedBytes);
 
   double get progress =>
       totalBytes == 0 ? 0.0 : (downloadedBytes / totalBytes).clamp(0.0, 1.0);

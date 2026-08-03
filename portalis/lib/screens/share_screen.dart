@@ -12,7 +12,6 @@ import '../ui/ui.dart';
 
 typedef _PickedFile = ({String name, Uint8List bytes});
 
-
 /// The registry already names every type it knows, so this reads the label
 /// off the format rather than maintaining a second mapping that could drift.
 String _kindLabel(String name) => MediaFormats.resolve(name).label;
@@ -100,17 +99,15 @@ class _ShareScreenState extends State<ShareScreen> {
     }
   }
 
-  void _toast(String msg,
-      {ToastSeverity severity = ToastSeverity.info}) {
+  void _toast(String msg, {ToastSeverity severity = ToastSeverity.info}) {
     if (!mounted) return;
     showToast(context, msg, severity: severity);
   }
 
   /// Pops the pushed route, or — embedded in the desktop shell — hands
   /// control back to whatever put this on screen.
-  void _close() => widget.onClose != null
-      ? widget.onClose!()
-      : Navigator.of(context).pop();
+  void _close() =>
+      widget.onClose != null ? widget.onClose!() : Navigator.of(context).pop();
 
   Future<void> _createShare() async {
     final name = _nameController.text.trim();
@@ -157,207 +154,144 @@ class _ShareScreenState extends State<ShareScreen> {
             ? 'Name the collection to continue'
             : 'Seeds from this device as soon as it\'s created';
 
-    return Scaffold(
-      backgroundColor: AppColors.surfaceDeep,
-      body: SafeArea(
-        child: PageBody(
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: _BackButton(onTap: _close),
+    return AppScreen(
+      title: 'New share',
+      subtitle: const Text('Files stay on this device — collaborators pull '
+          'them from you.'),
+      onBack: _close,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(kScreenGutter, 0, kScreenGutter, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // A labelled field rather than a 25pt look-alike title.
+            // It used to sit where the screen title goes, which is
+            // why it needed a "tap the name to rename" hint to
+            // explain that it was editable at all.
+            const SectionLabel('COLLECTION NAME'),
+            const SizedBox(height: 7),
+            TextField(
+              key: const Key('collectionNameField'),
+              controller: _nameController,
+              style: AppText.body(),
+              cursorColor: AppColors.signal,
+              decoration: InputDecoration(
+                hintText: 'Untitled collection',
+                hintStyle: const TextStyle(color: AppColors.textGhost),
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _PickerButton(
+                    label: 'Photos',
+                    icon: Icons.photo_camera_outlined,
+                    onTap: _busy ? null : _pickPhotos,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: _PickerButton(
+                    label: 'Files',
+                    icon: Icons.description_outlined,
+                    onTap: _busy ? null : _pickFiles,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: _PickerButton(
+                    label: 'Folder',
+                    icon: Icons.folder_outlined,
+                    onTap: _busy ? null : _pickFolder,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (_files.isEmpty)
+              Container(
+                height: 150,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.borderStrong),
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                  color: AppColors.surface.withValues(alpha: 0.4),
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            key: const Key('collectionNameField'),
-                            controller: _nameController,
-                            style: const TextStyle(
-                              fontSize: 25,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: -0.4,
-                              color: AppColors.text,
-                            ),
-                            cursorColor: AppColors.signal,
-                            decoration: const InputDecoration(
-                              hintText: 'Untitled collection',
-                              hintStyle: TextStyle(color: AppColors.textGhost),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const Icon(Icons.edit_outlined,
-                            size: 16, color: AppColors.signal),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Tap the name to rename · files stay on this phone',
-                      style: TextStyle(fontSize: 11.5, color: AppColors.textGhost),
+                    Icon(Icons.upload_outlined,
+                        size: 26, color: AppColors.textGhost),
+                    SizedBox(height: 8),
+                    Text(
+                      'Nothing added yet',
+                      style: AppText.body(color: AppColors.textDim),
                     ),
                   ],
                 ),
+              )
+            else ...[
+              Row(
+                children: [
+                  Text(
+                    '${_files.length} ITEM${_files.length == 1 ? '' : 'S'} · ${formatBytes(_totalBytes)}',
+                    style: monoLabel(
+                        size: 10.5,
+                        color: AppColors.textDim,
+                        letterSpacing: 1.0),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => setState(() => _files = []),
+                    child: Text(
+                      'Remove all',
+                      style: AppText.secondary(color: AppColors.signalSoft),
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _PickerButton(
-                              label: 'Photos',
-                              icon: Icons.photo_camera_outlined,
-                              onTap: _busy ? null : _pickPhotos,
-                            ),
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: _PickerButton(
-                              label: 'Files',
-                              icon: Icons.description_outlined,
-                              onTap: _busy ? null : _pickFiles,
-                            ),
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: _PickerButton(
-                              label: 'Folder',
-                              icon: Icons.folder_outlined,
-                              onTap: _busy ? null : _pickFolder,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      if (_files.isEmpty)
-                        Container(
-                          height: 150,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.borderStrong),
-                            borderRadius: BorderRadius.circular(14),
-                            color: AppColors.surface.withValues(alpha: 0.4),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.upload_outlined,
-                                  size: 26, color: AppColors.textGhost),
-                              SizedBox(height: 8),
-                              Text(
-                                'Nothing added yet',
-                                style: TextStyle(
-                                    fontSize: 13, color: AppColors.textDim),
-                              ),
-                            ],
-                          ),
-                        )
-                      else ...[
-                        Row(
-                          children: [
-                            Text(
-                              '${_files.length} ITEM${_files.length == 1 ? '' : 'S'} · ${formatBytes(_totalBytes)}',
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                fontFamily: 'monospace',
-                                letterSpacing: 1.0,
-                                color: AppColors.textDim,
-                              ),
-                            ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () => setState(() => _files = []),
-                              child: const Text(
-                                'Remove all',
-                                style: TextStyle(
-                                    fontSize: 12.5, color: AppColors.signalSoft),
-                              ),
-                            ),
-                          ],
-                        ),
-                        for (final f in _files) _fileRow(f),
-                      ],
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEB5757).withValues(alpha: 0.1),
-                              border: Border.all(
-                                  color:
-                                      const Color(0xFFEB5757).withValues(alpha: 0.4)),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _error!,
-                              style: const TextStyle(
-                                  fontSize: 11, color: Color(0xFFEB5757)),
-                            ),
-                          ),
-                        ),
-                    ],
+              for (final f in _files) _fileRow(f),
+            ],
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEB5757).withValues(alpha: 0.1),
+                    border: Border.all(
+                        color: const Color(0xFFEB5757).withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(AppRadius.tight),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: AppText.caption(color: Color(0xFFEB5757)),
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: AppColors.border)),
-                ),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton(
-                        key: const Key('createShareButton'),
-                        onPressed: canCreate ? _createShare : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.signal,
-                          disabledBackgroundColor: AppColors.borderStrong,
-                          foregroundColor: AppColors.surfaceDeep,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: _busy
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(AppColors.surfaceDeep),
-                                ),
-                              )
-                            : const Text('Create & share',
-                                style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      summary,
-                      style: const TextStyle(
-                          fontSize: 11.5, color: AppColors.textGhost),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
+      ),
+      footer: ScreenAction(
+        buttonKey: const Key('createShareButton'),
+        label: 'Create & share',
+        onPressed: canCreate ? _createShare : null,
+        busy: _busy,
+        hint: summary,
       ),
     );
   }
@@ -381,15 +315,15 @@ class _ShareScreenState extends State<ShareScreen> {
             decoration: BoxDecoration(
               color: AppColors.surface,
               border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(7),
+              borderRadius: BorderRadius.circular(AppRadius.tight),
             ),
             child: Text(
               ext.length > 4 ? ext.substring(0, 4) : ext,
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.6,
+              style: monoLabel(
+                size: 9,
                 color: AppColors.textDim,
+                letterSpacing: 0.6,
+                weight: FontWeight.w600,
               ),
             ),
           ),
@@ -401,20 +335,19 @@ class _ShareScreenState extends State<ShareScreen> {
                 Text(
                   f.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13.5),
+                  style: AppText.body(),
                 ),
                 const SizedBox(height: 1),
                 Text(
                   '${_kindLabel(f.name)} · ${formatBytes(f.bytes.length)}',
-                  style: const TextStyle(
-                      fontSize: 11.5, color: AppColors.textDim),
+                  style: AppText.caption(color: AppColors.textDim),
                 ),
               ],
             ),
           ),
           IconButton(
-            onPressed: () => setState(() =>
-                _files = _files.where((other) => other != f).toList()),
+            onPressed: () => setState(
+                () => _files = _files.where((other) => other != f).toList()),
             icon: const Icon(Icons.close, size: 15, color: AppColors.textDim),
           ),
         ],
@@ -434,14 +367,14 @@ class _PickerButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AppRadius.inner),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.inner),
         onTap: onTap,
         child: Container(
           height: 74,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.inner),
             border: Border.all(color: AppColors.borderStrong),
           ),
           child: Column(
@@ -449,29 +382,10 @@ class _PickerButton extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: AppColors.text),
               const SizedBox(height: 7),
-              Text(label,
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.text)),
+              Text(label, style: AppText.secondary(color: AppColors.text)),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: onTap,
-      icon: const Icon(Icons.chevron_left, size: 18, color: AppColors.textDim),
-      label: const Text(
-        'Back',
-        style: TextStyle(fontSize: 14, color: AppColors.textDim),
       ),
     );
   }

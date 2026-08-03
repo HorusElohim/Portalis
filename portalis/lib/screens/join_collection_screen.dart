@@ -77,9 +77,8 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
 
   /// Pops the pushed route, or — embedded in the desktop shell — hands
   /// control back to whatever put this on screen.
-  void _close() => widget.onClose != null
-      ? widget.onClose!()
-      : Navigator.of(context).pop();
+  void _close() =>
+      widget.onClose != null ? widget.onClose!() : Navigator.of(context).pop();
 
   /// `(name, addressCount)` when the code un-hexes to
   /// `<64-hex secret>:<name>[@addr1,addr2]`, else null.
@@ -152,217 +151,130 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
   Widget build(BuildContext context) {
     final parsed = _parsed;
 
-    return Scaffold(
-      backgroundColor: AppColors.surfaceDeep,
-      body: SafeArea(
-        child: PageBody(
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _close,
-                  icon: const Icon(Icons.chevron_left,
-                      size: 18, color: AppColors.textDim),
-                  label: const Text('Back',
-                      style: TextStyle(fontSize: 14, color: AppColors.textDim)),
+    return AppScreen(
+      title: 'Join a collection',
+      subtitle: const Text('Enter the invite code you were sent.'),
+      onBack: _close,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: kScreenGutter),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              key: const Key('inviteCodeField'),
+              controller: _codeController,
+              maxLines: 3,
+              minLines: 1,
+              style:
+                  monoLabel(size: 13, color: AppColors.text, letterSpacing: 0),
+              decoration: InputDecoration(
+                hintText: 'Paste the invite code',
+                hintStyle: const TextStyle(color: AppColors.textGhost),
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                  borderSide: const BorderSide(color: AppColors.borderStrong),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 2, 20, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Join a collection',
-                      style: TextStyle(
-                        fontSize: 25,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Enter the invite code you were sent.',
-                      style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
-                    ),
-                  ],
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: _busy ? null : _pasteCode,
+                  child: Text(
+                    'Paste code',
+                    style: AppText.body(color: AppColors.signalSoft),
+                  ),
                 ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        key: const Key('inviteCodeField'),
-                        controller: _codeController,
-                        maxLines: 3,
-                        minLines: 1,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontFamily: 'monospace',
-                          color: AppColors.text,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Paste the invite code',
-                          hintStyle: const TextStyle(color: AppColors.textGhost),
-                          filled: true,
-                          fillColor: AppColors.surface,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 16),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                const BorderSide(color: AppColors.borderStrong),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                const BorderSide(color: AppColors.borderStrong),
-                          ),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    parsed != null
+                        ? 'Code recognised'
+                        : 'Codes come from "Add collab"',
+                    textAlign: TextAlign.right,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption(),
+                  ),
+                ),
+              ],
+            ),
+            if (parsed != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.inner),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Avatar(
+                      initials:
+                          parsed.$1.isEmpty ? '?' : parsed.$1[0].toUpperCase(),
+                      size: 38,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextButton(
-                            onPressed: _busy ? null : _pasteCode,
-                            child: const Text(
-                              'Paste code',
-                              style: TextStyle(
-                                  fontSize: 13.5, color: AppColors.signalSoft),
-                            ),
+                          Text(
+                            parsed.$1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.cardTitle(),
                           ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              parsed != null
-                                  ? 'Code recognised'
-                                  : 'Codes come from "Add collab"',
-                              textAlign: TextAlign.right,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 11.5, color: AppColors.textGhost),
-                            ),
+                          const SizedBox(height: 2),
+                          Text(
+                            parsed.$2 == 0
+                                ? 'No address in the code — sync manually after joining'
+                                : '${parsed.$2} address${parsed.$2 == 1 ? '' : 'es'} embedded — syncs on join',
+                            style: AppText.caption(color: AppColors.textDim),
                           ),
                         ],
                       ),
-                      if (parsed != null) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Row(
-                            children: [
-                              Avatar(
-                                initials: parsed.$1.isEmpty
-                                    ? '?'
-                                    : parsed.$1[0].toUpperCase(),
-                                size: 38,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      parsed.$1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.w500),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      parsed.$2 == 0
-                                          ? 'No address in the code — sync manually after joining'
-                                          : '${parsed.$2} address${parsed.$2 == 1 ? '' : 'es'} embedded — syncs on join',
-                                      style: const TextStyle(
-                                          fontSize: 11.5,
-                                          color: AppColors.textDim),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 9),
-                            decoration: BoxDecoration(
-                              color:
-                                  const Color(0xFFEB5757).withValues(alpha: 0.1),
-                              border: Border.all(
-                                  color: const Color(0xFFEB5757)
-                                      .withValues(alpha: 0.4)),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _error!,
-                              style: const TextStyle(
-                                  fontSize: 11, color: Color(0xFFEB5757)),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton(
-                        key: const Key('joinCollectionButton'),
-                        onPressed: _busy || parsed == null ? null : _join,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.signal,
-                          disabledBackgroundColor: AppColors.borderStrong,
-                          foregroundColor: AppColors.surfaceDeep,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: _busy
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation(AppColors.surfaceDeep),
-                                ),
-                              )
-                            : const Text('Join', style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'You\'ll appear as $_nickname to the other members',
-                      style: const TextStyle(
-                          fontSize: 11.5, color: AppColors.textGhost),
                     ),
                   ],
                 ),
               ),
             ],
-          ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEB5757).withValues(alpha: 0.1),
+                    border: Border.all(
+                        color: const Color(0xFFEB5757).withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(AppRadius.tight),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: AppText.caption(color: Color(0xFFEB5757)),
+                  ),
+                ),
+              ),
+          ],
         ),
+      ),
+      footer: ScreenAction(
+        buttonKey: const Key('joinCollectionButton'),
+        label: 'Join',
+        onPressed: parsed == null ? null : _join,
+        busy: _busy,
+        hint: 'You\'ll appear as $_nickname to the other members',
       ),
     );
   }

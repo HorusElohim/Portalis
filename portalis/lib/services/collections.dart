@@ -24,8 +24,7 @@ bool get _hasPhotoGallery =>
 /// and the desktop sidebar's inline field.
 bool looksLikeMagnet(String value) {
   final v = value.trim();
-  return v.startsWith('magnet:?') ||
-      RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(v);
+  return v.startsWith('magnet:?') || RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(v);
 }
 
 /// The app's single source of collections.
@@ -108,8 +107,8 @@ class Collections extends ChangeNotifier {
     // Told, not inferred. The engine used to decide whether anyone was looking
     // by watching how recently this class had asked it for collections, which
     // made its network behaviour a side effect of how often a screen redrew.
-    unawaited(
-        Future.microtask(() => bridge.setActive(active: !paused)).catchError((_) {}));
+    unawaited(Future.microtask(() => bridge.setActive(active: !paused))
+        .catchError((_) {}));
     if (paused) {
       _timer?.cancel();
       _timer = null;

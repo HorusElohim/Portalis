@@ -44,7 +44,8 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   /// files, so the hash alone doesn't identify a file.
   MediaItem get _media {
     for (final m in _collection.media) {
-      if (m.infoHash == widget.media.infoHash && m.label == widget.media.label) {
+      if (m.infoHash == widget.media.infoHash &&
+          m.label == widget.media.label) {
         return m;
       }
     }
@@ -177,10 +178,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                     const SizedBox(height: 14),
                     Text(
                       media.label,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppText.cardTitle(),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -190,10 +188,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                       media.isReady
                           ? collection.name
                           : '${collection.name} · downloading',
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.textDim,
-                      ),
+                      style: AppText.caption(color: AppColors.textDim),
                     ),
                     const SizedBox(height: 12),
                     // Always on screen, never behind a tap: this is the whole
@@ -241,11 +236,14 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     final media = _media;
     final controller = _videoController;
 
-    if (_isPlayableVideo && !_videoFailed && controller != null && controller.value.isInitialized) {
+    if (_isPlayableVideo &&
+        !_videoFailed &&
+        controller != null &&
+        controller.value.isInitialized) {
       return AspectRatio(
         aspectRatio: controller.value.aspectRatio,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadius.tight),
           child: _VideoPlayerView(controller: controller),
         ),
       );
@@ -281,11 +279,8 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
               child: Center(
                 child: Text(
                   '${(media.progress * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    color: AppColors.signalSoft,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: AppText.body(
+                      color: AppColors.signalSoft, weight: FontWeight.w500),
                 ),
               ),
             ),

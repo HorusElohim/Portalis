@@ -8,6 +8,7 @@ import 'package:portalis/screens/collection_screen.dart';
 import 'package:portalis/screens/collections_screen.dart';
 import 'package:portalis/screens/join_collection_screen.dart';
 import 'package:portalis/screens/media_viewer_screen.dart';
+import 'package:portalis/screens/people_screen.dart';
 import 'package:portalis/screens/root_shell.dart';
 import 'package:portalis/screens/settings_screen.dart';
 import 'package:portalis/screens/share_screen.dart';
@@ -18,7 +19,8 @@ import 'package:portalis/services/settings_service.dart';
 import 'package:portalis/theme.dart';
 import 'package:portalis/ui/ui.dart';
 
-/// A phone-sized window — below [kDesktopBreakpoint], so the mobile layout.
+/// A phone-sized window — below [WindowSize.desktopBreakpoint], so the
+/// mobile layout.
 const _phone = Size(390, 844);
 
 /// Comfortably above the breakpoint, for the three-pane layout.
@@ -630,6 +632,30 @@ void main() {
       expect(find.text('3'), findsOneWidget);
       expect(find.text('COLLECTIONS'), findsOneWidget);
       expect(find.text('2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // People has gone missing on a platform twice: first it existed only as
+    // a desktop sidebar pane, then as a row so far down this screen that it
+    // was past the address, the identity notice and File formats. Both times
+    // it was reachable in principle and unfindable in practice, so this pins
+    // the way in rather than the fact that a PeopleScreen class exists.
+    testWidgets('People is one tap from the You tab on mobile',
+        (tester) async {
+      const ana = Collaborator(deviceId: 'dev-ana', name: 'Ana');
+      await _pumpApp(tester, collections: [
+        _collection(id: 'a', collaborators: [ana]),
+      ]);
+      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.pump();
+
+      // Reachable without scrolling: tapping fails outright if the count is
+      // off-screen, which is exactly the regression being guarded.
+      await tester.tap(find.text('PEOPLE'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PeopleScreen), findsOneWidget);
+      expect(find.text('Ana'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

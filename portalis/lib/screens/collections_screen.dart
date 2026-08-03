@@ -65,45 +65,33 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
         final up = all.fold<double>(0, (s, c) => s + c.uploadMbps);
         return Stack(
           children: [
-            PageBody(
-              child: CustomScrollView(
+            // A tab of RootShell, which already supplies the Scaffold and
+            // SafeArea — so embedded, exactly as a desktop pane is.
+            AppScreen(
+              title: 'Collections',
+              embedded: true,
+              // The aggregate Transfers used to carry. Stating it here is
+              // what let that destination go: it was the one fact this
+              // screen didn't already have.
+              subtitle: Collections.instance.liveRate > 0
+                  ? Text(
+                      '${plural(all.where((c) => c.isMoving).length, 'transfer')}'
+                      ' · ↓ ${formatRate(down)} · ↑ ${formatRate(up)}',
+                      overflow: TextOverflow.ellipsis,
+                      style: monoLabel(
+                          size: 12,
+                          color: AppColors.signal,
+                          letterSpacing: 0.2),
+                    )
+                  : Text(plural(all.length, 'collection')),
+              body: CustomScrollView(
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const CanvasTitle('Collections', size: 34),
-                          const SizedBox(height: 5),
-                          // The aggregate Transfers used to carry. Stating it
-                          // here is what let that destination go: it was the
-                          // one fact this screen didn't already have.
-                          if (Collections.instance.liveRate > 0)
-                            Text(
-                              '${plural(all.where((c) => c.isMoving).length, 'transfer')}'
-                              ' · ↓ ${formatRate(down)} · ↑ ${formatRate(up)}',
-                              overflow: TextOverflow.ellipsis,
-                              style: monoLabel(
-                                  size: 12,
-                                  color: AppColors.signal,
-                                  letterSpacing: 0.2),
-                            )
-                          else
-                            Text(
-                              plural(all.length, 'collection'),
-                              style: const TextStyle(
-                                  fontSize: 14, color: AppColors.textDim),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
                   if (!Collections.instance.engineReady)
                     const SliverToBoxAdapter(child: EngineStartingNotice()),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+                      padding: const EdgeInsets.fromLTRB(
+                          kScreenGutter, 0, kScreenGutter, 0),
                       child: FilterChips(
                         labels: const ['All', 'Sharing', 'Receiving'],
                         selected: _Filter.values.indexOf(_filter),
@@ -115,21 +103,22 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
                   if (shown.isEmpty)
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 40, 22, 0),
+                        padding: const EdgeInsets.fromLTRB(
+                            kScreenGutter, 40, kScreenGutter, 0),
                         child: Center(
                           child: Text(
                             _filter == _Filter.sharing
                                 ? 'Nothing is being shared right now.'
                                 : 'Nothing is being received right now.',
-                            style: const TextStyle(
-                                fontSize: 13, color: AppColors.textDim),
+                            style: AppText.body(color: AppColors.textDim),
                           ),
                         ),
                       ),
                     )
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+                      padding: const EdgeInsets.fromLTRB(
+                          kScreenGutter, 16, kScreenGutter, 0),
                       sliver: SliverList.separated(
                         itemCount: shown.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -173,11 +162,10 @@ class _NoCollectionsYet extends StatelessWidget {
             Text('No collections yet.',
                 style: displayText(size: 17, color: AppColors.textDim)),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'Share something or join with a key from Home.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 13, height: 1.5, color: AppColors.textGhost),
+              style: AppText.body(color: AppColors.textGhost, height: 1.5),
             ),
           ],
         ),
@@ -196,10 +184,10 @@ class AddFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.signal,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: InkWell(
         key: const Key('addFab'),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         onTap: () => _showSheet(context),
         child: const SizedBox(
           width: 62,
@@ -215,7 +203,8 @@ class AddFab extends StatelessWidget {
       context: context,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
       ),
       builder: (sheetContext) => SafeArea(
         child: Column(
@@ -257,10 +246,9 @@ class AddFab extends StatelessWidget {
       String title, String subtitle, Widget screen) {
     return ListTile(
       leading: Icon(icon, color: color),
-      title: Text(title,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 12, color: AppColors.textDim)),
+      title: Text(title, style: AppText.cardTitle()),
+      subtitle:
+          Text(subtitle, style: AppText.secondary(color: AppColors.textDim)),
       onTap: () {
         Navigator.of(sheetContext).pop();
         onPush(screen);

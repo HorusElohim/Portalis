@@ -15,7 +15,8 @@ class SettingsSection extends StatelessWidget {
     super.key,
     required this.label,
     required this.children,
-    this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 0),
+    this.padding =
+        const EdgeInsets.fromLTRB(kScreenGutter, 18, kScreenGutter, 0),
   });
 
   final String label;
@@ -32,6 +33,60 @@ class SettingsSection extends StatelessWidget {
           SectionLabel(label),
           const SizedBox(height: 6),
           ...children,
+        ],
+      ),
+    );
+  }
+}
+
+/// An icon, a title, an optional subtitle, and — when [onTap] is given — a
+/// trailing chevron. The shape behind every "go here" row on You and
+/// Settings: File formats, People, Settings, Network & engine, and (without
+/// [onTap]) the plain identity notice — five copies of the same Row before
+/// this existed.
+class DestinationRow extends StatelessWidget {
+  const DestinationRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.iconColor = AppColors.textDim,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Color iconColor;
+
+  /// Omit for a plain notice: no chevron, and nothing to tap.
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 19, color: iconColor),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppText.cardTitle()),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 3),
+                  Text(subtitle!, style: AppText.secondary()),
+                ],
+              ],
+            ),
+          ),
+          if (onTap != null)
+            const Icon(Icons.chevron_right,
+                size: 16, color: AppColors.textGhost),
         ],
       ),
     );
@@ -76,13 +131,13 @@ class ValueRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 13.5)),
+                Text(label, style: AppText.body()),
                 if (subtitle != null) ...[
                   const SizedBox(height: 3),
                   Text(
                     subtitle!,
-                    style: const TextStyle(
-                        fontSize: 11, height: 1.4, color: AppColors.textFaint),
+                    style: AppText.caption(
+                        color: AppColors.textFaint, height: 1.4),
                   ),
                 ],
               ],
@@ -101,10 +156,7 @@ class ValueRow extends StatelessWidget {
                       color: valueColor ?? AppColors.signalSoft,
                       letterSpacing: 0,
                     )
-                  : TextStyle(
-                      fontSize: 12.5,
-                      color: valueColor ?? AppColors.text,
-                    ),
+                  : AppText.secondary(color: valueColor ?? AppColors.text),
             ),
           ),
           if (copyable)
@@ -161,12 +213,12 @@ class SwitchRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 13.5)),
+                Text(label, style: AppText.body()),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                      fontSize: 11, height: 1.4, color: AppColors.textFaint),
+                  style:
+                      AppText.caption(color: AppColors.textFaint, height: 1.4),
                 ),
               ],
             ),
@@ -212,16 +264,15 @@ class InfoRow extends StatelessWidget {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+              style: AppText.secondary(color: AppColors.textDim),
             ),
           ),
           Expanded(
             child: Text(
               value,
               style: monospace
-                  ? monoLabel(
-                      size: 12, color: AppColors.text, letterSpacing: 0)
-                  : const TextStyle(fontSize: 12),
+                  ? monoLabel(size: 12, color: AppColors.text, letterSpacing: 0)
+                  : AppText.secondary(),
             ),
           ),
           if (copyable)
@@ -258,13 +309,13 @@ class InfoBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+      padding: const EdgeInsets.fromLTRB(kScreenGutter, 6, kScreenGutter, 0),
       child: Container(
         padding: const EdgeInsets.all(11),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.06),
           border: Border.all(color: color.withValues(alpha: 0.45)),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.inner),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,7 +325,7 @@ class InfoBanner extends StatelessWidget {
             Expanded(
               child: Text(
                 text,
-                style: TextStyle(fontSize: 11, height: 1.45, color: color),
+                style: AppText.caption(color: color, height: 1.45),
               ),
             ),
           ],

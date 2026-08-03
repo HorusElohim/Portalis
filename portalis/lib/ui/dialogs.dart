@@ -43,8 +43,7 @@ Future<String?> promptForText(
             hintStyle: const TextStyle(color: AppColors.textGhost),
             helperText: helper,
             helperMaxLines: 3,
-            helperStyle:
-                const TextStyle(fontSize: 10.5, color: AppColors.textDim),
+            helperStyle: AppText.caption(color: AppColors.textDim),
             focusedBorder: const UnderlineInputBorder(
               borderSide: BorderSide(color: AppColors.signal),
             ),
@@ -82,8 +81,7 @@ Future<bool> confirmAction(
       title: Text(title, style: displayText(size: 17)),
       content: Text(
         message,
-        style: const TextStyle(
-            fontSize: 12.5, height: 1.5, color: AppColors.textDim),
+        style: AppText.secondary(color: AppColors.textDim, height: 1.5),
       ),
       actions: [
         TextButton(
@@ -103,4 +101,3 @@ Future<bool> confirmAction(
   );
   return result ?? false;
 }
-

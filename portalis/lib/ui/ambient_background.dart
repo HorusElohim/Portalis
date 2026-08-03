@@ -103,7 +103,8 @@ class _AmbientBackgroundState extends State<AmbientBackground>
           // never mark the widget tree above as dirty.
           child: RepaintBoundary(
             child: controller == null
-                ? _Wash(t: 0, intensity: widget.intensity, accent: widget.accent)
+                ? _Wash(
+                    t: 0, intensity: widget.intensity, accent: widget.accent)
                 : AnimatedBuilder(
                     animation: controller,
                     builder: (context, _) => _Wash(

@@ -53,7 +53,7 @@ class HomeScreen extends StatelessWidget {
                       PulseRings(
                         size: 168,
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(AppRadius.card),
                           child: Image.asset(
                             'assets/PortalisNature.png',
                             width: 72,
@@ -76,14 +76,12 @@ class HomeScreen extends StatelessWidget {
                         height: 1.02,
                       ),
                       const SizedBox(height: 10),
-                      const Text(
+                      Text(
                         'No uploads, no size limits. Files move device to '
                         'device — and stay on yours.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 14.5,
-                            height: 1.5,
-                            color: AppColors.textDim),
+                        style:
+                            AppText.body(color: AppColors.textDim, height: 1.5),
                       ),
                     ],
                   ),
@@ -132,8 +130,8 @@ class HomeScreen extends StatelessWidget {
                               icon: Icons.link,
                               iconColor: AppColors.signal,
                               label: 'Join with a key',
-                              onTap: () => _push(
-                                  context, const JoinCollectionScreen()),
+                              onTap: () =>
+                                  _push(context, const JoinCollectionScreen()),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -170,8 +168,7 @@ class HomeScreen extends StatelessWidget {
                           Expanded(
                             child: Text(
                               plural(all.length, 'collection'),
-                              style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w600),
+                              style: AppText.cardTitle(),
                             ),
                           ),
                           const Icon(Icons.chevron_right,
@@ -282,7 +279,7 @@ class LiveTransferCard extends StatelessWidget {
 
     return SurfaceCard(
       onTap: onTap,
-      radius: 24,
+      radius: AppRadius.card,
       padding: const EdgeInsets.all(18),
       borderColor: accent.withValues(alpha: 0.28),
       gradient: LinearGradient(
@@ -331,15 +328,14 @@ class LiveTransferCard extends StatelessWidget {
                     style: displayText(size: 20, color: accent),
                   ),
                   Text('MB/S',
-                      style:
-                          monoLabel(size: 10, color: AppColors.signalMuted)),
+                      style: monoLabel(size: 10, color: AppColors.signalMuted)),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 16),
           ClipRRect(
-            borderRadius: BorderRadius.circular(99),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
             child: LinearProgressIndicator(
               value: collection.progress.clamp(0.0, 1.0),
               minHeight: 8,
@@ -431,7 +427,7 @@ class _SecondaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SurfaceCard(
       onTap: onTap,
-      radius: 18,
+      radius: AppRadius.card,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,7 +436,7 @@ class _SecondaryCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+            style: AppText.cardTitle(),
           ),
         ],
       ),

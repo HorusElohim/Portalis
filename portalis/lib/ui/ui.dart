@@ -10,7 +10,8 @@
 ///
 /// Layout of the kit:
 ///
-/// - [adaptive_screen] — chrome for a screen reachable both embedded and pushed
+/// - [screen] — the frame every screen is built in: chrome, width, gutter, title
+/// - [window] — breakpoints and available width, as a screen should reason about them
 /// - [formatters] — bytes, rates, limits, pluralisation
 /// - [primitives] — page frame, card surface, section label, status badge
 /// - [controls]   — primary action, pill button, filter chips, back button
@@ -24,7 +25,6 @@
 /// code and tests reference them too.
 library;
 
-export 'adaptive_screen.dart';
 export 'ambient_background.dart';
 export 'collection_views.dart';
 export 'controls.dart';
@@ -35,4 +35,6 @@ export 'indicators.dart';
 export 'media.dart';
 export 'primitives.dart';
 export 'rows.dart';
+export 'screen.dart';
 export 'toast.dart';
+export 'window.dart';

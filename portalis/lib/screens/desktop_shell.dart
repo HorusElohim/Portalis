@@ -45,6 +45,7 @@ enum _Pane { collections, people, you, settings, share, join }
 
 class _DesktopShellState extends State<DesktopShell> {
   _Pane _pane = _Pane.collections;
+
   /// The collection whose card is showing its contents, if any.
   String? _openId;
 
@@ -143,7 +144,7 @@ class _DesktopShellState extends State<DesktopShell> {
 
   Widget _centre() {
     switch (_pane) {
-      // `embedded: true` — see AdaptiveScreen. Each renders bare (no
+      // `embedded: true` — see AppScreen. Each renders bare (no
       // Scaffold, no SafeArea), relying on the one already established in
       // build() above, so getting that right isn't something this switch or
       // any one screen has to remember on its own.
@@ -155,7 +156,7 @@ class _DesktopShellState extends State<DesktopShell> {
         return const SettingsScreen(embedded: true);
       // Share and Join have their own Scaffold/SafeArea regardless of
       // context — a one-shot action rather than a destination with an
-      // embedded/pushed duality, so AdaptiveScreen doesn't apply. Closing
+      // embedded/pushed duality, so AppScreen doesn't apply. Closing
       // returns to the list they replaced, same as re-tapping an open header
       // button.
       case _Pane.share:
@@ -262,13 +263,14 @@ class _Sidebar extends StatelessWidget {
   }
 
   /// A secondary way in.
-  Widget _miniAction(BuildContext context, IconData icon, String label,
-      VoidCallback onTap, {Color color = AppColors.signalSoft}) {
+  Widget _miniAction(
+      BuildContext context, IconData icon, String label, VoidCallback onTap,
+      {Color color = AppColors.signalSoft}) {
     return Material(
       color: AppColors.surfaceRaised,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.control),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.control),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 15),
@@ -281,8 +283,7 @@ class _Sidebar extends StatelessWidget {
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500),
+                  style: AppText.cardTitle(),
                 ),
               ),
             ],
@@ -326,10 +327,10 @@ class _HeaderButton extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: selected ? AppColors.surfaceRaised : Colors.transparent,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(AppRadius.inner),
         child: InkWell(
           key: Key('header${tooltip}Button'),
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(AppRadius.inner),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
@@ -343,8 +344,7 @@ class _HeaderButton extends StatelessWidget {
                 ),
                 if (badge != null) ...[
                   const SizedBox(width: 5),
-                  Text(badge!,
-                      style: monoLabel(size: 10.5, letterSpacing: 0)),
+                  Text(badge!, style: monoLabel(size: 10.5, letterSpacing: 0)),
                 ],
               ],
             ),
@@ -440,18 +440,19 @@ class _TorrentQuickAddState extends State<_TorrentQuickAdd> {
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.inner),
               borderSide: const BorderSide(color: AppColors.border),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.inner),
               borderSide: const BorderSide(color: AppColors.border),
             ),
           ),
           onChanged: (_) => setState(() {}),
           onSubmitted: (_) => _isValid && !_busy
               ? _run(
-                  () => Collections.instance.addFromMagnet(_controller.text.trim()),
+                  () => Collections.instance
+                      .addFromMagnet(_controller.text.trim()),
                   'Added — joining swarm',
                 )
               : null,
@@ -504,12 +505,10 @@ class _TorrentQuickAddState extends State<_TorrentQuickAdd> {
       {IconData? icon, VoidCallback? onTap, bool primary = false}) {
     final enabled = onTap != null;
     return Material(
-      color: primary && enabled
-          ? AppColors.signal
-          : AppColors.surfaceRaised,
-      borderRadius: BorderRadius.circular(12),
+      color: primary && enabled ? AppColors.signal : AppColors.surfaceRaised,
+      borderRadius: BorderRadius.circular(AppRadius.inner),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.inner),
         onTap: onTap,
         child: Padding(
           padding: EdgeInsets.symmetric(
@@ -521,15 +520,13 @@ class _TorrentQuickAddState extends State<_TorrentQuickAdd> {
                     color: enabled ? AppColors.ember : AppColors.textFaint)
                 : Text(
                     label!,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: !enabled
-                          ? AppColors.textFaint
-                          : primary
-                              ? AppColors.onSignal
-                              : AppColors.text,
-                    ),
+                    style: AppText.body(
+                        color: !enabled
+                            ? AppColors.textFaint
+                            : primary
+                                ? AppColors.onSignal
+                                : AppColors.text,
+                        weight: FontWeight.w500),
                   ),
           ),
         ),
@@ -569,10 +566,10 @@ class _IdentityChipState extends State<_IdentityChip> {
         .fold<int>(0, (s, c) => s + c.livePeers);
     return Material(
       color: widget.selected ? AppColors.surfaceRaised : Colors.transparent,
-      borderRadius: BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(AppRadius.inner),
       child: InkWell(
         key: const Key('identityChip'),
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(AppRadius.inner),
         onTap: widget.onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -593,8 +590,7 @@ class _IdentityChipState extends State<_IdentityChip> {
                     Text(
                       name ?? 'This device',
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13.5, fontWeight: FontWeight.w600),
+                      style: AppText.body(weight: FontWeight.w600),
                     ),
                     const SizedBox(height: 1),
                     Text(
@@ -630,7 +626,7 @@ class _SessionRates extends StatelessWidget {
     final up = collections.fold<double>(0, (s, c) => s + c.uploadMbps);
     final live = down > 0 || up > 0;
     return SurfaceCard(
-      radius: 14,
+      radius: AppRadius.control,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -662,67 +658,54 @@ class _CollectionsPane extends StatelessWidget {
     final error = Collections.instance.lastError;
     final moving = collections.where((c) => c.isMoving).length;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 26, 28, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const CanvasTitle('Collections', size: 32),
-              const SizedBox(height: 4),
-              Text(
-                moving == 0
-                    ? '${collections.length} collection'
-                        '${collections.length == 1 ? '' : 's'}'
-                    : '$moving transfer${moving == 1 ? '' : 's'} in flight',
-                style:
-                    const TextStyle(fontSize: 13.5, color: AppColors.textDim),
+    // The same title and subtitle the mobile Collections screen states, from
+    // the same frame — they used to be two hand-built headers that had
+    // drifted to different sizes and gutters.
+    return AppScreen(
+      title: 'Collections',
+      subtitle: Text(
+        moving == 0
+            ? '${collections.length} collection'
+                '${collections.length == 1 ? '' : 's'}'
+            : '$moving transfer${moving == 1 ? '' : 's'} in flight',
+      ),
+      embedded: true,
+      width: ScreenWidth.full,
+      body: collections.isEmpty
+          ? Center(
+              child: Text(
+                error ?? 'Nothing here yet.',
+                textAlign: TextAlign.center,
+                style: AppText.body(
+                    color:
+                        error != null ? AppColors.danger : AppColors.textDim),
               ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: collections.isEmpty
-              ? Center(
-                  child: Text(
-                    error ?? 'Nothing here yet.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: error != null
-                          ? AppColors.danger
-                          : AppColors.textDim,
-                    ),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-                  itemCount: collections.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) {
-                    final c = collections[i];
-                    final open = c.id == openId;
-                    return CollectionRow(
-                      collection: c,
-                      selected: open,
-                      onTap: () => onOpen(c.id),
-                      // The card *is* the view. Keyed by id so opening
-                      // another starts fresh rather than carrying the
-                      // previous one's disclosure across.
-                      detail: open
-                          ? CollectionDetail(
-                              key: ValueKey(c.id),
-                              collection: c,
-                              showHeading: false,
-                            )
-                          : null,
-                    );
-                  },
-                ),
-        ),
-      ],
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(
+                  kScreenGutter, 0, kScreenGutter, 28),
+              itemCount: collections.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, i) {
+                final c = collections[i];
+                final open = c.id == openId;
+                return CollectionRow(
+                  collection: c,
+                  selected: open,
+                  onTap: () => onOpen(c.id),
+                  // The card *is* the view. Keyed by id so opening another
+                  // starts fresh rather than carrying the previous one's
+                  // disclosure across.
+                  detail: open
+                      ? CollectionDetail(
+                          key: ValueKey(c.id),
+                          collection: c,
+                          showHeading: false,
+                        )
+                      : null,
+                );
+              },
+            ),
     );
   }
 }

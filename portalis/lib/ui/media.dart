@@ -45,11 +45,8 @@ class PlaceholderTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textGhost,
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                    ),
+                    style: monoLabel(
+                        size: 10, color: AppColors.textGhost, letterSpacing: 0),
                   ),
                 ),
               ],

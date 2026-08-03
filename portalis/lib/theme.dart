@@ -96,7 +96,100 @@ class AppFonts {
   static const mono = 'JetBrains Mono';
 }
 
+/// The type scale — five steps of body text, plus [monoLabel] for machine
+/// output and [canvasTitle]/[impactTitle] for headings.
+///
+/// Five, because the app had fifteen: 9, 10, 10.5, 11, 11.5, 12, 12.5, 13,
+/// 13.5, 14, 14.5, 15, 16, 20 and 25, each picked at the call site that
+/// needed it. Nothing could be restyled without finding every literal, and
+/// two screens showing the same kind of text routinely disagreed by half a
+/// point — which is invisible on its own and exactly why it kept happening.
+///
+/// The steps are roles, not sizes: ask for what the text *is* and the scale
+/// decides how big it is. Restyling the app's text is then this class and
+/// nothing else — the same way [AppColors] is already the only place the
+/// palette lives, and [AppRadius] the only place corners do.
+class AppText {
+  AppText._();
+
+  /// The label on a button that completes something — see `ScreenAction`,
+  /// and the one line of a preview that names what you are about to add.
+  static TextStyle action({Color color = AppColors.text, double? height}) =>
+      _body(16, color, FontWeight.w500, height);
+
+  /// The heading inside a card or a row: "File formats", "People".
+  static TextStyle cardTitle({Color color = AppColors.text}) =>
+      _body(14.5, color, FontWeight.w600);
+
+  /// Default reading text, and the label half of a settings row.
+  static TextStyle body({
+    Color color = AppColors.text,
+    double? height,
+    FontWeight weight = FontWeight.w400,
+  }) =>
+      _body(13.5, color, weight, height);
+
+  /// Supporting copy under a title — the explanation, not the thing.
+  static TextStyle secondary({
+    Color color = AppColors.textFaint,
+    double? height,
+  }) =>
+      _body(12.5, color, FontWeight.w400, height);
+
+  /// The smallest step: hints under an action, helper text under a field,
+  /// and asides. [weight] because a caption occasionally has to carry a
+  /// name — a linked collection, a selected tab — and emphasis is the only
+  /// thing left to say it with at this size.
+  static TextStyle caption({
+    Color color = AppColors.textGhost,
+    double? height,
+    FontWeight weight = FontWeight.w400,
+  }) =>
+      _body(11.5, color, weight, height);
+
+  static TextStyle _body(
+    double size,
+    Color color,
+    FontWeight weight, [
+    double? height,
+  ]) =>
+      TextStyle(
+        fontFamily: AppFonts.body,
+        fontSize: size,
+        color: color,
+        fontWeight: weight,
+        height: height,
+      );
+}
+
+/// Corner radii, as roles rather than numbers.
+///
+/// Five, replacing the twelve the app had reached — 6, 7, 8, 10, 11, 12, 14,
+/// 15, 20, 22, 99 and 999 — where the difference between a 10 and an 11 was
+/// never a decision anyone made.
+class AppRadius {
+  AppRadius._();
+
+  /// Fully round: pills, bars, progress tracks.
+  static const pill = 99.0;
+
+  /// A card or panel — see `SurfaceCard`.
+  static const card = 20.0;
+
+  /// Buttons and text fields.
+  static const control = 14.0;
+
+  /// Something nested inside a card: a chip, a thumbnail, an inner tile.
+  static const inner = 11.0;
+
+  /// The smallest corner — a badge or a tiny glyph tile.
+  static const tight = 7.0;
+}
+
 /// Shorthand for the recurring mono label style (uppercase, tracked out).
+///
+/// The mono step of [AppText]'s scale — kept a standalone function because
+/// its callers vary letter-spacing and size far more than body text does.
 TextStyle monoLabel({
   double size = 10,
   Color color = AppColors.textFaint,
@@ -200,9 +293,9 @@ class AppTheme {
       ),
       dividerColor: AppColors.border,
       splashFactory: InkRipple.splashFactory,
-      snackBarTheme: const SnackBarThemeData(
+      snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.surface,
-        contentTextStyle: TextStyle(color: AppColors.text, fontSize: 13),
+        contentTextStyle: AppText.body(),
       ),
       dialogTheme: const DialogThemeData(backgroundColor: AppColors.surface),
     );

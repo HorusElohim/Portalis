@@ -21,7 +21,7 @@ class StorageScreen extends StatefulWidget {
   const StorageScreen({super.key, this.embedded = false, this.onBack});
 
   /// Set when this replaces the Settings pane in place on desktop rather
-  /// than being pushed over it — see [AdaptiveScreen].
+  /// than being pushed over it — see [AppScreen].
   final bool embedded;
 
   /// Called instead of popping a route. Only meaningful when [embedded]:
@@ -74,38 +74,18 @@ class _StorageScreenState extends State<StorageScreen> {
   @override
   Widget build(BuildContext context) {
     final entries = _entries;
-    return AdaptiveScreen(
+    return AppScreen(
+      title: 'Storage',
+      subtitle: Text(
+        entries == null
+            ? 'Reading the download folder…'
+            : '${formatBytes(_totalBytes)} across ${entries.length} item'
+                '${entries.length == 1 ? '' : 's'}',
+      ),
       embedded: widget.embedded,
       forceShowBack: true,
       onBack: widget.onBack,
-      body: PageBody(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CanvasTitle('Storage', size: 30),
-                  const SizedBox(height: 6),
-                  Text(
-                    entries == null
-                        ? 'Reading the download folder…'
-                        : '${formatBytes(_totalBytes)} across '
-                            '${entries.length} item'
-                            '${entries.length == 1 ? '' : 's'}',
-                    style:
-                        const TextStyle(fontSize: 13, color: AppColors.textDim),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Expanded(child: _body(entries)),
-          ],
-        ),
-      ),
+      body: _body(entries),
     );
   }
 
@@ -117,7 +97,7 @@ class _StorageScreenState extends State<StorageScreen> {
           child: Text(
             _error!,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13, color: AppColors.danger),
+            style: AppText.body(color: AppColors.danger),
           ),
         ),
       );
@@ -128,10 +108,10 @@ class _StorageScreenState extends State<StorageScreen> {
       );
     }
     if (entries.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Nothing downloaded yet.',
-          style: TextStyle(fontSize: 13, color: AppColors.textDim),
+          style: AppText.body(color: AppColors.textDim),
         ),
       );
     }
@@ -139,7 +119,7 @@ class _StorageScreenState extends State<StorageScreen> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
+        padding: const EdgeInsets.fromLTRB(kScreenGutter, 0, kScreenGutter, 24),
         itemCount: entries.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, i) => _EntryRow(
@@ -168,7 +148,8 @@ class _EntryRow extends StatelessWidget {
       return;
     }
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => CollectionScreen(collection: collection)),
+      MaterialPageRoute(
+          builder: (_) => CollectionScreen(collection: collection)),
     );
   }
 
@@ -203,8 +184,7 @@ class _EntryRow extends StatelessWidget {
                 child: Text(
                   entry.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13.5, fontWeight: FontWeight.w500),
+                  style: AppText.body(weight: FontWeight.w500),
                 ),
               ),
               const SizedBox(width: 10),
@@ -231,11 +211,9 @@ class _EntryRow extends StatelessWidget {
                               child: Text(
                                 entry.collectionName!,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.signalSoft,
-                                ),
+                                style: AppText.caption(
+                                    color: AppColors.signalSoft,
+                                    weight: FontWeight.w600),
                               ),
                             ),
                           ],
@@ -249,8 +227,8 @@ class _EntryRow extends StatelessWidget {
                           const SizedBox(width: 5),
                           Text(
                             'Not linked to a collection',
-                            style: monoLabel(
-                                size: 10, color: AppColors.textFaint),
+                            style:
+                                monoLabel(size: 10, color: AppColors.textFaint),
                           ),
                         ],
                       ),
@@ -267,7 +245,7 @@ class _EntryRow extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ClipRRect(
-            borderRadius: BorderRadius.circular(99),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
             child: LinearProgressIndicator(
               value: fraction.clamp(0.0, 1.0),
               minHeight: 4,

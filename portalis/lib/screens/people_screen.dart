@@ -34,69 +34,42 @@ class PeopleScreen extends StatelessWidget {
     }
     final people = byDevice.values.toList();
 
-    return AdaptiveScreen(
+    return AppScreen(
+      title: 'People',
+      subtitle: people.isEmpty
+          ? null
+          : Text('${people.length} collaborator'
+              '${people.length == 1 ? '' : 's'} across your collections'),
       embedded: embedded,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(28, embedded ? 26 : 12, 28, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const ImpactTitle('People'),
-                if (people.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '${people.length} collaborator'
-                    '${people.length == 1 ? '' : 's'} across your '
-                    'collections',
-                    style: const TextStyle(
-                        fontSize: 13.5, color: AppColors.textDim),
-                  ),
-                ],
-              ],
+      width: ScreenWidth.full,
+      body: people.isEmpty
+          ? Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: kScreenGutter),
+                child: Text(
+                  'Nobody yet. Collaborators appear once you share or join.',
+                  textAlign: TextAlign.center,
+                  style: AppText.body(color: AppColors.textDim),
+                ),
+              ),
+            )
+          // A grid, not a single stretched column: on desktop the centre
+          // pane is wide enough for several across, and on a phone-width
+          // window this resolves to one anyway.
+          : WindowBuilder(
+              builder: (context, window) => GridView.builder(
+                padding: const EdgeInsets.fromLTRB(
+                    kScreenGutter, 0, kScreenGutter, 28),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: window.columns(340),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  mainAxisExtent: 76,
+                ),
+                itemCount: people.length,
+                itemBuilder: (context, i) => PersonCard(entry: people[i]),
+              ),
             ),
-          ),
-          Expanded(
-            child: people.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 28),
-                      child: Text(
-                        'Nobody yet. Collaborators appear once you share '
-                        'or join.',
-                        textAlign: TextAlign.center,
-                        style:
-                            TextStyle(fontSize: 13, color: AppColors.textDim),
-                      ),
-                    ),
-                  )
-                // A grid, not a single stretched column: on desktop the
-                // centre pane is wide enough for several across, and on a
-                // phone-width window this resolves to one anyway.
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cols =
-                          (constraints.maxWidth / 340).floor().clamp(1, 4);
-                      return GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-                        gridDelegate:
-                            SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: cols,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          mainAxisExtent: 76,
-                        ),
-                        itemCount: people.length,
-                        itemBuilder: (context, i) =>
-                            PersonCard(entry: people[i]),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -124,8 +97,7 @@ class PersonCard extends StatelessWidget {
                 Text(
                   who.isAdmin ? '${who.name} · admin' : who.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600),
+                  style: AppText.cardTitle(),
                 ),
                 const SizedBox(height: 3),
                 Text(

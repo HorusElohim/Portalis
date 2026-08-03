@@ -16,8 +16,7 @@ class LiveDot extends StatefulWidget {
   State<LiveDot> createState() => _LiveDotState();
 }
 
-class _LiveDotState extends State<LiveDot>
-    with SingleTickerProviderStateMixin {
+class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 2),
@@ -232,7 +231,8 @@ class _PerimeterProgressPainter extends CustomPainter {
     final iterator = (Path()..addRRect(rrect)).computeMetrics().iterator;
     if (!iterator.moveNext()) return;
     final metric = iterator.current;
-    final extracted = metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
+    final extracted =
+        metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
     canvas.drawPath(
       extracted,
       Paint()
@@ -317,7 +317,7 @@ class TransferFacts extends StatelessWidget {
         // A full bar under a finished file is noise — it says "100%" twice.
         if (totalBytes > 0 && !_isComplete) ...[
           ClipRRect(
-            borderRadius: BorderRadius.circular(99),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
             child: LinearProgressIndicator(
               value: progress.clamp(0.0, 1.0),
               minHeight: 4,

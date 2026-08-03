@@ -19,7 +19,7 @@ class FormatsScreen extends StatefulWidget {
   const FormatsScreen({super.key, this.embedded = false, this.onBack});
 
   /// Set when this replaces the You pane in place on desktop rather than
-  /// being pushed over it — see [AdaptiveScreen].
+  /// being pushed over it — see [AppScreen].
   final bool embedded;
 
   /// Called instead of popping a route. Only meaningful when [embedded]:
@@ -50,70 +50,63 @@ class _FormatsScreenState extends State<FormatsScreen> {
     final viewable =
         all.where((f) => f.preview != PreviewSupport.externalOnly).length;
 
-    return AdaptiveScreen(
+    return AppScreen(
+      title: 'File formats',
+      subtitle: Text('${all.length} types · $viewable viewable in the app · '
+          '$converted converted when shared'),
       embedded: widget.embedded,
       forceShowBack: true,
       onBack: widget.onBack,
-      body: PageBody(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const CanvasTitle('File formats', size: 30),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${all.length} types · $viewable viewable in the '
-                      'app · $converted converted when shared',
-                      style: const TextStyle(
-                          fontSize: 13, height: 1.5, color: AppColors.textDim),
+      body: Column(
+        children: [
+          // Above the scroll rather than inside it: the field that filters
+          // the list shouldn't scroll away from the list it filters.
+          Padding(
+            padding:
+                const EdgeInsets.fromLTRB(kScreenGutter, 0, kScreenGutter, 4),
+            child: _SearchField(onChanged: (v) => setState(() => _query = v)),
+          ),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                if (matches.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          kScreenGutter, 40, kScreenGutter, 0),
+                      child: Center(
+                        child: Text(
+                          'Nothing matches "$_query".\nUnlisted types are '
+                          'still shared byte-for-byte — they just open in '
+                          'your system app.',
+                          textAlign: TextAlign.center,
+                          style: AppText.body(
+                              color: AppColors.textDim, height: 1.6),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    _SearchField(
-                      onChanged: (v) => setState(() => _query = v),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (matches.isEmpty)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 40, 22, 0),
-                  child: Center(
+                  )
+                else
+                  for (final kind in MediaKind.values)
+                    ..._kindSection(
+                        kind, matches.where((f) => f.kind == kind).toList()),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        kScreenGutter, 26, kScreenGutter, 28),
                     child: Text(
-                      'Nothing matches "$_query".\nUnlisted types are still '
-                      'shared byte-for-byte — they just open in your system '
-                      'app.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 13, height: 1.6, color: AppColors.textDim),
+                      'Anything not listed is still shareable. Portalis never '
+                      'inspects or re-encodes a file unless a conversion is '
+                      'shown above — everything else is seeded exactly as it '
+                      'is on your disk.',
+                      style: AppText.secondary(height: 1.6),
                     ),
                   ),
                 ),
-              )
-            else
-              for (final kind in MediaKind.values)
-                ..._kindSection(
-                    kind, matches.where((f) => f.kind == kind).toList()),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
-                child: Text(
-                  'Anything not listed is still shareable. Portalis never '
-                  'inspects or re-encodes a file unless a conversion is '
-                  'shown above — everything else is seeded exactly as it is '
-                  'on your disk.',
-                  style: const TextStyle(
-                      fontSize: 12, height: 1.6, color: AppColors.textFaint),
-                ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -123,13 +116,14 @@ class _FormatsScreenState extends State<FormatsScreen> {
     return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
+          padding:
+              const EdgeInsets.fromLTRB(kScreenGutter, 22, kScreenGutter, 8),
           child: SectionLabel('${_kindLabel(kind).toUpperCase()} · '
               '${formats.length}'),
         ),
       ),
       SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: const EdgeInsets.symmetric(horizontal: kScreenGutter),
         sliver: SliverList.separated(
           itemCount: formats.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -161,7 +155,7 @@ class _SearchField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(AppRadius.control),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
@@ -172,13 +166,12 @@ class _SearchField extends StatelessWidget {
             child: TextField(
               key: const Key('formatSearchField'),
               onChanged: onChanged,
-              style: const TextStyle(fontSize: 14, color: AppColors.text),
-              decoration: const InputDecoration(
+              style: AppText.body(),
+              decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
                 hintText: 'Search formats',
-                hintStyle:
-                    TextStyle(fontSize: 14, color: AppColors.textGhost),
+                hintStyle: AppText.body(color: AppColors.textGhost),
               ),
             ),
           ),
@@ -208,19 +201,17 @@ class _FormatCard extends StatelessWidget {
                 height: 38,
                 decoration: BoxDecoration(
                   color: format.accent.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.inner),
                 ),
-                child: Icon(format.effectiveIcon,
-                    size: 18, color: format.accent),
+                child:
+                    Icon(format.effectiveIcon, size: 18, color: format.accent),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(format.label,
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    Text(format.label, style: AppText.cardTitle()),
                     const SizedBox(height: 3),
                     Text(
                       format.extensions.map((e) => '.$e').join('  '),
@@ -292,7 +283,7 @@ class _Note extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(fontSize: 11.5, height: 1.45, color: c),
+            style: AppText.caption(color: c, height: 1.45),
           ),
         ),
       ],

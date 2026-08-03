@@ -75,7 +75,8 @@ void showToast(
       // Long messages need longer to read. Backend errors are the long ones,
       // and they're exactly what shouldn't vanish mid-sentence.
       duration: duration ??
-          Duration(milliseconds: (2200 + message.length * 45).clamp(2200, 7000)),
+          Duration(
+              milliseconds: (2200 + message.length * 45).clamp(2200, 7000)),
     ),
   );
 }
@@ -239,62 +240,57 @@ class _BalloonState extends State<_Balloon> with TickerProviderStateMixin {
       behavior: HitTestBehavior.opaque,
       onTap: _leave,
       child: AnimatedBuilder(
-      animation: Listenable.merge([_entry, _drift]),
-      builder: (context, child) {
-        final bob = _drift == null
-            ? 0.0
-            // A shallow, slow rise and fall. 3px is enough to feel alive and
-            // small enough never to look like a glitch.
-            : (Curves.easeInOut.transform(_drift!.value) - 0.5) * 6;
-        // Leaving lifts away rather than dropping back down — balloons go up.
-        final dy = _leaving
-            ? -28 * (1 - _entry.value)
-            : 34 * (1 - rise.value) + bob;
-        return Opacity(
-          opacity: fade.value.clamp(0.0, 1.0),
-          child: Transform.translate(offset: Offset(0, dy), child: child),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 5, 20, 5),
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 460),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: color.withValues(alpha: 0.45)),
-              boxShadow: [
-                // Tinted, not black: the glow reads as the balloon's own
-                // colour lifting off the page.
-                BoxShadow(
-                  color: color.withValues(alpha: 0.16),
-                  blurRadius: 22,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(severity.icon, size: 16, color: color),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    widget.message.text,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.35,
-                      color: AppColors.text,
+        animation: Listenable.merge([_entry, _drift]),
+        builder: (context, child) {
+          final bob = _drift == null
+              ? 0.0
+              // A shallow, slow rise and fall. 3px is enough to feel alive and
+              // small enough never to look like a glitch.
+              : (Curves.easeInOut.transform(_drift!.value) - 0.5) * 6;
+          // Leaving lifts away rather than dropping back down — balloons go up.
+          final dy =
+              _leaving ? -28 * (1 - _entry.value) : 34 * (1 - rise.value) + bob;
+          return Opacity(
+            opacity: fade.value.clamp(0.0, 1.0),
+            child: Transform.translate(offset: Offset(0, dy), child: child),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 5, 20, 5),
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 460),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: color.withValues(alpha: 0.45)),
+                boxShadow: [
+                  // Tinted, not black: the glow reads as the balloon's own
+                  // colour lifting off the page.
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.16),
+                    blurRadius: 22,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(severity.icon, size: 16, color: color),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      widget.message.text,
+                      style: AppText.body(height: 1.35),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }

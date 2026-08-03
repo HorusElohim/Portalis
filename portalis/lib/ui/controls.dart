@@ -34,9 +34,9 @@ class PrimaryAction extends StatelessWidget {
       opacity: enabled ? 1 : 0.38,
       child: Material(
         color: fill,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -63,6 +63,86 @@ class PrimaryAction extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The call-to-action that closes a flow — "Create & share", "Join", "Add &
+/// start" — with the one line of consequence under it.
+///
+/// Goes in [AppScreen.footer], which supplies the rule above it and the
+/// gutter around it. Share, Join and Add torrent each carried their own
+/// copy of this button: the same 52pt filled rectangle, the same 14pt
+/// radius, the same 20pt spinner swapped in while busy, written out three
+/// times.
+///
+/// Distinct from [PrimaryAction], which is the pill that *starts* a flow
+/// from a list or a sidebar. This one ends one, so it is full width and
+/// square-shouldered rather than a pill.
+class ScreenAction extends StatelessWidget {
+  const ScreenAction({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.hint,
+    this.busy = false,
+    this.buttonKey,
+  });
+
+  final String label;
+
+  /// Null disables the action. [busy] disables it too, so a caller only has
+  /// to express "not ready yet" here.
+  final VoidCallback? onPressed;
+
+  /// What happens when this is pressed, in one line.
+  final String? hint;
+
+  final bool busy;
+
+  /// Sits on the button itself rather than on this widget, so a tap in a
+  /// test lands on the button and not on the hint beneath it.
+  final Key? buttonKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton(
+            key: buttonKey,
+            onPressed: busy ? null : onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.signal,
+              disabledBackgroundColor: AppColors.borderStrong,
+              foregroundColor: AppColors.surfaceDeep,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.control),
+              ),
+            ),
+            child: busy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(AppColors.surfaceDeep),
+                    ),
+                  )
+                : Text(label, style: AppText.action()),
+          ),
+        ),
+        if (hint != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            hint!,
+            textAlign: TextAlign.center,
+            style: AppText.caption(),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -108,11 +188,8 @@ class PillButton extends StatelessWidget {
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: filled ? AppColors.onSignal : color,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: AppText.cardTitle(
+                      color: filled ? AppColors.onSignal : color),
                 ),
               ),
             ],
@@ -144,40 +221,39 @@ class FilterChips extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-      children: [
-        for (var i = 0; i < labels.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          // The selected chip is white-on-dark, never mint: selection is not
-          // movement, and mint has to keep meaning only one thing.
-          Material(
-            color: i == selected ? AppColors.text : Colors.transparent,
-            shape: StadiumBorder(
-              side: BorderSide(
-                color: i == selected ? AppColors.text : AppColors.borderStrong,
+        children: [
+          for (var i = 0; i < labels.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            // The selected chip is white-on-dark, never mint: selection is not
+            // movement, and mint has to keep meaning only one thing.
+            Material(
+              color: i == selected ? AppColors.text : Colors.transparent,
+              shape: StadiumBorder(
+                side: BorderSide(
+                  color:
+                      i == selected ? AppColors.text : AppColors.borderStrong,
+                ),
               ),
-            ),
-            child: InkWell(
-              customBorder: const StadiumBorder(),
-              onTap: () => onSelected(i),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                child: Text(
-                  labels[i],
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight:
-                        i == selected ? FontWeight.w600 : FontWeight.w400,
-                    color: i == selected
-                        ? AppColors.surfaceDeep
-                        : AppColors.textDim,
+              child: InkWell(
+                customBorder: const StadiumBorder(),
+                onTap: () => onSelected(i),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Text(
+                    labels[i],
+                    style: AppText.body(
+                        color: i == selected
+                            ? AppColors.surfaceDeep
+                            : AppColors.textDim,
+                        weight:
+                            i == selected ? FontWeight.w600 : FontWeight.w400),
                   ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
-      ],
       ),
     );
   }
@@ -197,9 +273,9 @@ class NavBackButton extends StatelessWidget {
         foregroundColor: AppColors.signalSoft,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       ),
-      child: const Text(
+      child: Text(
         '‹ Back',
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        style: AppText.cardTitle(),
       ),
     );
   }

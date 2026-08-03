@@ -10,19 +10,6 @@ import 'collections_screen.dart';
 import 'home_screen.dart';
 import 'user_screen.dart';
 
-/// Width at or above which the app switches to the three-pane desktop layout.
-///
-/// Chosen on available width, never on `Platform`: a narrow window on a Mac
-/// should get the phone layout, and a wide tablet should get the desktop one.
-///
-/// The desktop runners *open* above this, so the app never launches into the
-/// phone layout by accident, but they can be dragged well below it: the phone
-/// layout is a first-class layout on desktop too, and the crossing is a real
-/// transition rather than a degradation. Their floor is the smallest phone the
-/// design targets — see `macos/Runner/MainFlutterWindow.swift`,
-/// `linux/my_application.cc` and `windows/runner/`.
-const kDesktopBreakpoint = 1000.0;
-
 /// App root. Three destinations on mobile — Home, Collections, You — and a
 /// two-pane layout on a wide window.
 class RootShell extends StatefulWidget {
@@ -71,9 +58,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= kDesktopBreakpoint) {
+    return WindowBuilder(
+      builder: (context, window) {
+        if (window.isDesktop) {
           return const DesktopShell();
         }
         return ListenableBuilder(
@@ -163,11 +150,12 @@ class AppBottomNav extends StatelessWidget {
                 Expanded(
                   child: InkWell(
                     key: Key('navTab$i'),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.inner),
                     // Home doesn't just select a tab: it unwinds anything
                     // pushed on top as well, so one tap always lands you at
                     // the start rather than one screen shallower.
-                    onTap: () => i == 0 ? AppNavigation.goHome() : onSelected(i),
+                    onTap: () =>
+                        i == 0 ? AppNavigation.goHome() : onSelected(i),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Column(
@@ -180,7 +168,8 @@ class AppBottomNav extends StatelessWidget {
                               // the same as the glyphs beside it.
                               opacity: i == index ? 1 : 0.45,
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(7),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.tight),
                                 child: Image.asset(
                                   'assets/PortalisNature.png',
                                   width: 24,
@@ -207,14 +196,13 @@ class AppBottomNav extends StatelessWidget {
                           const SizedBox(height: 6),
                           Text(
                             items[i].label,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: i == index
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
+                            style: AppText.caption(
                               color: i == index
                                   ? AppColors.text
                                   : AppColors.textGhost,
+                              weight: i == index
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
                           ),
                         ],

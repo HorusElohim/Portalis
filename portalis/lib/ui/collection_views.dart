@@ -55,10 +55,9 @@ class CollectionRow extends StatelessWidget {
       // shared-and-standing-by glows calmly, everything else not at all.
       glow: collection.glow,
       glowColor: accent,
-      borderColor:
-          selected && collection.glow == GlowLevel.none
-              ? AppColors.borderStrong
-              : null,
+      borderColor: selected && collection.glow == GlowLevel.none
+          ? AppColors.borderStrong
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -81,82 +80,81 @@ class CollectionRow extends StatelessWidget {
     // indeterminate bar is the honest shape for "reaching out to a peer".
     final connecting = collection.isConnecting;
     return Row(
-        children: [
-          SizedBox(
-            width: 52,
-            height: 52,
-            child: torrent
-                ? Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.emberWash,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.download_outlined,
-                        size: 20, color: AppColors.ember),
-                  )
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: collection.media.isEmpty
-                        ? const PlaceholderTile(borderRadius: 14)
-                        : MediaThumbnail(
-                            media: collection.media.first, borderRadius: 14),
+      children: [
+        SizedBox(
+          width: 52,
+          height: 52,
+          child: torrent
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.emberWash,
+                    borderRadius: BorderRadius.circular(AppRadius.control),
                   ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    if (live) ...[
-                      LiveDot(color: accent, size: 6),
-                      const SizedBox(width: 7),
-                    ],
-                    Flexible(
-                      child: Text(
-                        collection.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: displayText(size: 15),
-                      ),
-                    ),
+                  child: const Icon(Icons.download_outlined,
+                      size: 20, color: AppColors.ember),
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                  child: collection.media.isEmpty
+                      ? const PlaceholderTile(borderRadius: 14)
+                      : MediaThumbnail(
+                          media: collection.media.first, borderRadius: 14),
+                ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (live) ...[
+                    LiveDot(color: accent, size: 6),
+                    const SizedBox(width: 7),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  collection.subtitle,
-                  overflow: TextOverflow.ellipsis,
-                  style: monoLabel(size: 11, letterSpacing: 0.2),
-                ),
-                if (downloading || connecting) ...[
-                  const SizedBox(height: 9),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      value: connecting
-                          ? null
-                          : collection.progress.clamp(0.0, 1.0),
-                      minHeight: 5,
-                      backgroundColor: AppColors.borderStrong,
-                      valueColor: AlwaysStoppedAnimation(accent),
+                  Flexible(
+                    child: Text(
+                      collection.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: displayText(size: 15),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                collection.subtitle,
+                overflow: TextOverflow.ellipsis,
+                style: monoLabel(size: 11, letterSpacing: 0.2),
+              ),
+              if (downloading || connecting) ...[
+                const SizedBox(height: 9),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: LinearProgressIndicator(
+                    value:
+                        connecting ? null : collection.progress.clamp(0.0, 1.0),
+                    minHeight: 5,
+                    backgroundColor: AppColors.borderStrong,
+                    valueColor: AlwaysStoppedAnimation(accent),
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: 12),
-          if (downloading)
-            StatusBadge(
-              label: '${(collection.progress * 100).round()}%',
-              color: accent,
-            )
-          else if (collection.isSharing)
-            // Mint here is earned: this device is genuinely serving the
-            // collection right now.
-            StatusBadge(label: 'SHARING', color: accent)
-          else
-            StatusBadge(label: collection.state.toUpperCase()),
+        ),
+        const SizedBox(width: 12),
+        if (downloading)
+          StatusBadge(
+            label: '${(collection.progress * 100).round()}%',
+            color: accent,
+          )
+        else if (collection.isSharing)
+          // Mint here is earned: this device is genuinely serving the
+          // collection right now.
+          StatusBadge(label: 'SHARING', color: accent)
+        else
+          StatusBadge(label: collection.state.toUpperCase()),
       ],
     );
   }
@@ -224,11 +222,10 @@ class EngineStartingNotice extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 11),
-            const Expanded(
+            Expanded(
               child: Text(
                 'Starting the transfer engine — nothing is being shared yet.',
-                style: TextStyle(
-                    fontSize: 12, height: 1.4, color: AppColors.textDim),
+                style: AppText.secondary(color: AppColors.textDim, height: 1.4),
               ),
             ),
           ],

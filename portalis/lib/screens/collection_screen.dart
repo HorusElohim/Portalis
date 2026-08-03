@@ -1,5 +1,3 @@
-
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -55,7 +53,8 @@ class CollectionScreen extends StatelessWidget {
       body: SafeArea(
         child: PageBody(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            padding:
+                const EdgeInsets.fromLTRB(kScreenGutter, 0, kScreenGutter, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -83,8 +82,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
   Collection get _collection =>
       Collections.instance.byId(widget.collection.id) ?? widget.collection;
 
-  void _toast(String msg,
-      {ToastSeverity severity = ToastSeverity.info}) {
+  void _toast(String msg, {ToastSeverity severity = ToastSeverity.info}) {
     if (!mounted) return;
     showToast(context, msg, severity: severity);
   }
@@ -118,9 +116,9 @@ class _CollectionDetailState extends State<CollectionDetail> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Share this code — anyone who enters it can join and add media.',
-                style: TextStyle(fontSize: 12, color: AppColors.textDim),
+                style: AppText.secondary(color: AppColors.textDim),
               ),
               const SizedBox(height: 14),
               Center(
@@ -128,7 +126,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.inner),
                   ),
                   // White background: QR readers need light-on-dark contrast
                   // regardless of the app's dark theme.
@@ -151,7 +149,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
               const SizedBox(height: 14),
               SelectableText(
                 code,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                style: monoLabel(size: 12, letterSpacing: 0),
               ),
             ],
           ),
@@ -232,9 +230,11 @@ class _CollectionDetailState extends State<CollectionDetail> {
       final normalized = await Future.wait(
         picked.map((f) => normalizeForSharing(name: f.name, bytes: f.bytes)),
       );
-      final label = 'Added ${DateTime.now().toIso8601String().split('T').first}';
+      final label =
+          'Added ${DateTime.now().toIso8601String().split('T').first}';
       await Collections.instance.addMedia(_collection.id, label, normalized);
-      _toast('Added ${normalized.length} item${normalized.length == 1 ? '' : 's'}');
+      _toast(
+          'Added ${normalized.length} item${normalized.length == 1 ? '' : 's'}');
     });
   }
 
@@ -253,13 +253,12 @@ class _CollectionDetailState extends State<CollectionDetail> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(
-              color: AppColors.text, fontSize: 13, fontFamily: 'monospace'),
-          decoration: const InputDecoration(
+          style: monoLabel(size: 13, color: AppColors.text, letterSpacing: 0),
+          decoration: InputDecoration(
             hintText: '192.168.1.23:54321',
-            hintStyle: TextStyle(color: AppColors.textGhost),
+            hintStyle: const TextStyle(color: AppColors.textGhost),
             helperText: "The other device's sync address (on its User screen)",
-            helperStyle: TextStyle(fontSize: 10.5, color: AppColors.textDim),
+            helperStyle: AppText.caption(color: AppColors.textDim),
           ),
         ),
         actions: [
@@ -289,10 +288,10 @@ class _CollectionDetailState extends State<CollectionDetail> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: Text('Remove "${_collection.name}"?'),
-        content: const Text(
+        content: Text(
           'This only removes it from this device. Downloaded files stay on '
           'disk, and other collaborators keep their own copies.',
-          style: TextStyle(fontSize: 12, color: AppColors.textDim),
+          style: AppText.secondary(color: AppColors.textDim),
         ),
         actions: [
           TextButton(
@@ -316,7 +315,9 @@ class _CollectionDetailState extends State<CollectionDetail> {
       // Embedded, the list beside us simply drops it and the selection moves
       // on; there is no route to leave.
       // The list simply drops it and the selection moves on.
-      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       _toast('Couldn\'t remove this collection: $e');
       if (mounted) setState(() => _busy = false);
@@ -338,15 +339,14 @@ class _CollectionDetailState extends State<CollectionDetail> {
       children: [
         _controls(collection),
         if (widget.showHeading) ...[
-          Text(collection.name,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
+          Text(collection.name, style: AppText.action()),
           const SizedBox(height: 6),
           Text(
             collection.isShared
                 ? 'Shared collection · ${collection.subtitle}'
                 : 'Torrent · ${collection.subtitle}',
-            style: const TextStyle(
-                fontSize: 10.5, fontFamily: 'monospace', color: AppColors.textDim),
+            style: monoLabel(
+                size: 10.5, color: AppColors.textDim, letterSpacing: 0),
           ),
           const SizedBox(height: 6),
         ],
@@ -398,11 +398,11 @@ class _CollectionDetailState extends State<CollectionDetail> {
           ),
         const SizedBox(height: 14),
         if (collection.media.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 22),
             child: Center(
               child: Text('Nothing in this collection yet.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textDim)),
+                  style: AppText.secondary(color: AppColors.textDim)),
             ),
           )
         else
@@ -419,8 +419,8 @@ class _CollectionDetailState extends State<CollectionDetail> {
       children: [
         if (admins > 0)
           Text('$admins admin${admins == 1 ? '' : 's'}',
-              style: const TextStyle(
-                  fontSize: 10, fontFamily: 'monospace', color: AppColors.textDim)),
+              style: monoLabel(
+                  size: 10, color: AppColors.textDim, letterSpacing: 0)),
         const Spacer(),
         IconButton(
           tooltip: _showDetails ? 'Hide details' : 'Details',
@@ -469,7 +469,6 @@ class _CollectionDetailState extends State<CollectionDetail> {
     );
   }
 }
-
 
 /// What a collection *is*, as opposed to what it is doing: the rows worth
 /// having once and rarely again. Everything that changes second to second is
@@ -539,11 +538,8 @@ class _Collaborators extends StatelessWidget {
             collection.livePeers == 0
                 ? 'No peers connected right now'
                 : '${collection.peersLabel} connected · not identified by name',
-            style: const TextStyle(
-              fontSize: 10,
-              fontFamily: 'monospace',
-              color: AppColors.textDim,
-            ),
+            style:
+                monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
           ),
         ],
       );
@@ -567,11 +563,10 @@ class _Collaborators extends StatelessWidget {
                         child: Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border:
-                                Border.all(color: AppColors.surfaceDeep, width: 2),
+                            border: Border.all(
+                                color: AppColors.surfaceDeep, width: 2),
                           ),
-                          child:
-                              Avatar(initials: shown[i].initials, size: 27),
+                          child: Avatar(initials: shown[i].initials, size: 27),
                         ),
                       ),
                   ],
@@ -584,11 +579,8 @@ class _Collaborators extends StatelessWidget {
                       ? '+$remaining more'
                       : shown.map((c) => c.name).join(', '),
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontFamily: 'monospace',
-                    color: AppColors.textDim,
-                  ),
+                  style: monoLabel(
+                      size: 10, color: AppColors.textDim, letterSpacing: 0),
                 ),
               ),
             ],
@@ -688,7 +680,7 @@ class _EntryHeader extends StatelessWidget {
         if (entry.fetched && entry.totalBytes > 0 && entry.progress < 1.0) ...[
           const SizedBox(height: 7),
           ClipRRect(
-            borderRadius: BorderRadius.circular(99),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
             child: LinearProgressIndicator(
               value: entry.progress,
               minHeight: 3,
@@ -732,14 +724,14 @@ class _MediaGrid extends StatelessWidget {
               child: PerimeterProgress(
                 progress: m.progress,
                 color: collection.hue,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(AppRadius.tight),
                 child: Container(
                   // Always-visible boundary, independent of the progress ring
                   // — otherwise a finished (or not-yet-started) tile has no
                   // outline at all, since the ring only paints while
                   // 0 < progress < 1.
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(AppRadius.tight),
                     border: Border.all(color: AppColors.border),
                   ),
                   clipBehavior: Clip.antiAlias,
@@ -785,7 +777,7 @@ class _MediaGrid extends StatelessWidget {
               m.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10.5, height: 1.1),
+              style: AppText.caption(color: AppColors.text, height: 1.1),
             ),
             Text(
               // What is known about it, in order of usefulness: still coming,

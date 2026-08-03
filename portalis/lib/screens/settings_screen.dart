@@ -26,7 +26,7 @@ class SettingsScreen extends StatefulWidget {
   });
 
   /// Rendered inside the desktop shell's centre pane rather than pushed —
-  /// see [AdaptiveScreen]. Still shows a back button while showing Advanced,
+  /// see [AppScreen]. Still shows a back button while showing Advanced,
   /// since collapsing that has nowhere else to happen; otherwise none,
   /// because the sidebar is the navigation.
   final bool embedded;
@@ -108,8 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (restartRequired && mounted) setState(() => _restartPending = true);
     } catch (e) {
       if (!mounted) return;
-      showToast(context, 'Couldn\'t save: $e',
-          severity: ToastSeverity.error);
+      showToast(context, 'Couldn\'t save: $e', severity: ToastSeverity.error);
     }
   }
 
@@ -136,15 +135,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             autofocus: true,
             keyboardType: keyboard,
             maxLines: maxLines,
-            style: const TextStyle(
-                color: AppColors.text, fontSize: 13, fontFamily: 'monospace'),
+            style: monoLabel(size: 13, color: AppColors.text, letterSpacing: 0),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: const TextStyle(color: AppColors.textGhost),
               helperText: helper,
               helperMaxLines: 3,
-              helperStyle:
-                  const TextStyle(fontSize: 10.5, color: AppColors.textDim),
+              helperStyle: AppText.caption(color: AppColors.textDim),
             ),
           ),
         ),
@@ -154,7 +151,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
             child: const Text('Save'),
           ),
         ],
@@ -168,10 +166,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('Reset engine settings?'),
-        content: const Text(
+        content: Text(
           'Restores every value below to the built-in default. Your '
           'collections and identity are untouched.',
-          style: TextStyle(fontSize: 12, color: AppColors.textDim),
+          style: AppText.secondary(color: AppColors.textDim),
         ),
         actions: [
           TextButton(
@@ -191,8 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (restartRequired && mounted) setState(() => _restartPending = true);
     } catch (e) {
       if (!mounted) return;
-      showToast(context, 'Couldn\'t reset: $e',
-          severity: ToastSeverity.error);
+      showToast(context, 'Couldn\'t reset: $e', severity: ToastSeverity.error);
     }
   }
 
@@ -242,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text(
                 '$_benchIterations calls, ${infos.length} collection'
                 '${infos.length == 1 ? '' : 's'} each.',
-                style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+                style: AppText.secondary(color: AppColors.textDim),
               ),
               const SizedBox(height: 12),
               Text(
@@ -275,59 +272,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onBack: () => setState(() => _showStorage = false),
       );
     }
-    return AdaptiveScreen(
+    return AppScreen(
+      // Advanced is a screen in its own right, so it says so rather than
+      // sitting under the title of the one it was reached from.
+      title: _advanced ? 'Network & engine' : 'Settings',
       embedded: widget.embedded,
       forceShowBack: _advanced,
       onBack: _handleBack,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          // Only embedded (desktop) ever has room to spare — a pushed route
-          // on mobile is never wider than the phone running it.
-          final wide = widget.embedded && constraints.maxWidth >= 860;
-          return PageBody(
-            maxWidth: wide ? 1100 : 560,
-            child: ListenableBuilder(
-              listenable: _settings,
-              builder: (context, _) {
-                final s = _settings.settings;
-                return SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(20, 8, 20, 10),
-                        child: ImpactTitle('Settings'),
-                      ),
-                      if (_settings.lastError != null)
-                        InfoBanner(
-                          color: const Color(0xFFEB5757),
-                          icon: Icons.error_outline,
-                          text: _settings.lastError!,
-                        ),
-                      if (_restartPending)
-                        const InfoBanner(
-                          color: AppColors.signalSoft,
-                          icon: Icons.restart_alt,
-                          text: 'Some changes apply the next time Portalis '
-                              'starts — the transfer engine reads them once, '
-                              'when it starts up.',
-                        ),
-                      if (s == null)
-                        const Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Text(
-                            'Loading engine settings…',
-                            style: TextStyle(
-                                fontSize: 12, color: AppColors.textDim),
-                          ),
-                        )
-                      else
-                        _SectionsLayout(wide: wide, sections: _sections(s)),
-                      const SizedBox(height: 24),
-                    ],
+      // Wider than the shared reading cap once there's room: this is the one
+      // screen with something to do with it (see _SectionsLayout).
+      wideMaxWidth: 1100,
+      body: ListenableBuilder(
+        listenable: _settings,
+        builder: (context, _) {
+          final s = _settings.settings;
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_settings.lastError != null)
+                  InfoBanner(
+                    color: const Color(0xFFEB5757),
+                    icon: Icons.error_outline,
+                    text: _settings.lastError!,
                   ),
-                );
-              },
+                if (_restartPending)
+                  const InfoBanner(
+                    color: AppColors.signalSoft,
+                    icon: Icons.restart_alt,
+                    text: 'Some changes apply the next time Portalis '
+                        'starts — the transfer engine reads them once, '
+                        'when it starts up.',
+                  ),
+                if (s == null)
+                  Padding(
+                    padding: EdgeInsets.all(kScreenGutter),
+                    child: Text(
+                      'Loading engine settings…',
+                      style: AppText.secondary(color: AppColors.textDim),
+                    ),
+                  )
+                else
+                  _SectionsLayout(sections: _sections(s)),
+                const SizedBox(height: 24),
+              ],
             ),
           );
         },
@@ -358,7 +346,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s, uploadLimitBps: _parseInt(raw), clearUpload: raw.isEmpty));
+              await _apply(_copy(s,
+                  uploadLimitBps: _parseInt(raw), clearUpload: raw.isEmpty));
             },
           ),
           ValueRow(
@@ -374,7 +363,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s, downloadLimitBps: _parseInt(raw), clearDownload: raw.isEmpty));
+              await _apply(_copy(s,
+                  downloadLimitBps: _parseInt(raw),
+                  clearDownload: raw.isEmpty));
             },
           ),
         ],
@@ -393,32 +384,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-        child: SurfaceCard(
+        padding: const EdgeInsets.fromLTRB(kScreenGutter, 18, kScreenGutter, 0),
+        child: DestinationRow(
+          icon: Icons.tune,
+          title: 'Network & engine',
+          subtitle: 'Ports, DHT, proxy, trackers, disk',
           onTap: _openAdvanced,
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              const Icon(Icons.tune, size: 19, color: AppColors.textDim),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Network & engine',
-                        style: TextStyle(
-                            fontSize: 14.5, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 3),
-                    Text('Ports, DHT, proxy, trackers, disk',
-                        style: const TextStyle(
-                            fontSize: 12.5, color: AppColors.textFaint)),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right,
-                  size: 16, color: AppColors.textGhost),
-            ],
-          ),
         ),
       ),
       SettingsSection(
@@ -460,7 +431,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final start = _parseInt(parts.first);
               final end = parts.length > 1 ? _parseInt(parts[1]) : start;
               if (start == null || end == null) return;
-              await _apply(_copy(s, listenPortStart: start, listenPortEnd: end));
+              await _apply(
+                  _copy(s, listenPortStart: start, listenPortEnd: end));
             },
           ),
           SwitchRow(
@@ -483,7 +455,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 helper: 'Leave empty to connect directly.',
               );
               if (raw == null) return;
-              await _apply(_copy(s, socksProxyUrl: raw, clearProxy: raw.isEmpty));
+              await _apply(
+                  _copy(s, socksProxyUrl: raw, clearProxy: raw.isEmpty));
             },
           ),
         ],
@@ -542,7 +515,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 helper: 'Leave empty for none.',
               );
               if (raw == null) return;
-              await _apply(_copy(s, blocklistUrl: raw, clearBlocklist: raw.isEmpty));
+              await _apply(
+                  _copy(s, blocklistUrl: raw, clearBlocklist: raw.isEmpty));
             },
           ),
         ],
@@ -658,7 +632,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+        padding: const EdgeInsets.fromLTRB(kScreenGutter, 18, kScreenGutter, 0),
         child: PillButton(
           label: 'Reset to defaults',
           dim: true,
@@ -666,7 +640,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+        padding: const EdgeInsets.fromLTRB(kScreenGutter, 10, kScreenGutter, 0),
         child: PillButton(
           label: 'Run FFI benchmark',
           dim: true,
@@ -753,26 +727,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
 /// Round-robin rather than a true masonry: the sections are already ordered
 /// by how likely they are to matter, and alternating keeps that order
 /// reading left-to-right, top-to-bottom rather than top-half/bottom-half.
+///
+/// Decides for itself from the space it's actually given, the same as
+/// [PageBody] — not from [SettingsScreen.embedded], which answers a
+/// different question (is there a sidebar to go back to) than this one
+/// (is there room for two columns).
 class _SectionsLayout extends StatelessWidget {
-  const _SectionsLayout({required this.wide, required this.sections});
+  const _SectionsLayout({required this.sections});
 
-  final bool wide;
   final List<Widget> sections;
 
   @override
   Widget build(BuildContext context) {
-    if (!wide) return Column(children: sections);
-    final left = <Widget>[];
-    final right = <Widget>[];
-    for (var i = 0; i < sections.length; i++) {
-      (i.isEven ? left : right).add(sections[i]);
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: Column(children: left)),
-        Expanded(child: Column(children: right)),
-      ],
+    return WindowBuilder(
+      builder: (context, window) {
+        if (!window.isSpacious) return Column(children: sections);
+        final left = <Widget>[];
+        final right = <Widget>[];
+        for (var i = 0; i < sections.length; i++) {
+          (i.isEven ? left : right).add(sections[i]);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Column(children: left)),
+            Expanded(child: Column(children: right)),
+          ],
+        );
+      },
     );
   }
 }
@@ -803,7 +785,7 @@ class _HealthCard extends StatelessWidget {
     ];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      padding: const EdgeInsets.fromLTRB(kScreenGutter, 14, kScreenGutter, 0),
       child: SurfaceCard(
         padding: const EdgeInsets.all(16),
         // Mint only when something is genuinely connected; otherwise this is
@@ -829,8 +811,7 @@ class _HealthCard extends StatelessWidget {
                 children: [
                   Text(
                     peers > 0 ? 'Connected' : 'Idle',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600),
+                    style: AppText.cardTitle(),
                   ),
                   const SizedBox(height: 5),
                   Text(
