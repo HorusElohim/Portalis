@@ -454,12 +454,32 @@ mod native {
         }))
     }
 
+    /// How long a walk stays good for. The Settings screen polls this every
+    /// 2s while it's open (see `SettingsScreen._storagePoll`); on a large
+    /// library the re-stat isn't free, and nothing about disk usage needs
+    /// sub-few-second freshness. Same short-TTL-cache idiom as
+    /// `collab_sync::lan_ips`.
+    const STORAGE_TTL: std::time::Duration = std::time::Duration::from_secs(5);
+    static STORAGE_CACHE: std::sync::Mutex<Option<(std::time::Instant, u64)>> =
+        std::sync::Mutex::new(None);
+
     pub(super) async fn storage_usage_bytes() -> anyhow::Result<u64> {
         // Ensures output_dir() actually exists before walking it (a fresh
         // install with nothing downloaded yet shouldn't error, just read
         // as zero) — session() creates it as a side effect.
         let _ = session().await?;
-        Ok(dir_size(&output_dir()))
+
+        if let Some((at, cached)) = STORAGE_CACHE.lock().unwrap().as_ref() {
+            if at.elapsed() < STORAGE_TTL {
+                return Ok(*cached);
+            }
+        }
+        // A recursive stat walk is blocking I/O; running it inline would tie
+        // up a tokio worker thread for however long the disk takes, same as
+        // every other task scheduled on it.
+        let size = tokio::task::spawn_blocking(|| dir_size(&output_dir())).await?;
+        *STORAGE_CACHE.lock().unwrap() = Some((std::time::Instant::now(), size));
+        Ok(size)
     }
 
     fn dir_size(path: &std::path::Path) -> u64 {

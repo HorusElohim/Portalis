@@ -103,12 +103,36 @@ fn candidates(key: &str) -> Vec<String> {
 
 /// Contacts every candidate, not just the first that answers: two
 /// collaborators can hold different entries, so stopping early leaves the rest
-/// un-merged. Failures are expected and bounded by the connect timeout.
+/// un-merged. Failures are expected and bounded by the connect timeout — which
+/// is exactly why this must run them concurrently rather than one at a time:
+/// an invite can carry up to a dozen addresses (see `MAX_PEERS_PER_COLLECTION`
+/// in `collab_sync.rs`), most of them typically unreachable from any one
+/// network, and dialing each in turn at up to `CONNECT_TIMEOUT` made a single
+/// pass over one collection take the better part of a minute.
 async fn attempt(key: &str, addresses: &[String]) -> Round {
+    // Spawned rather than joined in place: a `Vec` of handles forces every
+    // dial to start now, so they race each other on the runtime instead of
+    // the loop below re-creating the sequential wait it's meant to remove.
+    let dials: Vec<_> = addresses
+        .iter()
+        .map(|address| {
+            let key = key.to_string();
+            let address = address.clone();
+            tokio::spawn(async move {
+                let reached = sync_with(&key, &address).await.is_ok();
+                let failures = note_peer_result(&key, &address, reached);
+                (address, reached, failures)
+            })
+        })
+        .collect();
+
     let mut round = Round::default();
-    for address in addresses {
-        let reached = sync_with(key, address).await.is_ok();
-        round.record(address, reached, note_peer_result(key, address, reached));
+    for dial in dials {
+        // A panicked dial (there shouldn't be one) just doesn't count, rather
+        // than losing every other address's result along with it.
+        if let Ok((address, reached, failures)) = dial.await {
+            round.record(&address, reached, failures);
+        }
     }
     round
 }

@@ -256,7 +256,9 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          MediaThumbnail(media: media, borderRadius: 8),
+          // Shown up to near-fullscreen here, unlike this widget's usual grid
+          // tile / row-icon job — decode sharper accordingly.
+          MediaThumbnail(media: media, borderRadius: 8, decodeSize: 720),
           if (_isPlayableVideo && !_videoFailed)
             // Video still initializing.
             const SizedBox(

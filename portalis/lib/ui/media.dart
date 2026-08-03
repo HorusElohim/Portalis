@@ -68,10 +68,27 @@ class PlaceholderTile extends StatelessWidget {
 /// everywhere a media tile is shown — collection cards, grids, the media
 /// viewer — so a tile looks the same wherever it appears.
 class MediaThumbnail extends StatelessWidget {
-  const MediaThumbnail({super.key, required this.media, this.borderRadius = 0});
+  const MediaThumbnail({
+    super.key,
+    required this.media,
+    this.borderRadius = 0,
+    this.decodeSize = 160,
+  });
 
   final MediaItem media;
   final double borderRadius;
+
+  /// Longest side to decode the source image to, in logical pixels.
+  ///
+  /// Without this, `Image.file` decodes at the file's real resolution — a
+  /// 12MP camera photo becomes ~48MB of raw RGBA to paint a tile a few dozen
+  /// logical pixels across, and a grid of them can push Flutter's image
+  /// cache into the hundreds of MB. The default suits this widget's usual
+  /// job (a row icon or a grid tile); callers rendering it larger — the
+  /// full-screen viewer — pass a bigger value. Same idea as the nav icon in
+  /// `main.dart`, generalised because this widget renders at very different
+  /// sizes depending on where it's used.
+  final double decodeSize;
 
   @override
   Widget build(BuildContext context) {
@@ -80,11 +97,14 @@ class MediaThumbnail extends StatelessWidget {
     // because it was converted on the way in.
     final format = MediaFormats.resolve(media.label);
     if (media.isReady && format.preview == PreviewSupport.image) {
+      final cacheWidth =
+          (decodeSize * MediaQuery.devicePixelRatioOf(context)).round();
       return ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
         child: Image.file(
           File(media.localPath!),
           fit: BoxFit.cover,
+          cacheWidth: cacheWidth,
           errorBuilder: (context, error, stack) => PlaceholderTile(
             label: _typeLabel(media.label),
             borderRadius: borderRadius,
