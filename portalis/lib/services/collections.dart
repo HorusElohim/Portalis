@@ -67,7 +67,7 @@ class Collections extends ChangeNotifier {
 
   /// While bytes are moving, the numbers on screen are worth refreshing
   /// often enough to feel live.
-  static const _activeInterval = Duration(milliseconds: 300);
+  static const _activeInterval = Duration(milliseconds: 500);
 
   /// When nothing is in flight, nothing changes second to second: a settled
   /// collection's size, peers and state are static. Polling five times less
