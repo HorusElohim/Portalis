@@ -8,6 +8,7 @@ import '../services/collections.dart';
 import '../services/settings_service.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
+import 'storage_screen.dart';
 
 
 
@@ -48,6 +49,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// instance — see [_openAdvanced].
   late bool _advanced = widget.advanced;
 
+  /// Embedded only: shows [StorageScreen] in place of Settings instead of
+  /// pushing it over the shell's sidebar and list — see [_openStorage].
+  bool _showStorage = false;
+
   @override
   void initState() {
     super.initState();
@@ -81,15 +86,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Embedded and showing Advanced: collapse back to Basic in place — there
-  /// is no pushed route here to pop. Embedded and already Basic: no back
-  /// button at all, since the sidebar is the only way in or out of this pane.
-  /// Not embedded: always a real pushed screen, so always pop.
-  bool get _showBackButton => !widget.embedded || _advanced;
+  /// Same reasoning as [_openAdvanced]: embedded, there's nowhere for a
+  /// pushed route to go but over the whole shell, so it swaps in place;
+  /// pushed (mobile), it's its own screen with its own back-stack entry.
+  void _openStorage() {
+    if (widget.embedded) {
+      setState(() => _showStorage = true);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const StorageScreen()),
+      );
+    }
+  }
+
+  /// Embedded and showing Advanced or Storage: collapse back to Basic in
+  /// place — there is no pushed route here to pop. Embedded and already
+  /// Basic: no back button at all, since the sidebar is the only way in or
+  /// out of this pane. Not embedded: always a real pushed screen, so always
+  /// pop.
+  bool get _showBackButton => !widget.embedded || _advanced || _showStorage;
 
   void _handleBack() {
     if (widget.embedded) {
-      setState(() => _advanced = false);
+      setState(() {
+        _advanced = false;
+        _showStorage = false;
+      });
     } else {
       Navigator.of(context).pop();
     }
@@ -262,6 +284,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showStorage) {
+      return StorageScreen(
+          onBack: () => setState(() => _showStorage = false));
+    }
     return Scaffold(
       backgroundColor: AppColors.surfaceDeep,
       body: SafeArea(
@@ -416,6 +442,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             label: 'Storage used',
             value: formatBytes(_settings.storageUsedBytes),
             subtitle: 'Reported by the engine. Not capped by anything.',
+            onTap: _openStorage,
           ),
         ],
       ),

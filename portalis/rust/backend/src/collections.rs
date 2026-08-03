@@ -231,6 +231,30 @@ pub async fn sync_address() -> anyhow::Result<String> {
     native::sync_address().await
 }
 
+/// One item under the download directory, joined against whichever
+/// collection actually claims it — the same join [`list_collections`] does
+/// between the persisted manifest and the live session, applied to
+/// `torrent::storage_breakdown`'s raw filesystem walk instead of to the
+/// session's torrent list.
+///
+/// `collection_id`/`collection_name` are `None` when nothing in the app's
+/// own state claims this path — the common case is a deleted collection's
+/// leftovers: [`delete_collection`] deliberately leaves downloaded files on
+/// disk, so a folder can easily outlive every record of what it was.
+#[derive(Debug, Clone)]
+pub struct StorageEntry {
+    pub name: String,
+    pub bytes: u64,
+    pub path: String,
+    pub collection_id: Option<String>,
+    pub collection_name: Option<String>,
+}
+
+/// What's on disk, resolved back to the collections the app knows about.
+pub async fn storage_breakdown() -> anyhow::Result<Vec<StorageEntry>> {
+    native::storage_breakdown().await
+}
+
 mod native {
     use std::collections::{HashMap, HashSet};
 
@@ -244,7 +268,7 @@ mod native {
 
     use anyhow::Context;
 
-    use super::{CollaboratorInfo, CollectionInfo, CollectionKind, MediaInfo};
+    use super::{CollaboratorInfo, CollectionInfo, CollectionKind, MediaInfo, StorageEntry};
 
     fn now_unix_ms() -> i64 {
         std::time::SystemTime::now()
@@ -1104,6 +1128,66 @@ mod native {
         let addrs = current_sync_addresses();
         anyhow::ensure!(!addrs.is_empty(), "couldn't start the sync listener");
         Ok(addrs.join(","))
+    }
+
+    pub(super) async fn storage_breakdown() -> anyhow::Result<Vec<StorageEntry>> {
+        let raw = crate::torrent::storage_breakdown().await?;
+        // The walk above already starts the session (see
+        // torrent::storage_breakdown), so holdings() here is never what
+        // brings it up — safe to ask for unconditionally, unlike
+        // list_collections's own guard against exactly that.
+        let torrents = crate::substrate::current().holdings().await;
+
+        // Which top-level directory each live torrent's files sit under, so
+        // a raw filesystem entry can be traced back to the torrent — and
+        // from there, the collection — it belongs to. `starts_with` rather
+        // than an exact match: a multi-file torrent nests its files under
+        // subdirectories of the batch folder, not directly inside it.
+        let by_path: Vec<(std::path::PathBuf, &TorrentInfo)> = torrents
+            .iter()
+            .filter_map(|t| {
+                t.files.first().map(|f| (std::path::PathBuf::from(&f.absolute_path), t))
+            })
+            .collect();
+
+        read_store(|collections| {
+            Ok(raw
+                .into_iter()
+                .map(|entry| {
+                    let entry_path = std::path::Path::new(&entry.path);
+                    let owner = by_path
+                        .iter()
+                        .find(|(file_path, _)| file_path.starts_with(entry_path))
+                        .map(|(_, t)| resolve_owner(t, collections))
+                        .unwrap_or((None, None));
+                    StorageEntry {
+                        name: entry.name,
+                        bytes: entry.bytes,
+                        path: entry.path,
+                        collection_id: owner.0,
+                        collection_name: owner.1,
+                    }
+                })
+                .collect())
+        })
+    }
+
+    /// Whichever collection claims `torrent`: the shared collection whose
+    /// manifest lists its info-hash, or — nothing claiming it — the
+    /// plain-torrent collection it is its own one of. Mirrors exactly how
+    /// `list_collections` tells the two apart.
+    fn resolve_owner(
+        torrent: &TorrentInfo,
+        collections: &[Collection],
+    ) -> (Option<String>, Option<String>) {
+        let hash = norm(&torrent.info_hash);
+        if let Some(c) = collections
+            .iter()
+            .find(|c| c.manifest().entries().any(|e| norm(&e.info_hash.to_hex()) == hash))
+        {
+            return (Some(c.id.to_string()), Some(c.name.clone()));
+        }
+        (Some(hash), Some(torrent.name.clone()))
     }
 
     #[cfg(test)]

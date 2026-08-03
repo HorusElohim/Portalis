@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'torrent.dart';
 
 // These functions are ignored because they are not marked as `pub`: `pursue_fetches`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Every collection this device knows about, from both sources, joined.
 Future<List<CollectionInfo>> listCollections() =>
@@ -96,6 +96,10 @@ Future<void> deleteCollection({required String collectionId}) =>
 /// effect, so calling it makes this device reachable.
 Future<String> syncAddress() =>
     RustLib.instance.api.crateCollectionsSyncAddress();
+
+/// What's on disk, resolved back to the collections the app knows about.
+Future<List<StorageEntry>> storageBreakdown() =>
+    RustLib.instance.api.crateCollectionsStorageBreakdown();
 
 class CollaboratorInfo {
   final String deviceId;
@@ -312,4 +316,49 @@ class MediaInfo {
           progress == other.progress &&
           fetched == other.fetched &&
           addedBy == other.addedBy;
+}
+
+/// One item under the download directory, joined against whichever
+/// collection actually claims it — the same join [`list_collections`] does
+/// between the persisted manifest and the live session, applied to
+/// `torrent::storage_breakdown`'s raw filesystem walk instead of to the
+/// session's torrent list.
+///
+/// `collection_id`/`collection_name` are `None` when nothing in the app's
+/// own state claims this path — the common case is a deleted collection's
+/// leftovers: [`delete_collection`] deliberately leaves downloaded files on
+/// disk, so a folder can easily outlive every record of what it was.
+class StorageEntry {
+  final String name;
+  final BigInt bytes;
+  final String path;
+  final String? collectionId;
+  final String? collectionName;
+
+  const StorageEntry({
+    required this.name,
+    required this.bytes,
+    required this.path,
+    this.collectionId,
+    this.collectionName,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      bytes.hashCode ^
+      path.hashCode ^
+      collectionId.hashCode ^
+      collectionName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StorageEntry &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          bytes == other.bytes &&
+          path == other.path &&
+          collectionId == other.collectionId &&
+          collectionName == other.collectionName;
 }

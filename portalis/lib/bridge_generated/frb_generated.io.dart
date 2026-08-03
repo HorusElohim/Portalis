@@ -83,6 +83,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<StorageEntry> dco_decode_list_storage_entry(dynamic raw);
+
+  @protected
   List<TorrentFile> dco_decode_list_torrent_file(dynamic raw);
 
   @protected
@@ -102,6 +105,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  StorageEntry dco_decode_storage_entry(dynamic raw);
 
   @protected
   TorrentFile dco_decode_torrent_file(dynamic raw);
@@ -192,6 +198,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<StorageEntry> sse_decode_list_storage_entry(
+      SseDeserializer deserializer);
+
+  @protected
   List<TorrentFile> sse_decode_list_torrent_file(SseDeserializer deserializer);
 
   @protected
@@ -211,6 +221,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  StorageEntry sse_decode_storage_entry(SseDeserializer deserializer);
 
   @protected
   TorrentFile sse_decode_torrent_file(SseDeserializer deserializer);
@@ -308,6 +321,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_storage_entry(
+      List<StorageEntry> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_torrent_file(
       List<TorrentFile> self, SseSerializer serializer);
 
@@ -329,6 +346,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_storage_entry(StorageEntry self, SseSerializer serializer);
 
   @protected
   void sse_encode_torrent_file(TorrentFile self, SseSerializer serializer);

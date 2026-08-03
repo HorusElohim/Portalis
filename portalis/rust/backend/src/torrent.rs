@@ -100,6 +100,31 @@ pub async fn storage_usage_bytes() -> anyhow::Result<u64> {
     native::storage_usage_bytes().await
 }
 
+/// One top-level item under the download directory — in practice, almost
+/// always one manifest entry's own batch folder (see
+/// `collections::add_media_to_collection`) or a plain torrent's folder.
+/// `bytes` is recursive, so a multi-file batch reports what it actually
+/// costs on disk.
+///
+/// Internal: `collections::storage_breakdown` is the bridged version, which
+/// joins each of these against the collection that actually claims it — the
+/// same join `list_collections` does between the persisted manifest and the
+/// live session, so it belongs there and not here. See that module's doc for
+/// why the join can only happen in the one layer that sees both sides.
+#[derive(Debug, Clone)]
+pub(crate) struct RawStorageEntry {
+    pub(crate) name: String,
+    pub(crate) bytes: u64,
+    pub(crate) path: String,
+}
+
+/// What's actually on disk under the download directory, one entry per
+/// top-level item, largest first — the real filesystem, where
+/// `storage_usage_bytes`'s single total can only say "this much, somewhere".
+pub(crate) async fn storage_breakdown() -> anyhow::Result<Vec<RawStorageEntry>> {
+    native::storage_breakdown().await
+}
+
 /// Caps transfer speed across every torrent at once (not per-torrent).
 /// `librqbit`'s `Session::ratelimits` is adjustable at runtime, so unlike the
 /// rest of `SessionOptions` these take effect without a restart. `None` means
@@ -172,7 +197,7 @@ mod native {
     };
     use tokio::sync::OnceCell;
 
-    use super::{NewFile, TorrentFile, TorrentInfo};
+    use super::{NewFile, RawStorageEntry, TorrentFile, TorrentInfo};
 
     static SESSION: OnceCell<Arc<Session>> = OnceCell::const_new();
 
@@ -454,32 +479,61 @@ mod native {
         }))
     }
 
-    /// How long a walk stays good for. The Settings screen polls this every
-    /// 2s while it's open (see `SettingsScreen._storagePoll`); on a large
-    /// library the re-stat isn't free, and nothing about disk usage needs
-    /// sub-few-second freshness. Same short-TTL-cache idiom as
+    /// How long a walk stays good for. Both the Settings screen's total (this
+    /// function, polled every 2s while it's open — see
+    /// `SettingsScreen._storagePoll`) and the Storage screen's breakdown
+    /// (`collections::storage_breakdown`, same cadence — see
+    /// `StorageScreen._poll`) read through this one cache, so having both
+    /// open at once still costs one walk, not two. Same short-TTL idiom as
     /// `collab_sync::lan_ips`.
     const STORAGE_TTL: std::time::Duration = std::time::Duration::from_secs(5);
-    static STORAGE_CACHE: std::sync::Mutex<Option<(std::time::Instant, u64)>> =
+    static STORAGE_CACHE: std::sync::Mutex<Option<(std::time::Instant, Vec<RawStorageEntry>)>> =
         std::sync::Mutex::new(None);
 
     pub(super) async fn storage_usage_bytes() -> anyhow::Result<u64> {
+        Ok(storage_breakdown().await?.iter().map(|e| e.bytes).sum())
+    }
+
+    pub(super) async fn storage_breakdown() -> anyhow::Result<Vec<RawStorageEntry>> {
         // Ensures output_dir() actually exists before walking it (a fresh
         // install with nothing downloaded yet shouldn't error, just read
-        // as zero) — session() creates it as a side effect.
+        // as empty) — session() creates it as a side effect.
         let _ = session().await?;
 
         if let Some((at, cached)) = STORAGE_CACHE.lock().unwrap().as_ref() {
             if at.elapsed() < STORAGE_TTL {
-                return Ok(*cached);
+                return Ok(cached.clone());
             }
         }
+        let dir = output_dir();
         // A recursive stat walk is blocking I/O; running it inline would tie
-        // up a tokio worker thread for however long the disk takes, same as
-        // every other task scheduled on it.
-        let size = tokio::task::spawn_blocking(|| dir_size(&output_dir())).await?;
-        *STORAGE_CACHE.lock().unwrap() = Some((std::time::Instant::now(), size));
-        Ok(size)
+        // up a tokio worker thread for however long the disk takes.
+        let entries = tokio::task::spawn_blocking(move || {
+            let Ok(read) = std::fs::read_dir(&dir) else {
+                return Vec::new();
+            };
+            let mut entries: Vec<RawStorageEntry> = read
+                .filter_map(|e| e.ok())
+                .map(|entry| {
+                    let path = entry.path();
+                    let bytes = if path.is_dir() {
+                        dir_size(&path)
+                    } else {
+                        entry.metadata().map(|m| m.len()).unwrap_or(0)
+                    };
+                    RawStorageEntry {
+                        name: entry.file_name().to_string_lossy().into_owned(),
+                        bytes,
+                        path: path.to_string_lossy().into_owned(),
+                    }
+                })
+                .collect();
+            entries.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+            entries
+        })
+        .await?;
+        *STORAGE_CACHE.lock().unwrap() = Some((std::time::Instant::now(), entries.clone()));
+        Ok(entries)
     }
 
     fn dir_size(path: &std::path::Path) -> u64 {
