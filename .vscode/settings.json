@@ -1,5 +1,12 @@
 {
     "cSpell.words": [
         "Portalis"
+    ],
+    "python-envs.pythonProjects": [
+        {
+            "path": "tests",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
     ]
 }
