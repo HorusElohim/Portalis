@@ -3,7 +3,9 @@
   Portalis Windows Dev Environment Wizard
 .DESCRIPTION
   Idempotent PowerShell wizard that installs and configures:
-    - winget-managed: Git, VS Code, Flutter, Android Studio, OpenJDK 17, Rust (rustup), VS 2022 Build Tools
+    - winget-managed: Git, VS Code, Android Studio, OpenJDK 17, Rust (rustup), VS 2022 Build Tools
+    - Flutter SDK from the official release archive (not on winget); override the
+      install location with $env:FLUTTER_ROOT (default: %LOCALAPPDATA%\flutter)
     - Android SDK base, platform-tools, build-tools, emulator; accepts licenses
     - VS Code extensions (Flutter, Dart, Rust Analyzer, TOML, EditorConfig)
     - Rust tools: flutter_rust_bridge_codegen, gitmoji-rs
@@ -38,10 +40,13 @@ function Test-Cmd($name) {
 function Ensure-InPath([string]$dir) {
     if (-not (Test-Path $dir)) { return }
     $current = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    if (-not $current.Split(';') -contains $dir) {
+    if ($current.Split(';') -notcontains $dir) {
         [Environment]::SetEnvironmentVariable("Path", "$current;$dir", "Machine")
         Write-Ok "Added to PATH (machine): $dir"
     }
+    # Also expose it to the rest of this run, so later steps (flutter doctor,
+    # VS Code extensions, cargo installs) can see what we just installed.
+    if ($env:Path.Split(';') -notcontains $dir) { $env:Path = "$env:Path;$dir" }
 }
 
 function Set-EnvMachine([string]$name, [string]$value) {
@@ -85,12 +90,15 @@ function Install-IfMissingWinget($id, $name) {
     $installed = winget list --id $id --accept-source-agreements | Out-String
     if ($installed -match $id) {
         Write-Ok "$name already installed."
+        return
     }
-    else {
-        Write-Info "Installing $name..."
-        winget install --id $id --accept-package-agreements --accept-source-agreements -h | Out-Null
-        Write-Ok "$name installed."
+    Write-Info "Installing $name..."
+    winget install --id $id --exact --accept-package-agreements --accept-source-agreements -h | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "$name did NOT install (winget exit $LASTEXITCODE for id '$id')."
+        return
     }
+    Write-Ok "$name installed."
 }
 
 # endregion -------------------------------------------------------------------
@@ -127,9 +135,106 @@ if (Confirm-Yes "Install Visual Studio 2022 Build Tools (C++ toolchain)?" $true)
 $jdkId = if ($IsArm64) { "Microsoft.OpenJDK.17" } else { "Microsoft.OpenJDK.17" }
 Install-IfMissingWinget $jdkId "OpenJDK 17"
 
-# Flutter & Android Studio
-Install-IfMissingWinget "Google.Flutter"       "Flutter SDK"
 Install-IfMissingWinget "Google.AndroidStudio" "Android Studio"
+
+# endregion -------------------------------------------------------------------
+
+# region Flutter SDK -----------------------------------------------------------
+
+# There is no Flutter SDK package on winget (only Google.DartSDK), so install it
+# from the official release archive instead. Deliberately NOT under Program
+# Files: `flutter upgrade` and the pub cache write into the SDK directory, so it
+# has to stay user-writable.
+$FlutterRoot = if ($env:FLUTTER_ROOT) { $env:FLUTTER_ROOT } else { "$env:LOCALAPPDATA\flutter" }
+
+function Get-FlutterStableRelease {
+    $base = "https://storage.googleapis.com/flutter_infra_release/releases"
+    $manifest = Invoke-RestMethod -UseBasicParsing -Uri "$base/releases_windows.json"
+    $hash = $manifest.current_release.stable
+    $wantArch = if ($IsArm64) { "arm64" } else { "x64" }
+
+    $candidates = @($manifest.releases | Where-Object { $_.hash -eq $hash -and $_.channel -eq "stable" })
+    # Newer manifests publish one entry per arch; older ones omit the field.
+    $rel = $candidates | Where-Object { $_.dart_sdk_arch -eq $wantArch } | Select-Object -First 1
+    if (-not $rel) { $rel = $candidates | Select-Object -First 1 }
+    if (-not $rel) { throw "Could not find a stable Windows release in the Flutter manifest." }
+
+    return [pscustomobject]@{
+        Url     = "$base/$($rel.archive)"
+        Version = $rel.version
+    }
+}
+
+function Install-Flutter {
+    if (Test-Path (Join-Path $FlutterRoot "bin\flutter.bat")) {
+        Write-Ok "Flutter SDK already present: $FlutterRoot"
+        return
+    }
+
+    Write-Info "Resolving latest stable Flutter release..."
+    $rel = Get-FlutterStableRelease
+    Write-Info "Downloading Flutter $($rel.Version) (this is ~1 GB and takes a few minutes)..."
+
+    $tmpDir = Join-Path $env:TEMP ("flutter-sdk-" + [Guid]::NewGuid())
+    New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+    $zipPath = Join-Path $tmpDir "flutter.zip"
+
+    # Invoke-WebRequest's progress bar costs more than the download on big files.
+    $oldProgress = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri $rel.Url -OutFile $zipPath
+    }
+    finally {
+        $ProgressPreference = $oldProgress
+    }
+
+    Write-Info "Extracting to $FlutterRoot ..."
+    $extractDir = Join-Path $tmpDir "extract"
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractDir)
+
+    # The archive contains a top-level "flutter" folder.
+    $src = Join-Path $extractDir "flutter"
+    if (-not (Test-Path $src)) { throw "Unexpected archive layout: no 'flutter' directory inside $zipPath." }
+
+    $parent = Split-Path -Parent $FlutterRoot
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    Move-Item -Path $src -Destination $FlutterRoot -Force
+
+    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+    Write-Ok "Flutter $($rel.Version) installed: $FlutterRoot"
+}
+
+try {
+    Install-Flutter
+}
+catch {
+    Write-Warn ("Flutter SDK install failed: " + $_)
+    Write-Warn "Install manually from https://docs.flutter.dev/get-started/install/windows, then re-run this wizard."
+}
+
+# Flutter creates symlinks under windows/flutter/ephemeral for every plugin, and
+# unprivileged symlink creation on Windows requires Developer Mode. Without it
+# `flutter pub get` fails with "Building with plugins requires symlink support".
+try {
+    $devModeKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+    $devMode = (Get-ItemProperty -Path $devModeKey -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue).AllowDevelopmentWithoutDevLicense
+    if ($devMode -eq 1) {
+        Write-Ok "Windows Developer Mode already enabled."
+    }
+    else {
+        Write-Info "Enabling Windows Developer Mode (required for Flutter plugin symlinks)..."
+        if (-not (Test-Path $devModeKey)) { New-Item -Path $devModeKey -Force | Out-Null }
+        New-ItemProperty -Path $devModeKey -Name AllowDevelopmentWithoutDevLicense `
+            -PropertyType DWord -Value 1 -Force | Out-Null
+        Write-Ok "Windows Developer Mode enabled."
+    }
+}
+catch {
+    Write-Warn ("Could not enable Developer Mode automatically: " + $_)
+    Write-Warn "Enable it manually: run 'start ms-settings:developers' and switch Developer Mode on."
+}
 
 # endregion -------------------------------------------------------------------
 
@@ -165,13 +270,31 @@ Ensure-InPath "$androidSdk\platform-tools"
 Ensure-InPath "$androidSdk\emulator"
 Ensure-InPath "$androidSdk\cmdline-tools\latest\bin"
 
-# Flutter on PATH (winget installs under Program Files)
+# Flutter on PATH. $FlutterRoot first: that's where this wizard installs it.
 $candFlutter = @(
+    "$FlutterRoot\bin",
     "$env:ProgramFiles\flutter\bin",
-    "$env:LOCALAPPDATA\flutter\bin"
-) | Where-Object { Test-Path $_ }
+    "$env:LOCALAPPDATA\flutter\bin",
+    "C:\flutter\bin",
+    "C:\src\flutter\bin"
+) | Where-Object { Test-Path $_ } | Select-Object -Unique
 
 foreach ($p in $candFlutter) { Ensure-InPath $p }
+
+# The SDK ships as a git checkout. Extracting it from an elevated shell leaves
+# it owned by Administrators, which trips git's "dubious ownership" check and
+# makes `flutter --version` fail to resolve a version.
+if ((Test-Cmd git) -and (Test-Path "$FlutterRoot\.git")) {
+    git config --global --add safe.directory ($FlutterRoot -replace '\\', '/') 2>$null | Out-Null
+}
+
+# Pre-download the Windows desktop toolchain so the first build isn't a surprise.
+if (Test-Cmd flutter) {
+    Write-Info "Enabling Windows desktop support and pre-caching artifacts..."
+    flutter config --enable-windows-desktop | Out-Null
+    flutter precache --windows | Out-Null
+    Write-Ok "Flutter Windows desktop ready."
+}
 
 # Rust & Cargo PATH (user scope, but ensure for machine PATH too for CI shells)
 $cargoBin = "$env:USERPROFILE\.cargo\bin"
