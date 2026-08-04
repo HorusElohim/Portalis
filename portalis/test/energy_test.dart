@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/models.dart';
 import 'package:portalis/theme.dart';
@@ -87,6 +88,60 @@ void main() {
           AppColors.ember.toARGB32() & 0x00FFFFFF);
       expect(glow.shadows.single.color.toARGB32() & 0x00FFFFFF,
           AppColors.ember.toARGB32() & 0x00FFFFFF);
+    });
+  });
+
+  group('the wash follows the glow', () {
+    /// Alpha at the bright corner of a level's gradient.
+    double top(GlowLevel level, {double intensity = 0}) =>
+        (Glow.of(level, intensity: intensity).gradient as LinearGradient)
+            .colors
+            .first
+            .a;
+
+    test('a settled surface has no wash, so it stays flat', () {
+      // What lets SurfaceCard fall back to a plain fill without asking.
+      expect(Glow.of(GlowLevel.none).gradient, isNull);
+    });
+
+    test('brightens across the levels, in step with the halo', () {
+      expect(top(GlowLevel.calm), lessThan(top(GlowLevel.active)));
+      expect(top(GlowLevel.active), lessThan(top(GlowLevel.vivid)));
+    });
+
+    test('brightens with real throughput within a level', () {
+      // The dynamic half: same state, more bytes moving, more colour.
+      expect(top(GlowLevel.active), lessThan(top(GlowLevel.active, intensity: 1)));
+    });
+
+    test('speed alone never lights a surface that is doing nothing', () {
+      // Intensity modulates an earned wash; it cannot manufacture one.
+      expect(Glow.of(GlowLevel.none, intensity: 1).gradient, isNull);
+    });
+
+    test('washes in the colour it glows in', () {
+      final wash = Glow.of(GlowLevel.active, color: AppColors.ember).gradient!
+          as LinearGradient;
+      for (final c in wash.colors) {
+        expect(c.toARGB32() & 0x00FFFFFF, AppColors.ember.toARGB32() & 0x00FFFFFF);
+      }
+    });
+
+    test('stays a wash — never opaque enough to compete with content', () {
+      expect(top(GlowLevel.vivid, intensity: 1), lessThan(0.3));
+    });
+  });
+
+  group('live intensity', () {
+    test('a settled collection contributes nothing', () {
+      expect(_c(state: 'seeding').liveIntensity, 0);
+    });
+
+    test('rises with the combined rate', () {
+      expect(_c(state: 'downloading', down: 1).liveIntensity,
+          lessThan(_c(state: 'downloading', down: 6).liveIntensity));
+      // Both directions count, the same way glow counts them.
+      expect(_c(state: 'seeding', up: 4, down: 4).liveIntensity, 1.0);
     });
   });
 }

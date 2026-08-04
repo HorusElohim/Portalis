@@ -98,6 +98,7 @@ class SurfaceCard extends StatelessWidget {
     this.gradient,
     this.glow = GlowLevel.none,
     this.glowColor = AppColors.signal,
+    this.glowIntensity = 0,
   });
 
   final Widget child;
@@ -105,6 +106,10 @@ class SurfaceCard extends StatelessWidget {
   final double radius;
   final VoidCallback? onTap;
   final Color? borderColor;
+
+  /// Overrides the wash [glow] would otherwise supply. Rarely needed — a
+  /// card's fill follows its energy by default, which is what keeps the two
+  /// from drifting apart.
   final Gradient? gradient;
 
   /// Energy, not decoration — see [GlowLevel]. A card that is merely selected
@@ -112,14 +117,20 @@ class SurfaceCard extends StatelessWidget {
   final GlowLevel glow;
   final Color glowColor;
 
+  /// Live throughput behind this card, 0..1 — see [Glow.intensityForRate].
+  /// Brightens the wash as bytes actually move.
+  final double glowIntensity;
+
   @override
   Widget build(BuildContext context) {
-    final energy = Glow.of(glow, color: glowColor);
+    final energy =
+        Glow.of(glow, color: glowColor, intensity: glowIntensity);
+    final fill = gradient ?? energy.gradient;
     final content = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: gradient == null ? AppColors.surface : null,
-        gradient: gradient,
+        color: fill == null ? AppColors.surface : null,
+        gradient: fill,
         borderRadius: BorderRadius.circular(radius),
         border: borderColor != null
             ? Border.all(color: borderColor!)

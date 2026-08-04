@@ -18,21 +18,21 @@ Future<int> _framesOver(WidgetTester tester, Duration window) async {
 void main() {
   group('intensity mapping', () {
     test('nothing moving is exactly zero', () {
-      expect(AmbientBackground.intensityForRate(0), 0);
-      expect(AmbientBackground.intensityForRate(-1), 0);
+      expect(Glow.intensityForRate(0), 0);
+      expect(Glow.intensityForRate(-1), 0);
     });
 
     test('any real movement is visible, and it saturates', () {
       // A trickle still registers...
-      expect(AmbientBackground.intensityForRate(0.01), greaterThanOrEqualTo(0.15));
+      expect(Glow.intensityForRate(0.01), greaterThanOrEqualTo(0.15));
       // ...and a firehose doesn't keep getting brighter forever.
-      expect(AmbientBackground.intensityForRate(500), 1.0);
-      expect(AmbientBackground.intensityForRate(8), 1.0);
+      expect(Glow.intensityForRate(500), 1.0);
+      expect(Glow.intensityForRate(8), 1.0);
     });
 
     test('is monotonic between the floor and the ceiling', () {
-      expect(AmbientBackground.intensityForRate(2),
-          lessThan(AmbientBackground.intensityForRate(6)));
+      expect(Glow.intensityForRate(2),
+          lessThan(Glow.intensityForRate(6)));
     });
   });
 

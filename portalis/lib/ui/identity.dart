@@ -29,13 +29,7 @@ class Avatar extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: primary ? null : AppColors.signalDeep,
-        gradient: primary
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.signal, AppColors.signalDim],
-              )
-            : null,
+        gradient: primary ? signalFill : null,
         borderRadius: BorderRadius.circular(size * 0.34),
       ),
       child: Text(

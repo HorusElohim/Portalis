@@ -30,23 +30,12 @@ class AmbientBackground extends StatefulWidget {
   final Widget child;
 
   /// 0 = nothing moving, 1 = saturated. Callers map real throughput onto
-  /// this; see [intensityForRate].
+  /// this; see [Glow.intensityForRate].
   final double intensity;
 
   /// Which colour the wash takes. Ember when the activity is a torrent, so
   /// the background agrees with the row that caused it.
   final Color accent;
-
-  /// Maps an aggregate MB/s figure onto [intensity].
-  ///
-  /// Deliberately saturating: past a few MB/s the difference stops being
-  /// legible, and letting it keep growing would just make the screen
-  /// brighter for no information.
-  static double intensityForRate(double mbps) {
-    if (mbps <= 0) return 0;
-    const saturateAt = 8.0;
-    return (mbps / saturateAt).clamp(0.15, 1.0);
-  }
 
   @override
   State<AmbientBackground> createState() => _AmbientBackgroundState();

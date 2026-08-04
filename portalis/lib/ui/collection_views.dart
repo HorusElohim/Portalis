@@ -34,27 +34,17 @@ class CollectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final torrent = !collection.isShared;
-    final live = collection.downloadMbps > 0 || collection.uploadMbps > 0;
     final accent = torrent ? AppColors.ember : AppColors.signal;
 
     return SurfaceCard(
       onTap: onTap,
-      // A live row gets a tinted wash so it separates from the settled ones
-      // at a glance; selection is a plain stronger border, not a colour.
-      gradient: live
-          ? LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accent.withValues(alpha: 0.13),
-                accent.withValues(alpha: 0.03),
-              ],
-            )
-          : null,
       // Energy by what it is genuinely doing: transferring glows brightest,
-      // shared-and-standing-by glows calmly, everything else not at all.
+      // shared-and-standing-by glows calmly, everything else not at all. The
+      // wash that separates a live row from the settled ones comes with it —
+      // see [Glow.gradient].
       glow: collection.glow,
       glowColor: accent,
+      glowIntensity: collection.liveIntensity,
       borderColor: selected && collection.glow == GlowLevel.none
           ? AppColors.borderStrong
           : null,

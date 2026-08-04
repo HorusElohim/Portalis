@@ -281,15 +281,11 @@ class LiveTransferCard extends StatelessWidget {
       onTap: onTap,
       radius: AppRadius.card,
       padding: const EdgeInsets.all(18),
-      borderColor: accent.withValues(alpha: 0.28),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          accent.withValues(alpha: 0.16),
-          accent.withValues(alpha: 0.04),
-        ],
-      ),
+      // The hero card carries the same energy as the row it stands for, wash
+      // and halo together — and brightens as the transfer speeds up.
+      glow: collection.glow,
+      glowColor: accent,
+      glowIntensity: collection.liveIntensity,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

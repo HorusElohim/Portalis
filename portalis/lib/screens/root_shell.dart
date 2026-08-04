@@ -70,7 +70,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
             return Scaffold(
               backgroundColor: AppColors.surfaceDeep,
               body: AmbientBackground(
-                intensity: AmbientBackground.intensityForRate(rate),
+                intensity: Glow.intensityForRate(rate),
                 child: SafeArea(
                   bottom: false,
                   child: IndexedStack(

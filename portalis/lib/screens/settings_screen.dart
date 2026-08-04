@@ -789,20 +789,9 @@ class _HealthCard extends StatelessWidget {
       child: SurfaceCard(
         padding: const EdgeInsets.all(16),
         // Mint only when something is genuinely connected; otherwise this is
-        // a neutral status panel, not a reassurance.
-        borderColor: peers > 0
-            ? AppColors.signal.withValues(alpha: 0.24)
-            : AppColors.border,
-        gradient: peers > 0
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.signal.withValues(alpha: 0.13),
-                  AppColors.signal.withValues(alpha: 0.03),
-                ],
-              )
-            : null,
+        // a neutral status panel, not a reassurance. Connected is a standing
+        // state rather than a transfer, so it stays calm at any speed.
+        glow: peers > 0 ? GlowLevel.calm : GlowLevel.none,
         child: Row(
           children: [
             Expanded(

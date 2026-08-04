@@ -337,6 +337,8 @@ class Glow {
     required this.blur,
     required this.spread,
     required this.shadowOpacity,
+    required this.washOpacity,
+    this.intensity = 0,
   });
 
   final GlowLevel level;
@@ -346,7 +348,51 @@ class Glow {
   final double spread;
   final double shadowOpacity;
 
+  /// Alpha at the bright corner of [gradient].
+  final double washOpacity;
+
+  /// Real throughput, 0 (nothing moving) to 1 (saturated) — see
+  /// [intensityForRate]. Brightens [gradient] and nothing else: a surface's
+  /// border and halo say *what state it is in*, which doesn't change with
+  /// speed, while the wash says *how hard it is working*, which does.
+  final double intensity;
+
   bool get isVisible => level != GlowLevel.none;
+
+  /// The tinted wash behind an energised surface, in the same colour as the
+  /// halo — so a card's fill and its glow can never disagree.
+  ///
+  /// Null at [GlowLevel.none], which is what makes a settled card fall back
+  /// to flat [AppColors.surface] without the caller testing for it.
+  Gradient? get gradient {
+    if (!isVisible) return null;
+    // Half again as bright at full tilt. Enough to read as "this one is
+    // working" next to a calm sibling, not enough to compete with content.
+    final top = washOpacity * (1 + 0.5 * intensity);
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        color.withValues(alpha: top),
+        color.withValues(alpha: top * 0.22),
+      ],
+    );
+  }
+
+  /// Maps an aggregate MB/s figure onto [intensity].
+  ///
+  /// Deliberately saturating: past a few MB/s the difference stops being
+  /// legible, and letting it keep growing would just make the screen brighter
+  /// for no information.
+  ///
+  /// Lives here rather than on a widget because both the background wash and
+  /// every card's gradient read from it — one curve, so the whole app
+  /// brightens together.
+  static double intensityForRate(double mbps) {
+    if (mbps <= 0) return 0;
+    const saturateAt = 8.0;
+    return (mbps / saturateAt).clamp(0.15, 1.0);
+  }
 
   Border get border => Border.all(
         color: isVisible
@@ -367,7 +413,11 @@ class Glow {
 
   /// Looks up the tuned appearance for a level. One table, so retuning the
   /// app's energy is a single edit.
-  static Glow of(GlowLevel level, {Color color = AppColors.signal}) =>
+  static Glow of(
+    GlowLevel level, {
+    Color color = AppColors.signal,
+    double intensity = 0,
+  }) =>
       switch (level) {
         GlowLevel.none => Glow(
             level: level,
@@ -376,30 +426,48 @@ class Glow {
             blur: 0,
             spread: 0,
             shadowOpacity: 0,
+            washOpacity: 0,
           ),
         GlowLevel.calm => Glow(
             level: level,
             color: color,
+            intensity: intensity,
             borderOpacity: 0.26,
             blur: 14,
             spread: -4,
             shadowOpacity: 0.10,
+            washOpacity: 0.11,
           ),
         GlowLevel.active => Glow(
             level: level,
             color: color,
+            intensity: intensity,
             borderOpacity: 0.40,
             blur: 22,
             spread: -2,
             shadowOpacity: 0.18,
+            washOpacity: 0.13,
           ),
         GlowLevel.vivid => Glow(
             level: level,
             color: color,
+            intensity: intensity,
             borderOpacity: 0.58,
             blur: 30,
             spread: 0,
             shadowOpacity: 0.26,
+            washOpacity: 0.16,
           ),
       };
 }
+
+/// The one opaque mint fill — avatars, primary badges, anything that is the
+/// signal rather than merely lit by it.
+///
+/// A constant and not a [Glow]: those describe a surface's *energy*, which is
+/// earned and varies. This is identity, and never varies.
+const signalFill = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [AppColors.signal, AppColors.signalDim],
+);

@@ -243,6 +243,12 @@ class Collection {
     return isSharing ? GlowLevel.calm : GlowLevel.none;
   }
 
+  /// How hard this collection is working, 0..1 — what its card's wash
+  /// brightens with. [glow] says which state it is in; this says how much of
+  /// it is happening.
+  double get liveIntensity =>
+      Glow.intensityForRate(downloadMbps + uploadMbps);
+
   /// Stable per-collection accent, derived from the id so a collection keeps
   /// its colour across restarts.
   Color get hue => AppColors.hueAt(id.hashCode.abs());
