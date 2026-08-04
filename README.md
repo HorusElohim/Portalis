@@ -53,6 +53,68 @@ Each wizard installs common dependencies, configures environment variables, and 
 
 Detailed build instructions for every platform live in [`doc/build.md`](doc/build.md).
 
+## Building
+
+Every command below runs from the `portalis/` directory.
+
+### The one rule worth knowing
+
+On **desktop**, `flutter run` does *not* build the Rust crate — nothing in the CMake/Xcode desktop config invokes cargo on Windows or Linux. Instead `flutter_rust_bridge` loads the native library at runtime by relative path, `rust/backend/target/release/`, configured in `lib/bridge_generated/frb_generated.dart`. Two consequences:
+
+- Always build the Rust side with `--release`, even when running Flutter in debug. There is no debug lookup path.
+- After changing any Rust source, rebuild it yourself. Skipping this gives you a `Bad state: Content hash on Dart side (...) is different from Rust side (...)` at startup — the app is loading a stale library.
+
+Mobile and web are different: their platform hooks build Rust for you (see the last column below).
+
+### Dev loop
+
+| Platform | Build Rust | Run | Who builds the native lib |
+|---|---|---|---|
+| 🪟 Windows | `cargo build --release --manifest-path rust/backend/Cargo.toml` | `flutter run -d windows` | you (manual) |
+| 🐧 Linux | `cargo build --release --manifest-path rust/backend/Cargo.toml` | `flutter run -d linux` | you (manual) |
+| 🍎 macOS | — | `flutter run -d macos` | Xcode build phase → `macos/Runner/build_backend.sh` |
+| 📱 iOS | — | `flutter run -d ios` | Xcode build phase → `ios/Runner/build_rust_ios.sh` |
+| 🤖 Android | — | `flutter run -d android` | Gradle hook → `android/build_rust_android.sh` |
+| 🕸️ Web | `./tool/frb_build.sh web` | `flutter run -d chrome` | you (produces `web/pkg/*.wasm`) |
+
+### Release builds
+
+These mirror `.github/actions/build-*/action.yml` exactly, so a local release build matches CI.
+
+```bash
+# 🪟 Windows
+cargo build --release --manifest-path rust/backend/Cargo.toml
+flutter build windows --release
+cp rust/backend/target/release/backend.dll build/windows/x64/runner/Release/
+
+# 🐧 Linux
+cargo build --release --manifest-path rust/backend/Cargo.toml
+flutter build linux --release
+cp rust/backend/target/release/libbackend.so build/linux/x64/release/bundle/lib/
+
+# 🍎 macOS / 📱 iOS / 🤖 Android — the platform hook builds Rust
+flutter build macos --release
+bash ios/Runner/build_rust_ios.sh && flutter build ios --release --no-codesign
+bash ./android/build_rust_android.sh release && flutter build apk --release
+
+# 🕸️ Web
+bash ./tool/frb_build.sh web
+flutter build web --release
+```
+
+Windows and Linux need that explicit copy: the relative path FRB uses during `flutter run` doesn't exist beside a packaged binary, so the library has to ship next to the runner (Windows) or in the bundle's `lib/` (Linux).
+
+### Regenerating bindings
+
+Only needed when a **signature or DTO changes** in one of the five bridged Rust modules (`bridge`, `torrent`, `device`, `collections`, `settings`). Editing a function body doesn't require it.
+
+```bash
+cargo install flutter_rust_bridge_codegen   # once
+./tool/frb_build.sh <macos|ios|android|linux|windows|web>
+```
+
+Then rebuild the Rust library for your platform. Never invoke the codegen with `--rust-input crate`: its module scan ignores Rust visibility, so the bare wildcard pulls in internal-only modules such as `domain` and fails to compile. `tool/frb_build.sh` passes the correct explicit module list.
+
 ## Testing
 Use the scripts in `tests/` to exercise the codebase consistently:
 

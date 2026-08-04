@@ -58,7 +58,8 @@ Prerequisites
 
 Dev run (recommended)
 - From repo root `portalis/` in PowerShell:
-  - `./tool/build_windows.ps1`  # regenerates FRB (if available), builds Rust DLL, runs Flutter on Windows
+  - `./tool/build_windows.ps1 -NoCodegen`  # builds Rust DLL, runs Flutter on Windows
+- ⚠️ Run it with `-NoCodegen`. Without the flag the script invokes the codegen with `--rust-input crate`, the bare wildcard described under "Regenerating FRB bindings" below, which does not compile. Use `./tool/frb_build.sh` (Git Bash) when you actually need to regenerate bindings.
 
 Manual steps (equivalent)
 - Build Rust DLL (release, required by FRB loader at runtime):
@@ -78,7 +79,7 @@ Release build (packaged app)
 
 Notes
 - FRB’s generated config expects the DLL at `rust/backend/target/release/backend.dll` during `flutter run`; keep using `--release` for the Rust build.
-- To update bindings after Rust API changes, install the codegen: `cargo install flutter_rust_bridge_codegen`, then re-run `./tool/build_windows.ps1`.
+- To update bindings after Rust API changes, install the codegen: `cargo install flutter_rust_bridge_codegen`, then run `./tool/frb_build.sh windows` from Git Bash (not `build_windows.ps1` — see the warning above).
 
 ## Linux (Desktop)
 
@@ -111,7 +112,7 @@ Notes
   - `./tool/frb_build.sh android`
   - `./tool/frb_build.sh web`
 - Notes:
-  - Uses `flutter_rust_bridge_codegen generate` with `--rust-root rust/backend --rust-input crate`.
+  - Uses `flutter_rust_bridge_codegen generate` with `--rust-root rust/backend` and an **explicit** `--rust-input` module list (`crate::bridge,crate::torrent,crate::device,crate::collections,crate::settings`). Never the bare `crate` wildcard: the codegen's module scan ignores Rust visibility, so a wildcard sweeps in internal-only modules like `domain` and fails to compile.
   - FRB version pinned to 2.11.1; if you upgrade FRB crates, re-run codegen.
 
 ## Troubleshooting
