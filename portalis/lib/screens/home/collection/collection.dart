@@ -4,11 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../../app/app_controllers.dart';
+import '../../../design/design.dart';
+import '../../../features/collections/domain/collection.dart';
+import '../../../features/collections/presentation/collection_presentation.dart';
+import '../../../features/collections/presentation/components.dart';
 import '../../../media/formats.dart';
-import '../../../models.dart';
-import '../../../services/collections.dart';
 import '../../../theme.dart';
-import '../../../ui/ui.dart';
 import 'media_viewer.dart';
 import 'remove.dart';
 
@@ -81,7 +83,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
   /// The live version, falling back to the one we were pushed with if it has
   /// since been deleted (the screen pops in that case).
   Collection get _collection =>
-      Collections.instance.byId(widget.collection.id) ?? widget.collection;
+      AppControllers.collections.byId(widget.collection.id) ?? widget.collection;
 
   void _toast(String msg, {ToastSeverity severity = ToastSeverity.info}) {
     if (!mounted) return;
@@ -233,14 +235,15 @@ class _CollectionDetailState extends State<CollectionDetail> {
       );
       final label =
           'Added ${DateTime.now().toIso8601String().split('T').first}';
-      await Collections.instance.addMedia(_collection.id, label, normalized);
+      await AppControllers.collections.addMedia(_collection.id, label, normalized);
       _toast(
           'Added ${normalized.length} item${normalized.length == 1 ? '' : 's'}');
     });
   }
 
   Future<void> _fetchPending() => _run(() async {
-        final started = await Collections.instance.fetchMedia(_collection.id);
+        final started =
+            await AppControllers.collections.fetchMedia(_collection.id);
         _toast('Fetching $started item${started == 1 ? '' : 's'}');
       });
 
@@ -277,7 +280,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
     );
     if (peerAddr == null || peerAddr.isEmpty || !mounted) return;
     await _run(() async {
-      final updated = await Collections.instance.sync(_collection.id, peerAddr);
+      final updated = await AppControllers.collections.sync(_collection.id, peerAddr);
       _toast('Synced — ${updated.media.length} item(s), '
           '${updated.collaborators.length} collaborator(s)');
     });
@@ -294,7 +297,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Collections.instance,
+      listenable: AppControllers.collections,
       builder: (context, _) => _detail(_collection),
     );
   }

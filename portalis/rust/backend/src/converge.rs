@@ -32,17 +32,17 @@ static ACTIVE: AtomicBool = AtomicBool::new(true);
 /// wait up to forty-five seconds to find out whether it worked.
 static WAKE: Notify = Notify::const_new();
 
-pub(crate) fn set_active(active: bool) {
+pub(crate) fn set_reconciliation_active(active: bool) {
     ACTIVE.store(active, Ordering::Relaxed);
 }
 
-/// Converge as soon as possible — after a join, a fetch or a manual sync.
-pub(crate) fn now() {
+/// Requests reconciliation after a join, a fetch, or a manual sync.
+pub(crate) fn request_reconciliation() {
     WAKE.notify_one();
 }
 
-pub(crate) fn start() {
-    clog!("converge", "every {INTERVAL:?} while in use, and on demand");
+pub(crate) fn start_reconciliation_loop() {
+    clog!("reconciliation", "every {INTERVAL:?} while in use, and on demand");
     tokio::spawn(async {
         loop {
             tokio::select! {
@@ -50,7 +50,7 @@ pub(crate) fn start() {
                 _ = WAKE.notified() => {}
             }
             if ACTIVE.load(Ordering::Relaxed) {
-                tick().await;
+                reconcile_all().await;
             }
         }
     });
@@ -59,14 +59,14 @@ pub(crate) fn start() {
 /// One pass: bring every set's truth level with its peers, then chase whatever
 /// is still wanted. Fetches come second because a sync is what teaches us where
 /// a peer's content lives, which is exactly what a stalled fetch was missing.
-async fn tick() {
-    for (name, key) in sets() {
-        reconcile(&name, &key).await;
+async fn reconcile_all() {
+    for (name, key) in collection_keys() {
+        reconcile_collection(&name, &key).await;
     }
     crate::collections::pursue_fetches().await;
 }
 
-fn sets() -> Vec<(String, String)> {
+fn collection_keys() -> Vec<(String, String)> {
     crate::collab_store::read_store(|collections| {
         Ok(collections
             .iter()
@@ -76,13 +76,18 @@ fn sets() -> Vec<(String, String)> {
     .unwrap_or_default()
 }
 
-async fn reconcile(name: &str, key: &str) {
-    let addresses = candidates(key);
+async fn reconcile_collection(name: &str, key: &str) {
+    let addresses = candidate_addresses(key);
     if addresses.is_empty() {
         return;
     }
-    let round = attempt(key, &addresses).await;
-    clog!("converge", "{name:?} — {}/{} reachable", round.reachable, addresses.len());
+    let round = sync_candidates(key, &addresses).await;
+    clog!(
+        "reconciliation",
+        "{name:?} — {}/{} reachable",
+        round.reachable,
+        addresses.len()
+    );
     round.prune(key);
 }
 
@@ -92,7 +97,7 @@ async fn reconcile(name: &str, key: &str) {
 /// different one — remembered before the listener had a stable port, or from a
 /// run that fell back to an ephemeral one. Without this, two devices that both
 /// restarted could never find each other again without re-exchanging an invite.
-fn candidates(key: &str) -> Vec<String> {
+fn candidate_addresses(key: &str) -> Vec<String> {
     let known = known_sync_peers(key);
     let mut all: std::collections::BTreeSet<String> = known.iter().cloned().collect();
     all.extend(known.iter().filter_map(|a| a.rsplit_once(':')).map(|(host, _)| {
@@ -109,7 +114,7 @@ fn candidates(key: &str) -> Vec<String> {
 /// in `collab_sync.rs`), most of them typically unreachable from any one
 /// network, and dialing each in turn at up to `CONNECT_TIMEOUT` made a single
 /// pass over one collection take the better part of a minute.
-async fn attempt(key: &str, addresses: &[String]) -> Round {
+async fn sync_candidates(key: &str, addresses: &[String]) -> Round {
     // Spawned rather than joined in place: a `Vec` of handles forces every
     // dial to start now, so they race each other on the runtime instead of
     // the loop below re-creating the sequential wait it's meant to remove.
@@ -188,7 +193,7 @@ mod tests {
         let key = "d".repeat(64);
         crate::collab_sync::remember_sync_peers(&key, ["10.0.0.4:61638".to_string()]);
 
-        let tried = candidates(&key);
+        let tried = candidate_addresses(&key);
 
         assert!(tried.contains(&"10.0.0.4:61638".to_string()));
         assert!(tried.contains(&format!("10.0.0.4:{PREFERRED_SYNC_PORT}")));

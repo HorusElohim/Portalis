@@ -4,7 +4,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/collections.dart';
+import '../app/app_controllers.dart';
+import '../features/collections/domain/paste.dart';
 import '../theme.dart';
 import 'toast.dart';
 
@@ -82,7 +83,7 @@ class _OmnibarState extends State<Omnibar> {
           _error = null;
         });
         try {
-          await Collections.instance.addFromMagnet(text);
+          await AppControllers.collections.addFromMagnet(text);
           if (!mounted) return;
           _clear();
           showToast(context, 'Added — joining swarm',
@@ -116,7 +117,7 @@ class _OmnibarState extends State<Omnibar> {
       _error = null;
     });
     try {
-      await Collections.instance.addFromFileBytes(bytes);
+      await AppControllers.collections.addFromFileBytes(bytes);
       if (!mounted) return;
       showToast(context, 'Torrent added — joining swarm',
           severity: ToastSeverity.success);

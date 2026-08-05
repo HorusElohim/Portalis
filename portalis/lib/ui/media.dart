@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../media/formats.dart';
-import '../models.dart';
+import '../features/collections/domain/collection.dart';
 import '../theme.dart';
 
 /// Placeholder tile standing in for real thumbnails/covers/media — shown

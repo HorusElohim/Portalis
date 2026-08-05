@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../app/app_controllers.dart';
+import '../../../design/design.dart';
+import '../../../features/collections/domain/collection.dart';
+import '../../../features/collections/presentation/collection_presentation.dart';
+import '../../../features/collections/presentation/components.dart';
 import '../../../media/formats.dart';
-import '../../../models.dart';
-import '../../../services/collections.dart';
 import '../../../theme.dart';
-import '../../../ui/ui.dart';
 
 class MediaViewerScreen extends StatefulWidget {
   const MediaViewerScreen({
@@ -38,7 +40,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   bool _showDetails = false;
 
   Collection get _collection =>
-      Collections.instance.byId(widget.collection.id) ?? widget.collection;
+      AppControllers.collections.byId(widget.collection.id) ?? widget.collection;
 
   /// Matched on info-hash *and* name: one manifest entry can hold several
   /// files, so the hash alone doesn't identify a file.
@@ -64,12 +66,12 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     // any more — the file arrives through the cache, so that is what has to be
     // watched. A video that finishes downloading while it is open now starts
     // playing instead of staying a thumbnail until the screen is reopened.
-    Collections.instance.addListener(_syncVideo);
+    AppControllers.collections.addListener(_syncVideo);
   }
 
   @override
   void dispose() {
-    Collections.instance.removeListener(_syncVideo);
+    AppControllers.collections.removeListener(_syncVideo);
     _disposeVideo();
     super.dispose();
   }
@@ -123,7 +125,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
     // Rebuilt on every poll, so everything below is the current answer rather
     // than the answer at the moment this screen opened.
     return ListenableBuilder(
-      listenable: Collections.instance,
+      listenable: AppControllers.collections,
       builder: (context, _) => _build(context),
     );
   }

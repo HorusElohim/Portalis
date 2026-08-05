@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../bridge_generated/device.dart' as device_bridge;
-import '../../../services/collections.dart';
+import '../../../app/app_controllers.dart';
+import '../../../design/design.dart';
+import '../../../features/collections/domain/paste.dart';
 import '../../../theme.dart';
-import '../../../ui/ui.dart';
 
 /// "Join a collection" — the invite-code half of the old combined Add
 /// screen, redesigned per the Portalis Add Flow. The preview card is
@@ -43,11 +43,10 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
   }
 
   Future<void> _loadNickname() async {
-    try {
-      final identity = await device_bridge.deviceIdentity();
-      if (mounted) setState(() => _nickname = identity.nickname);
-    } catch (_) {
-      // Backend unavailable (e.g. tests) — keep the fallback.
+    await AppControllers.identity.load();
+    final nickname = AppControllers.identity.info?.nickname;
+    if (mounted && nickname != null && nickname.isNotEmpty) {
+      setState(() => _nickname = nickname);
     }
   }
 
@@ -113,7 +112,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
       // the addresses embedded in the code happens in the background
       // (see collections.rs::join_collection), so `collection.media` here
       // is always the pre-sync snapshot, not a verdict on whether it worked.
-      final collection = await Collections.instance
+      final collection = await AppControllers.collections
           .join(_codeController.text.trim(), _nickname);
       if (mounted) {
         FocusScope.of(context).unfocus();

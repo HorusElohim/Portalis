@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:portalis/design/design.dart';
 import 'package:portalis/theme.dart';
-import 'package:portalis/ui/ui.dart';
 
 /// Pumps a trivial app and hands back a context sitting under an Overlay.
 Future<BuildContext> _host(WidgetTester tester) async {

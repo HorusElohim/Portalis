@@ -617,7 +617,7 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
             });
             // Keeps every joined collection in step from here on. Started
             // here so it exists exactly once, alongside the listener it needs.
-            crate::converge::start();
+            crate::reconciliation::start_reconciliation_loop();
             Ok(addr)
         })
         .await

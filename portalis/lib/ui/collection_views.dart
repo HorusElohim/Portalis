@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 
-import '../models.dart';
+import '../features/collections/domain/collection.dart';
+import '../features/collections/presentation/collection_presentation.dart';
 import '../theme.dart';
 import 'indicators.dart';
 import 'media.dart';

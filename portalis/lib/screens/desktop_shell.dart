@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../services/collections.dart';
+import '../app/app_controllers.dart';
+import '../design/design.dart';
 import '../services/navigation.dart';
 import '../theme.dart';
-import '../ui/ui.dart';
 import 'desktop_pane.dart';
 import 'desktop_sidebar.dart';
 import 'home.dart';
@@ -119,7 +119,7 @@ class _DesktopShellState extends State<DesktopShell> {
     return Scaffold(
       backgroundColor: AppColors.surfaceDeep,
       body: ListenableBuilder(
-        listenable: Collections.instance,
+        listenable: AppControllers.collections,
         builder: (context, _) {
           // The same wash mobile's shell carries — brightening with real
           // throughput, dark and still otherwise. Desktop drew a flat
@@ -127,7 +127,7 @@ class _DesktopShellState extends State<DesktopShell> {
           // piece of "the two shells share a model" that stopped at the
           // window's edge.
           return AmbientBackground(
-            intensity: Glow.intensityForRate(Collections.instance.liveRate),
+            intensity: Glow.intensityForRate(AppControllers.collections.liveRate),
             // No second panel. A collection opens inside its own card, in
             // the one list — a panel beside it was a second, thinner
             // account of the same collection, and a button to get from

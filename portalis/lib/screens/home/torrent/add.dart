@@ -2,9 +2,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../services/collections.dart';
+import '../../../app/app_controllers.dart';
+import '../../../design/design.dart';
+import '../../../features/collections/domain/paste.dart';
 import '../../../theme.dart';
-import '../../../ui/ui.dart';
 
 /// "Torrent" — the join-a-swarm half of the old combined Add screen,
 /// redesigned per the Portalis Add Flow: magnet input with a live preview
@@ -70,7 +71,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       _error = null;
     });
     try {
-      await Collections.instance.addFromMagnet(_magnet);
+      await AppControllers.collections.addFromMagnet(_magnet);
       if (mounted) {
         FocusScope.of(context).unfocus();
         Navigator.of(context).pop();
@@ -94,7 +95,7 @@ class _AddTorrentScreenState extends State<AddTorrentScreen> {
       _error = null;
     });
     try {
-      await Collections.instance.addFromFileBytes(bytes);
+      await AppControllers.collections.addFromFileBytes(bytes);
       if (mounted) {
         Navigator.of(context).pop();
         showToast(context, 'Torrent added — joining swarm',

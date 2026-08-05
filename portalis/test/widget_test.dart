@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:portalis/app/app_controllers.dart';
+import 'package:portalis/design/design.dart';
+import 'package:portalis/features/collections/domain/collection.dart';
+import 'package:portalis/features/collections/domain/paste.dart';
+import 'package:portalis/features/settings/domain/engine_settings.dart';
 import 'package:portalis/main.dart';
-import 'package:portalis/models.dart';
 import 'package:portalis/screens/home.dart';
 import 'package:portalis/screens/home/collection/collection.dart';
 import 'package:portalis/screens/home/collection/join.dart';
@@ -11,14 +15,10 @@ import 'package:portalis/screens/home/torrent/add.dart';
 import 'package:portalis/screens/people.dart';
 import 'package:portalis/screens/root_shell.dart';
 import 'package:portalis/screens/settings.dart';
-import 'package:portalis/services/collections.dart';
 import 'package:portalis/services/navigation.dart';
-import 'package:portalis/services/settings_service.dart';
 import 'package:portalis/theme.dart';
-import 'package:portalis/ui/ui.dart';
 
-/// A phone-sized window — below [WindowSize.desktopBreakpoint], so the
-/// mobile layout.
+/// A phone-sized window, below the desktop breakpoint, so the mobile layout.
 const _phone = Size(390, 844);
 
 /// Comfortably above the breakpoint, for the three-pane layout.
@@ -81,7 +81,7 @@ Future<void> _pumpApp(
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(const MyApp());
   await tester.pump();
-  Collections.instance.debugSeed(collections, error: error);
+  AppControllers.collections.debugSeed(collections, error: error);
   await tester.pump();
 }
 
@@ -102,7 +102,7 @@ void main() {
   // lives above the navigator and has to reach them), which means a test that
   // switches tabs would otherwise leave every later test starting there.
   tearDown(() {
-    Collections.instance.debugSeed([]);
+    AppControllers.collections.debugSeed([]);
     AppNavigation.tab.value = 0;
     AppNavigation.depth.value = 0;
   });
@@ -201,7 +201,7 @@ void main() {
       await tester.binding.setSurfaceSize(_desktop);
       await tester.pumpWidget(const MyApp());
       await tester.pump();
-      Collections.instance.debugSeed([_collection()]);
+      AppControllers.collections.debugSeed([_collection()]);
       await tester.pump();
       // The desktop sidebar carries a People pane that mobile has no room
       // for, and the bottom bar is gone entirely.
@@ -529,7 +529,7 @@ void main() {
           findsOneWidget);
       expect(find.textContaining('SEND ANYTHING'), findsNothing);
 
-      Collections.instance.debugSeed([]);
+      AppControllers.collections.debugSeed([]);
       await tester.pump();
       expect(find.textContaining('SEND ANYTHING'), findsOneWidget);
       expect(find.textContaining('Couldn\'t load'), findsNothing);
@@ -624,14 +624,14 @@ void main() {
       // those polls used to rebuild every widget listening to this.
       // Whatever earlier tests left behind, one poll records it — the
       // singleton is process-wide, so this cannot assume a starting point.
-      await Collections.instance.refresh();
+      await AppControllers.collections.refresh();
 
       var notifications = 0;
       void count() => notifications++;
-      Collections.instance.addListener(count);
-      addTearDown(() => Collections.instance.removeListener(count));
+      AppControllers.collections.addListener(count);
+      addTearDown(() => AppControllers.collections.removeListener(count));
 
-      await Collections.instance.refresh();
+      await AppControllers.collections.refresh();
 
       expect(notifications, 0);
     });
@@ -643,12 +643,12 @@ void main() {
       await _pumpApp(tester, collections: [
         _collection(state: 'seeding', downloadMbps: 0, uploadMbps: 0),
       ]);
-      expect(Collections.instance.liveRate, 0);
+      expect(AppControllers.collections.liveRate, 0);
 
       await _pumpApp(tester, collections: [
         _collection(state: 'downloading', downloadMbps: 12.5),
       ]);
-      expect(Collections.instance.liveRate, 12.5);
+      expect(AppControllers.collections.liveRate, 12.5);
     });
   });
 
@@ -740,7 +740,7 @@ void main() {
         (tester) async {
       await tester.binding.setSurfaceSize(_phone);
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      SettingsService.instance.debugSeed(_engineSettings());
+      AppControllers.settings.debugSeed(_engineSettings());
       await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -755,7 +755,7 @@ void main() {
         (tester) async {
       await tester.binding.setSurfaceSize(_phone);
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      SettingsService.instance.debugSeed(_engineSettings());
+      AppControllers.settings.debugSeed(_engineSettings());
       await tester.pumpWidget(
         const MaterialApp(home: SettingsScreen(advanced: true)),
       );
@@ -889,7 +889,7 @@ void main() {
         downloadMbps: 2,
         livePeers: 3,
       );
-      Collections.instance.debugSeed([collection]);
+      AppControllers.collections.debugSeed([collection]);
       await tester.binding.setSurfaceSize(const Size(390, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(MaterialApp(
@@ -909,7 +909,7 @@ void main() {
       expect(find.byType(MediaViewerScreen), findsOneWidget);
 
       // And it follows the cache rather than the arguments it was built with.
-      Collections.instance.debugSeed([
+      AppControllers.collections.debugSeed([
         _collection(
           state: 'downloading',
           media: const [
@@ -940,7 +940,7 @@ void main() {
       // state and an id — everything on it that moved is now on the screen
       // itself.
       final collection = _collection(state: 'seeding');
-      Collections.instance.debugSeed([collection]);
+      AppControllers.collections.debugSeed([collection]);
       await tester.binding.setSurfaceSize(const Size(390, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(MaterialApp(
@@ -977,7 +977,7 @@ void main() {
               fetched: false, addedBy: 'dev1'),
         ],
       );
-      Collections.instance.debugSeed([collection]);
+      AppControllers.collections.debugSeed([collection]);
       await tester.binding.setSurfaceSize(const Size(390, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(MaterialApp(

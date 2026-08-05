@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:portalis/design/design.dart';
 import 'package:portalis/theme.dart';
-import 'package:portalis/ui/ui.dart';
 
 /// Counts the frames actually scheduled, which is what battery cost reduces
 /// to for an ambient effect.

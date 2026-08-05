@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../models.dart';
-import '../../../services/collections.dart';
+import '../../../app/app_controllers.dart';
+import '../../../design/design.dart';
+import '../../../features/collections/domain/collection.dart';
 import '../../../theme.dart';
-import '../../../ui/ui.dart';
 
 /// Confirms, then removes a collection from this device.
 ///
@@ -47,7 +47,7 @@ Future<void> confirmAndRemoveCollection(
   // dialog would just close with nothing happening and no error shown.
   setBusy(true);
   try {
-    await Collections.instance.delete(collection.id);
+    await AppControllers.collections.delete(collection.id);
     // Embedded, the list beside us simply drops it and the selection moves
     // on; there is no route to leave.
     if (context.mounted && Navigator.of(context).canPop()) {

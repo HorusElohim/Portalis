@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../services/collections.dart';
-import '../services/device_identity.dart';
+import '../app/app_controllers.dart';
+import '../design/design.dart';
 import '../theme.dart';
-import '../ui/ui.dart';
 import 'desktop_pane.dart';
 
 /// The desktop shell's left column: who you are, where you can go, and
@@ -21,7 +20,7 @@ class DesktopSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final collections = Collections.instance.collections;
+    final collections = AppControllers.collections.collections;
     final people = <String>{
       for (final c in collections)
         for (final p in c.collaborators) p.deviceId,
@@ -164,20 +163,20 @@ class _IdentityChipState extends State<_IdentityChip> {
   @override
   void initState() {
     super.initState();
-    DeviceIdentity.instance.load();
+    AppControllers.identity.load();
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: DeviceIdentity.instance,
+      listenable: AppControllers.identity,
       builder: (context, _) => _build(context),
     );
   }
 
   Widget _build(BuildContext context) {
-    final name = DeviceIdentity.instance.info?.nickname;
-    final peers = Collections.instance.collections
+    final name = AppControllers.identity.info?.nickname;
+    final peers = AppControllers.collections.collections
         .fold<int>(0, (s, c) => s + c.livePeers);
     return Material(
       color: widget.selected ? AppColors.surfaceRaised : Colors.transparent,
@@ -236,7 +235,7 @@ class _SessionRates extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final collections = Collections.instance.collections;
+    final collections = AppControllers.collections.collections;
     final down = collections.fold<double>(0, (s, c) => s + c.downloadMbps);
     final up = collections.fold<double>(0, (s, c) => s + c.uploadMbps);
     final live = down > 0 || up > 0;

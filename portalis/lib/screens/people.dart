@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../models.dart';
-import '../services/collections.dart';
+import '../app/app_controllers.dart';
+import '../design/design.dart';
+import '../features/collections/domain/collection.dart';
 import '../theme.dart';
-import '../ui/ui.dart';
 
 /// Distinct collaborators across every collection, and where they appear.
 /// Derived — there is no peer directory in the backend.
@@ -31,14 +31,14 @@ class PeopleScreen extends StatelessWidget {
     // leave it showing whatever was true the first time it built, right up
     // until something else forced this position in the tree to rebuild.
     return ListenableBuilder(
-      listenable: Collections.instance,
+      listenable: AppControllers.collections,
       builder: (context, _) => _build(context),
     );
   }
 
   Widget _build(BuildContext context) {
     final byDevice = <String, ({Collaborator who, List<String> collections})>{};
-    for (final c in Collections.instance.collections) {
+    for (final c in AppControllers.collections.collections) {
       for (final p in c.collaborators) {
         final entry = byDevice[p.deviceId];
         if (entry == null) {

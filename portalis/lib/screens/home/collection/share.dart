@@ -5,10 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../app/app_controllers.dart';
+import '../../../design/design.dart';
 import '../../../media/formats.dart';
-import '../../../services/collections.dart';
 import '../../../theme.dart';
-import '../../../ui/ui.dart';
 
 typedef PickedFile = ({String name, Uint8List bytes});
 
@@ -135,7 +135,7 @@ class _ShareScreenState extends State<ShareScreen> {
       );
       // Creates a *shared* collection, not a bare torrent: what you share is
       // now invitable and can grow later.
-      await Collections.instance.createWithMedia(name, normalized);
+      await AppControllers.collections.createWithMedia(name, normalized);
       if (mounted) {
         FocusScope.of(context).unfocus();
         _close();

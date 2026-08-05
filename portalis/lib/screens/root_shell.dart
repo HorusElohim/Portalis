@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../services/collections.dart';
+import '../app/app_controllers.dart';
+import '../design/design.dart';
 import '../services/navigation.dart';
-import '../services/settings_service.dart';
 import '../theme.dart';
-import '../ui/ui.dart';
 import 'desktop_shell.dart';
 import 'home.dart';
 import 'people.dart';
@@ -32,8 +31,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     // One start() covers everything: collections created or joined in a
     // previous session load from disk and appear immediately, alongside any
     // plain torrents in the session.
-    Collections.instance.start();
-    SettingsService.instance.load();
+    AppControllers.collections.start();
+    AppControllers.settings.load();
+    AppControllers.identity.load();
   }
 
   @override
@@ -41,7 +41,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
     // Stop polling whenever the app isn't in front of the user. Seeding
     // continues in Rust regardless — there is just no reason to wake the Dart
     // isolate to redraw a list nobody is looking at.
-    Collections.instance.setPaused(state != AppLifecycleState.resumed);
+    AppControllers.collections.setPaused(state != AppLifecycleState.resumed);
   }
 
   void _onTabChanged() {
@@ -52,7 +52,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   void dispose() {
     AppNavigation.tab.removeListener(_onTabChanged);
     WidgetsBinding.instance.removeObserver(this);
-    Collections.instance.stop();
+    AppControllers.collections.stop();
     super.dispose();
   }
 
@@ -64,9 +64,9 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
           return const DesktopShell();
         }
         return ListenableBuilder(
-          listenable: Collections.instance,
+          listenable: AppControllers.collections,
           builder: (context, _) {
-            final rate = Collections.instance.liveRate;
+            final rate = AppControllers.collections.liveRate;
             return Scaffold(
               backgroundColor: AppColors.surfaceDeep,
               body: AmbientBackground(

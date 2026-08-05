@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../bridge_generated/collections.dart' as bridge;
-import '../../services/collections.dart';
+import '../../app/app_controllers.dart';
+import '../../design/design.dart';
+import '../../features/settings/domain/storage_entry.dart';
 import '../../theme.dart';
-import '../../ui/ui.dart';
 import '../home/collection/collection.dart';
 
 /// What's actually on disk under the download directory, joined against the
@@ -34,7 +34,7 @@ class StorageScreen extends StatefulWidget {
 }
 
 class _StorageScreenState extends State<StorageScreen> {
-  List<bridge.StorageEntry>? _entries;
+  List<StorageEntry>? _entries;
   String? _error;
   Timer? _poll;
 
@@ -56,7 +56,7 @@ class _StorageScreenState extends State<StorageScreen> {
 
   Future<void> _load() async {
     try {
-      final entries = await bridge.storageBreakdown();
+      final entries = await AppControllers.settings.storageBreakdown();
       if (!mounted) return;
       setState(() {
         _entries = entries;
@@ -69,7 +69,7 @@ class _StorageScreenState extends State<StorageScreen> {
   }
 
   int get _totalBytes =>
-      _entries?.fold<int>(0, (sum, e) => sum + e.bytes.toInt()) ?? 0;
+      _entries?.fold<int>(0, (sum, e) => sum + e.bytes) ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +89,7 @@ class _StorageScreenState extends State<StorageScreen> {
     );
   }
 
-  Widget _body(List<bridge.StorageEntry>? entries) {
+  Widget _body(List<StorageEntry>? entries) {
     if (_error != null) {
       return Center(
         child: Padding(
@@ -124,7 +124,7 @@ class _StorageScreenState extends State<StorageScreen> {
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, i) => _EntryRow(
           entry: entries[i],
-          fraction: total == 0 ? 0 : entries[i].bytes.toInt() / total,
+          fraction: total == 0 ? 0 : entries[i].bytes / total,
         ),
       ),
     );
@@ -134,14 +134,14 @@ class _StorageScreenState extends State<StorageScreen> {
 class _EntryRow extends StatelessWidget {
   const _EntryRow({required this.entry, required this.fraction});
 
-  final bridge.StorageEntry entry;
+  final StorageEntry entry;
   final double fraction;
 
   /// The collection this entry belongs to, if the app's own state still
   /// claims it — see `collections::storage_breakdown`'s doc for when it
   /// doesn't (almost always a deleted collection's leftovers).
   void _openCollection(BuildContext context) {
-    final collection = Collections.instance.byId(entry.collectionId!);
+    final collection = AppControllers.collections.byId(entry.collectionId!);
     if (collection == null) {
       showToast(context, 'Couldn\'t find that collection',
           severity: ToastSeverity.error);
@@ -189,7 +189,7 @@ class _EntryRow extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                formatBytes(entry.bytes.toInt()),
+                formatBytes(entry.bytes),
                 style: monoLabel(size: 11.5, color: AppColors.signalSoft),
               ),
             ],

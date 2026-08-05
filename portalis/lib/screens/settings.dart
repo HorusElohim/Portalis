@@ -1,18 +1,17 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../bridge_generated/collections.dart' as bridge;
-import '../bridge_generated/device.dart' as device_bridge;
-import '../services/collections.dart';
-import '../services/device_identity.dart';
+import '../app/app_controllers.dart';
+import '../design/design.dart';
+import '../features/identity/domain/device_profile.dart';
+import '../features/settings/domain/engine_settings.dart';
+import '../features/settings/domain/listen_port_range.dart';
+import '../features/settings/presentation/device_profile_section.dart';
+import '../features/settings/presentation/settings_sections.dart';
 import '../services/navigation.dart';
-import '../services/settings_service.dart';
 import '../theme.dart';
-import '../ui/ui.dart';
 import 'settings/formats.dart';
 import 'settings/storage.dart';
 
@@ -50,7 +49,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _settings = SettingsService.instance;
+  final _settings = AppControllers.settings;
   Timer? _storagePoll;
   bool _restartPending = false;
 
@@ -69,7 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String? _syncAddress;
 
-  device_bridge.DeviceIdentityInfo? get _identity => DeviceIdentity.instance.info;
+  DeviceProfile? get _identity => AppControllers.identity.info;
 
   @override
   void initState() {
@@ -80,7 +79,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const Duration(seconds: 2),
       (_) => _settings.refreshStorageUsage(),
     );
-    DeviceIdentity.instance.load();
+    AppControllers.identity.load();
     _loadSyncAddress();
   }
 
@@ -94,7 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Separate from identity: fetching the sync address is what starts the
     // listener, making this device reachable for as long as the app runs.
     try {
-      final addr = await Collections.instance.syncAddress();
+      final addr = await AppControllers.collections.syncAddress();
       if (mounted) setState(() => _syncAddress = addr);
     } catch (_) {
       // Backend unavailable — the row stays hidden rather than showing a
@@ -111,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (result == null || result.isEmpty || !mounted) return;
     try {
-      await DeviceIdentity.instance.rename(result);
+      await AppControllers.identity.rename(result);
     } catch (e) {
       if (mounted) showToast(context, 'Couldn\'t rename: $e');
     }
@@ -183,7 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
         return;
       }
-      await _apply(_copy(settings, downloadDir: path));
+      await _apply(settings.copyWith(downloadDir: path));
     } catch (e) {
       if (!mounted) return;
       showToast(context, 'Couldn\'t choose that folder: $e',
@@ -272,77 +271,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// Times `listCollections` across the Dart<->Rust bridge — the call the
-  /// UI polls every second (see `Collections._activeInterval`) and the one
-  /// `docs/future-engine.md` names as the app's actual performance cost:
-  /// every collection's full manifest, joined against the live session and
-  /// marshalled across FFI, on every tick.
-  static const _benchIterations = 10;
-
-  Future<void> _runBenchmark() async {
-    final samplesUs = <int>[];
-    int dtoCount = 0;
-    List<bridge.CollectionInfo> infos = const [];
-    try {
-      for (var i = 0; i < _benchIterations; i++) {
-        final sw = Stopwatch()..start();
-        infos = await bridge.listCollections();
-        sw.stop();
-        samplesUs.add(sw.elapsedMicroseconds);
-      }
-      dtoCount = infos.length +
-          infos.fold<int>(
-              0, (sum, c) => sum + c.media.length + c.collaborators.length);
-    } catch (e) {
-      if (!mounted) return;
-      showToast(context, 'Benchmark failed: $e', severity: ToastSeverity.error);
-      return;
-    }
-    if (!mounted) return;
-
-    final avgMs = samplesUs.reduce((a, b) => a + b) / samplesUs.length / 1000;
-    final minMs = samplesUs.reduce(math.min) / 1000;
-    final maxMs = samplesUs.reduce(math.max) / 1000;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('listCollections benchmark'),
-        content: SizedBox(
-          width: 300,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$_benchIterations calls, ${infos.length} collection'
-                '${infos.length == 1 ? '' : 's'} each.',
-                style: AppText.secondary(color: AppColors.textDim),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Average    ${avgMs.toStringAsFixed(2)} ms\n'
-                'Min        ${minMs.toStringAsFixed(2)} ms\n'
-                'Max        ${maxMs.toStringAsFixed(2)} ms\n'
-                'Calls/sec  ${(1000 / avgMs).toStringAsFixed(1)}\n'
-                'DTOs/call  $dtoCount',
-                style: monoLabel(
-                    size: 12.5, color: AppColors.text, letterSpacing: 0),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_showStorage) {
@@ -365,11 +293,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       forceShowBack: _advanced,
       onBack: _handleBack,
       // Wider than the shared reading cap once there's room: this is the one
-      // screen with something to do with it (see _SectionsLayout).
+      // screen with something to do with it (see SettingsSectionsLayout).
       wideMaxWidth: 1100,
       body: ListenableBuilder(
         listenable: Listenable.merge(
-          [_settings, Collections.instance, DeviceIdentity.instance],
+          [_settings, AppControllers.collections, AppControllers.identity],
         ),
         builder: (context, _) {
           final s = _settings.settings;
@@ -377,7 +305,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!_advanced) _ProfileSection(state: this),
+                if (!_advanced)
+                  DeviceProfileSection(
+                    profile: _identity,
+                    identityError: AppControllers.identity.lastError,
+                    collections: AppControllers.collections.collections,
+                    syncAddress: _syncAddress,
+                    onRename: _identity == null ? null : _rename,
+                    onOpenPeople: () => AppNavigation.tab.value = 1,
+                    onOpenFormats: _openFormats,
+                  ),
                 if (_settings.lastError != null)
                   InfoBanner(
                     color: const Color(0xFFEB5757),
@@ -401,7 +338,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   )
                 else
-                  _SectionsLayout(sections: _sections(s)),
+                  SettingsSectionsLayout(sections: _sections(s)),
                 const SizedBox(height: 24),
               ],
             ),
@@ -417,7 +354,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// What most people ever need: how fast, and whether to keep sharing.
   List<Widget> _basicSections(EngineSettings s) {
     return [
-      _HealthCard(settings: s),
+      SettingsHealthCard(settings: s, collections: AppControllers.collections),
       SettingsSection(
         label: 'SPEED · APPLIES IMMEDIATELY',
         children: [
@@ -434,8 +371,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s,
-                  uploadLimitBps: _parseInt(raw), clearUpload: raw.isEmpty));
+              await _apply(
+                s.copyWith(uploadLimitBps: raw.isEmpty ? null : _parseInt(raw)),
+              );
             },
           ),
           ValueRow(
@@ -451,9 +389,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s,
-                  downloadLimitBps: _parseInt(raw),
-                  clearDownload: raw.isEmpty));
+              await _apply(
+                s.copyWith(
+                  downloadLimitBps: raw.isEmpty ? null : _parseInt(raw),
+                ),
+              );
             },
           ),
         ],
@@ -467,7 +407,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'starts again. Off means the engine forgets them and silently '
                 'seeds nothing.',
             value: s.persistSession,
-            onChanged: (v) => _apply(_copy(s, persistSession: v)),
+            onChanged: (v) => _apply(s.copyWith(persistSession: v)),
           ),
         ],
       ),
@@ -496,7 +436,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: 'Use Portalis default folder',
               value: 'Reset',
               subtitle: 'Does not move torrents already added.',
-              onTap: () => _apply(_copy(s, clearDownloadDir: true)),
+              onTap: () => _apply(s.copyWith(downloadDir: null)),
             ),
           ValueRow(
             label: 'Storage used',
@@ -530,12 +470,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 helper: 'start-end',
               );
               if (raw == null || raw.isEmpty) return;
-              final parts = raw.split(RegExp(r'[-u2013s]+'));
-              final start = _parseInt(parts.first);
-              final end = parts.length > 1 ? _parseInt(parts[1]) : start;
-              if (start == null || end == null) return;
+              final range = parseListenPortRange(raw);
+              if (range == null) {
+                if (mounted) {
+                  showToast(
+                    context,
+                    'Enter ports from 1 to 65535, for example 6881-6999.',
+                    severity: ToastSeverity.error,
+                  );
+                }
+                return;
+              }
               await _apply(
-                  _copy(s, listenPortStart: start, listenPortEnd: end));
+                s.copyWith(
+                  listenPortStart: range.start,
+                  listenPortEnd: range.end,
+                ),
+              );
             },
           ),
           SwitchRow(
@@ -544,7 +495,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'if the router has UPnP off, or while a VPN owns the default '
                 'route.',
             value: s.enableUpnpPortForwarding,
-            onChanged: (v) => _apply(_copy(s, enableUpnpPortForwarding: v)),
+            onChanged: (v) => _apply(s.copyWith(enableUpnpPortForwarding: v)),
           ),
           ValueRow(
             label: 'SOCKS5 proxy',
@@ -559,7 +510,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
               if (raw == null) return;
               await _apply(
-                  _copy(s, socksProxyUrl: raw, clearProxy: raw.isEmpty));
+                s.copyWith(socksProxyUrl: raw.isEmpty ? null : raw),
+              );
             },
           ),
         ],
@@ -572,7 +524,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: 'Without the distributed hash table, peers are only '
                 'found via trackers or addresses shared directly.',
             value: s.disableDht,
-            onChanged: (v) => _apply(_copy(s, disableDht: v)),
+            onChanged: (v) => _apply(s.copyWith(disableDht: v)),
           ),
           SwitchRow(
             label: 'Disable DHT persistence',
@@ -580,7 +532,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'runs. That stored port is why two copies of Portalis can\'t '
                 'run at once.',
             value: s.disableDhtPersistence,
-            onChanged: (v) => _apply(_copy(s, disableDhtPersistence: v)),
+            onChanged: (v) => _apply(s.copyWith(disableDhtPersistence: v)),
           ),
           ValueRow(
             label: 'Extra trackers',
@@ -603,7 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   .map((t) => t.trim())
                   .where((t) => t.isNotEmpty)
                   .toList();
-              await _apply(_copy(s, trackers: trackers));
+              await _apply(s.copyWith(trackers: trackers));
             },
           ),
           ValueRow(
@@ -619,7 +571,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
               if (raw == null) return;
               await _apply(
-                  _copy(s, blocklistUrl: raw, clearBlocklist: raw.isEmpty));
+                s.copyWith(blocklistUrl: raw.isEmpty ? null : raw),
+              );
             },
           ),
         ],
@@ -632,7 +585,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: 'Trust the saved piece state instead of re-hashing every '
                 'file at launch.',
             value: s.fastresume,
-            onChanged: (v) => _apply(_copy(s, fastresume: v)),
+            onChanged: (v) => _apply(s.copyWith(fastresume: v)),
           ),
         ],
       ),
@@ -655,8 +608,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s,
-                  deferWritesUpToMb: _parseInt(raw), clearDefer: raw.isEmpty));
+              await _apply(
+                s.copyWith(
+                  deferWritesUpToMb: raw.isEmpty ? null : _parseInt(raw),
+                ),
+              );
             },
           ),
           ValueRow(
@@ -672,8 +628,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s,
-                  concurrentInitLimit: _parseInt(raw), clearInit: raw.isEmpty));
+              await _apply(
+                s.copyWith(
+                  concurrentInitLimit: raw.isEmpty ? null : _parseInt(raw),
+                ),
+              );
             },
           ),
         ],
@@ -693,9 +652,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s,
-                  peerConnectTimeoutSecs: _parseInt(raw),
-                  clearConnect: raw.isEmpty));
+              await _apply(
+                s.copyWith(
+                  peerConnectTimeoutSecs: raw.isEmpty ? null : _parseInt(raw),
+                ),
+              );
             },
           ),
           ValueRow(
@@ -710,9 +671,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s,
-                  peerReadWriteTimeoutSecs: _parseInt(raw),
-                  clearReadWrite: raw.isEmpty));
+              await _apply(
+                s.copyWith(
+                  peerReadWriteTimeoutSecs:
+                      raw.isEmpty ? null : _parseInt(raw),
+                ),
+              );
             },
           ),
           ValueRow(
@@ -727,9 +691,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 keyboard: TextInputType.number,
               );
               if (raw == null) return;
-              await _apply(_copy(s,
-                  peerKeepAliveIntervalSecs: _parseInt(raw),
-                  clearKeepAlive: raw.isEmpty));
+              await _apply(
+                s.copyWith(
+                  peerKeepAliveIntervalSecs:
+                      raw.isEmpty ? null : _parseInt(raw),
+                ),
+              );
             },
           ),
         ],
@@ -742,14 +709,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: () => _confirmReset(s),
         ),
       ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(kScreenGutter, 10, kScreenGutter, 0),
-        child: PillButton(
-          label: 'Run FFI benchmark',
-          dim: true,
-          onTap: _runBenchmark,
-        ),
-      ),
     ];
   }
 
@@ -760,406 +719,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return (v == null || v <= 0) ? null : v;
   }
 
-  /// FRB's generated DTO has no `copyWith`, and every field is final, so this
-  /// rebuilds it. The `clear*` flags exist because a null argument can't
-  /// distinguish "leave alone" from "unset" for the optional fields.
-  static EngineSettings _copy(
-    EngineSettings s, {
-    int? uploadLimitBps,
-    bool clearUpload = false,
-    int? downloadLimitBps,
-    bool clearDownload = false,
-    String? downloadDir,
-    bool clearDownloadDir = false,
-    int? listenPortStart,
-    int? listenPortEnd,
-    bool? enableUpnpPortForwarding,
-    String? socksProxyUrl,
-    bool clearProxy = false,
-    bool? disableDht,
-    bool? disableDhtPersistence,
-    bool? persistSession,
-    bool? fastresume,
-    int? deferWritesUpToMb,
-    bool clearDefer = false,
-    int? concurrentInitLimit,
-    bool clearInit = false,
-    int? peerConnectTimeoutSecs,
-    bool clearConnect = false,
-    int? peerReadWriteTimeoutSecs,
-    bool clearReadWrite = false,
-    int? peerKeepAliveIntervalSecs,
-    bool clearKeepAlive = false,
-    String? blocklistUrl,
-    bool clearBlocklist = false,
-    List<String>? trackers,
-  }) {
-    return EngineSettings(
-      uploadLimitBps: clearUpload ? null : (uploadLimitBps ?? s.uploadLimitBps),
-      downloadLimitBps:
-          clearDownload ? null : (downloadLimitBps ?? s.downloadLimitBps),
-      downloadDir:
-          clearDownloadDir ? null : (downloadDir ?? s.downloadDir),
-      listenPortStart: listenPortStart ?? s.listenPortStart,
-      listenPortEnd: listenPortEnd ?? s.listenPortEnd,
-      enableUpnpPortForwarding:
-          enableUpnpPortForwarding ?? s.enableUpnpPortForwarding,
-      socksProxyUrl: clearProxy ? null : (socksProxyUrl ?? s.socksProxyUrl),
-      disableDht: disableDht ?? s.disableDht,
-      disableDhtPersistence: disableDhtPersistence ?? s.disableDhtPersistence,
-      persistSession: persistSession ?? s.persistSession,
-      fastresume: fastresume ?? s.fastresume,
-      deferWritesUpToMb:
-          clearDefer ? null : (deferWritesUpToMb ?? s.deferWritesUpToMb),
-      concurrentInitLimit:
-          clearInit ? null : (concurrentInitLimit ?? s.concurrentInitLimit),
-      peerConnectTimeoutSecs: clearConnect
-          ? null
-          : (peerConnectTimeoutSecs ?? s.peerConnectTimeoutSecs),
-      peerReadWriteTimeoutSecs: clearReadWrite
-          ? null
-          : (peerReadWriteTimeoutSecs ?? s.peerReadWriteTimeoutSecs),
-      peerKeepAliveIntervalSecs: clearKeepAlive
-          ? null
-          : (peerKeepAliveIntervalSecs ?? s.peerKeepAliveIntervalSecs),
-      blocklistUrl: clearBlocklist ? null : (blocklistUrl ?? s.blocklistUrl),
-      trackers: trackers ?? s.trackers,
-    );
-  }
-}
-
-/// Lays the section cards out in two columns once the pane is wide enough to
-/// hold them without stretching a single row's label and value apart — see
-/// [PageBody]'s doc for why that was worth avoiding in the first place.
-/// Round-robin rather than a true masonry: the sections are already ordered
-/// by how likely they are to matter, and alternating keeps that order
-/// reading left-to-right, top-to-bottom rather than top-half/bottom-half.
-///
-/// Decides for itself from the space it's actually given, the same as
-/// [PageBody] — not from [SettingsScreen.embedded], which answers a
-/// different question (is there a sidebar to go back to) than this one
-/// (is there room for two columns).
-class _SectionsLayout extends StatelessWidget {
-  const _SectionsLayout({required this.sections});
-
-  final List<Widget> sections;
-
-  @override
-  Widget build(BuildContext context) {
-    return WindowBuilder(
-      builder: (context, window) {
-        if (!window.isSpacious) return Column(children: sections);
-        final left = <Widget>[];
-        final right = <Widget>[];
-        for (var i = 0; i < sections.length; i++) {
-          (i.isEven ? left : right).add(sections[i]);
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: Column(children: left)),
-            Expanded(child: Column(children: right)),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// A label/value row; tappable when [onTap] is given, read-only otherwise.
-
-/// A summary of what the engine is actually doing.
-///
-/// The design's version claimed "Everything is healthy · PORT OPEN · DHT ON ·
-/// 14 PEERS". Two of those three are knowable and one is not: nothing here
-/// verifies that the listen port is *reachable* from outside, only which port
-/// range was configured. So this states the configured port and the real DHT
-/// and peer figures, and never asserts overall health.
-class _HealthCard extends StatelessWidget {
-  const _HealthCard({required this.settings});
-
-  final EngineSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    final peers = Collections.instance.collections
-        .fold<int>(0, (sum, c) => sum + c.livePeers);
-    final dhtOn = !settings.disableDht;
-    final facts = [
-      'PORT ${settings.listenPortStart}–${settings.listenPortEnd}',
-      dhtOn ? 'DHT ON' : 'DHT OFF',
-      plural(peers, 'PEER').toUpperCase(),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(kScreenGutter, 14, kScreenGutter, 0),
-      child: SurfaceCard(
-        padding: const EdgeInsets.all(16),
-        // Mint only when something is genuinely connected; otherwise this is
-        // a neutral status panel, not a reassurance. Connected is a standing
-        // state rather than a transfer, so it stays calm at any speed.
-        glow: peers > 0 ? GlowLevel.calm : GlowLevel.none,
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    peers > 0 ? 'Connected' : 'Idle',
-                    style: AppText.cardTitle(),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    facts.join(' · '),
-                    style: monoLabel(
-                      size: 10.5,
-                      color: peers > 0
-                          ? AppColors.signalMuted
-                          : AppColors.textFaint,
-                      letterSpacing: 0.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              peers > 0 ? Icons.check_circle_outline : Icons.circle_outlined,
-              size: 20,
-              color: peers > 0 ? AppColors.signal : AppColors.textGhost,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// This device's identity and what it has moved this session — the leading
-/// block of the Basic view, folded in from the old You/`user_screen.dart`
-/// destination. The design's lifetime "SENT / RECEIVED" totals are not real:
-/// those counters are per-collection and reset with the session, so they're
-/// labelled as this session rather than implying a running total the backend
-/// never keeps.
-class _ProfileSection extends StatelessWidget {
-  const _ProfileSection({required this.state});
-
-  final _SettingsScreenState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final identity = state._identity;
-    final error = DeviceIdentity.instance.lastError;
-    // Read from the live listenable, not a value computed once above the
-    // builder: only the builder re-runs when the identity changes, so a name
-    // computed outside would still be the one from before a rename.
-    final nickname = identity?.nickname ?? '…';
-    final initials = identity != null && nickname.isNotEmpty
-        ? nickname[0].toUpperCase()
-        : '·';
-    final collections = Collections.instance.collections;
-    final sent = collections.fold<int>(0, (s, c) => s + c.uploadedBytes);
-    final received =
-        collections.fold<int>(0, (s, c) => s + c.downloadedBytes);
-    // One person can collaborate on several collections; count devices, not
-    // memberships.
-    final people = <String>{
-      for (final c in collections)
-        for (final p in c.collaborators) p.deviceId,
-    }.length;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 4, 0, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Column(
-              children: [
-                Avatar(initials: initials, size: 76, primary: true),
-                const SizedBox(height: 16),
-                CanvasTitle(nickname, size: 30),
-                const SizedBox(height: 6),
-                Text(
-                  identity == null
-                      ? (error == null ? 'LOADING…' : 'IDENTITY UNAVAILABLE')
-                      : 'THIS DEVICE · '
-                          '${identity.deviceId.substring(0, identity.deviceId.length.clamp(0, 8)).toUpperCase()}',
-                  style: monoLabel(size: 10.5, letterSpacing: 0.6),
-                ),
-                const SizedBox(height: 16),
-                PillButton(
-                  label: 'Change name',
-                  dim: true,
-                  onTap: identity == null ? null : state._rename,
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding:
-                const EdgeInsets.fromLTRB(kScreenGutter, 26, kScreenGutter, 0),
-            child: GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 2.0,
-              children: [
-                // "This session", not a lifetime total — the engine keeps no
-                // running counter across restarts.
-                _Stat(label: 'SENT · SESSION', value: formatBytes(sent)),
-                _Stat(
-                  label: 'RECEIVED · SESSION',
-                  value: formatBytes(received),
-                  highlight: received > 0,
-                ),
-                _Stat(label: 'COLLECTIONS', value: '${collections.length}'),
-                // People is still its own destination on both layouts — this
-                // card is a shortcut to it, on either platform: on desktop
-                // AppNavigation.tab still drives DesktopShell's pane
-                // selection, the same as it always has.
-                _Stat(
-                  label: 'PEOPLE',
-                  value: '$people',
-                  onTap: () => AppNavigation.tab.value = 1,
-                ),
-              ],
-            ),
-          ),
-          if (state._syncAddress != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  kScreenGutter, 22, kScreenGutter, 0),
-              child: SurfaceCard(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('YOUR ADDRESS', style: monoLabel(size: 10)),
-                    const SizedBox(height: 9),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            state._syncAddress!,
-                            style: monoLabel(
-                                size: 12.5,
-                                color: AppColors.text,
-                                letterSpacing: 0),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            Clipboard.setData(
-                                ClipboardData(text: state._syncAddress!));
-                            showToast(context, 'Address copied');
-                          },
-                          child: const Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Icon(Icons.copy,
-                                size: 15, color: AppColors.textDim),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 9),
-                    Text(
-                      'Rotates every launch. Collaborators reach this '
-                      'device here to exchange collection contents.',
-                      style: AppText.secondary(height: 1.45),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                kScreenGutter, 12, kScreenGutter, 0),
-            // No "Back up identity" action: nothing in device.rs can export
-            // the keypair yet, and a button that does nothing is worse than
-            // none.
-            child: DestinationRow(
-              icon: Icons.shield_outlined,
-              iconColor: AppColors.signal,
-              title: 'Identity lives on this device',
-              subtitle: 'A key pair, no account, no server. Lose the '
-                  'device and the identity goes with it.',
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                kScreenGutter, 12, kScreenGutter, 0),
-            child: DestinationRow(
-              icon: Icons.category_outlined,
-              title: 'File formats',
-              subtitle: 'What Portalis can view, and what it converts',
-              onTap: state._openFormats,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-    this.onTap,
-  });
-
-  final String label;
-  final String value;
-
-  /// Mint only when the figure represents data that actually moved.
-  final bool highlight;
-
-  /// Set when the figure has somewhere to go — PEOPLE opens the directory
-  /// the number counts. A chevron beside the label says so, since a card
-  /// that merely states a number gives no reason to try tapping it.
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SurfaceCard(
-      padding: const EdgeInsets.all(14),
-      onTap: onTap,
-      // Scaled to fit rather than fixed: the label is a long uppercase mono
-      // string and the value can be four characters wide, and the card has a
-      // fixed aspect ratio in the grid.
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, style: monoLabel(size: 9.5)),
-                if (onTap != null) ...[
-                  const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right,
-                      size: 13, color: AppColors.textGhost),
-                ],
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: displayText(
-                size: 24,
-                color: highlight ? AppColors.signal : AppColors.text,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

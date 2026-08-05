@@ -26,8 +26,12 @@ impl Vault {
     /// not an error. A file that exists but won't parse *is* an error: silently
     /// treating corruption as absence would overwrite it on the next save.
     pub(crate) fn read<T: DeserializeOwned>(&self) -> anyhow::Result<Option<T>> {
-        let Ok(bytes) = std::fs::read(&self.path) else {
-            return Ok(None);
+        let bytes = match std::fs::read(&self.path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(error).with_context(|| format!("reading {:?}", self.path));
+            }
         };
         serde_json::from_slice(&bytes)
             .map(Some)
@@ -48,14 +52,13 @@ impl Vault {
     }
 }
 
-// Unix mode bits only — Windows' permission model doesn't map onto
-// `PermissionsExt`, so there's no equivalent way to make a directory briefly
-// unwritable here. The whole module is gated rather than just the test so
-// `use super::*` doesn't sit unused on other platforms.
-#[cfg(all(test, unix))]
+// The failed-write assertion needs Unix mode bits. The unreadable-path
+// regression is portable and must keep running on Windows too.
+#[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn absent_reads_as_nothing_and_a_write_that_fails_keeps_the_last_one() {
         use std::os::unix::fs::PermissionsExt;
@@ -74,5 +77,14 @@ mod tests {
 
         assert!(refused.is_err());
         assert_eq!(vault.read::<u32>().unwrap(), Some(1));
+    }
+
+    #[test]
+    fn an_unreadable_state_path_is_not_mistaken_for_a_first_run() {
+        let temp = crate::paths::redirect_to_temp();
+        std::fs::create_dir(temp.path("not-a-json-file.json")).unwrap();
+        let vault = Vault::named("not-a-json-file.json");
+
+        assert!(vault.read::<u32>().is_err());
     }
 }

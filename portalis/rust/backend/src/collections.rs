@@ -183,14 +183,14 @@ pub async fn fetch_collection_media(collection_id: String) -> anyhow::Result<u32
 
 /// Re-attempts fetches the user has asked for that haven't landed yet.
 ///
-/// Driven by the convergence loop, since the thing that usually unblocks a
+/// Driven by the reconciliation loop, since the thing that usually unblocks a
 /// stalled fetch is a sync exchange telling us where the seeder's content
 /// lives. Internal, never bridged.
 pub(crate) async fn pursue_fetches() {
     native::pursue_fetches().await
 }
 
-/// Brings the engine up: the sync listener, the convergence loop, and the
+/// Brings the engine up: the sync listener, the reconciliation loop, and the
 /// BitTorrent session warming in the background.
 ///
 /// Explicit, because it used to happen as a side effect of the UI asking for
@@ -204,7 +204,7 @@ pub async fn start_engine() -> anyhow::Result<()> {
 /// Tells the engine whether anyone is looking, so it can stop reaching for
 /// the network when nobody is. Called from the app's lifecycle observer.
 pub async fn set_active(active: bool) {
-    crate::converge::set_active(active);
+    crate::reconciliation::set_reconciliation_active(active);
 }
 
 /// One full manifest sync with a peer, for a shared collection.
@@ -802,7 +802,7 @@ mod native {
             // prompt, and therefore the one that fails — which is exactly why
             // this must not be a single attempt fired by the join.
             crate::collab_sync::remember_sync_peers(&rendezvous_key_hex, peer_addrs);
-            crate::converge::now();
+            crate::reconciliation::request_reconciliation();
         }
         reload(&id.to_string()).await
     }
@@ -853,7 +853,7 @@ mod native {
             );
             Ok(())
         })?;
-        crate::converge::now();
+        crate::reconciliation::request_reconciliation();
         reload(&collection_id).await
     }
 
@@ -954,13 +954,13 @@ mod native {
         // A pass reconciles before it pursues, so a collection with no known
         // peer yet gets one found for it rather than needing its own lookup
         // here. Returns what is outstanding, which is what "Fetch N" meant.
-        crate::converge::now();
+        crate::reconciliation::request_reconciliation();
         fetch_pending(&collection_id).await
     }
 
     /// What the manifest lists that this device does not hold.
     ///
-    /// No peer lookup here any more: a convergence pass reconciles before it
+    /// No peer lookup here any more: a reconciliation pass reconciles before it
     /// pursues, so by the time this runs the addresses are as good as they are
     /// going to get. The inline sync this used to do was a second, differently
     /// paced copy of the loop's first half.

@@ -3,15 +3,18 @@ import 'dart:typed_data';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 
-import '../bridge_generated/device.dart' as bridge;
-import '../models.dart';
-import '../services/collections.dart';
+import '../app/app_controllers.dart';
+import '../design/design.dart';
+import '../features/collections/domain/collection.dart';
+import '../features/collections/presentation/components.dart';
 import '../theme.dart';
-import '../ui/ui.dart';
 import 'home/collection/collection.dart';
 import 'home/collection/join.dart';
 import 'home/collection/share.dart';
 import 'home/torrent/add.dart';
+
+export '../features/collections/presentation/home_sections.dart'
+    show LiveTransferCard;
 
 /// Home — the one place to find, filter, and add a collection.
 ///
@@ -134,7 +137,7 @@ class _HomeState extends State<Home> {
       final bytes = await files.single.readAsBytes();
       setState(() => _dropBusy = true);
       try {
-        await Collections.instance.addFromFileBytes(bytes);
+        await AppControllers.collections.addFromFileBytes(bytes);
         if (mounted) {
           showToast(context, 'Torrent added — joining swarm',
               severity: ToastSeverity.success);
@@ -159,13 +162,13 @@ class _HomeState extends State<Home> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Collections.instance,
+      listenable: AppControllers.collections,
       builder: (context, _) =>
           widget.embedded ? _buildDesktop(context) : _buildMobile(context),
     );
   }
 
-  List<Collection> get _shown => Collections.instance.collections
+  List<Collection> get _shown => AppControllers.collections.collections
       .where(_matchesQuery)
       .where(_matchesFilter)
       .toList(growable: false);
@@ -195,7 +198,7 @@ class _HomeState extends State<Home> {
           const SizedBox(width: 12),
           _shareButton(expand: false),
           const SizedBox(width: 8),
-          _AddTorrentButton(onTap: _openAddTorrent),
+          AddTorrentAction(onTap: _openAddTorrent),
         ],
       );
     }
@@ -208,7 +211,7 @@ class _HomeState extends State<Home> {
           children: [
             Expanded(child: _shareButton(expand: true)),
             const SizedBox(width: 8),
-            _AddTorrentButton(onTap: _openAddTorrent),
+            AddTorrentAction(onTap: _openAddTorrent),
           ],
         ),
       ],
@@ -221,7 +224,7 @@ class _HomeState extends State<Home> {
   /// from the same frame — they used to be two hand-built headers (one per
   /// platform) that had already drifted to different levels of detail.
   String _summary(List<Collection> all) {
-    if (Collections.instance.liveRate <= 0) {
+    if (AppControllers.collections.liveRate <= 0) {
       return plural(all.length, 'collection');
     }
     final down = all.fold<double>(0, (s, c) => s + c.downloadMbps);
@@ -231,8 +234,8 @@ class _HomeState extends State<Home> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    final all = Collections.instance.collections;
-    final error = Collections.instance.lastError;
+    final all = AppControllers.collections.collections;
+    final error = AppControllers.collections.lastError;
     final shown = _shown;
 
     final pane = AppScreen(
@@ -282,10 +285,15 @@ class _HomeState extends State<Home> {
 
   Widget _body(List<Collection> all, List<Collection> shown, String? error) {
     if (shown.isNotEmpty) {
-      return _CollectionList(
+      return CollectionsList(
         collections: shown,
         openId: widget.openId,
         onOpen: _openCollection,
+        detailFor: (collection) => CollectionDetail(
+          key: ValueKey(collection.id),
+          collection: collection,
+          showHeading: false,
+        ),
       );
     }
     if (error != null) {
@@ -310,14 +318,14 @@ class _HomeState extends State<Home> {
         ),
       );
     }
-    return const _EmptyWelcome();
+    return const EmptyCollectionsWelcome();
   }
 
   // ----------------------------------------------------------------- Mobile
 
   Widget _buildMobile(BuildContext context) {
-    final all = Collections.instance.collections;
-    final error = Collections.instance.lastError;
+    final all = AppControllers.collections.collections;
+    final error = AppControllers.collections.lastError;
     final moving = all
         .where((c) => c.downloadMbps > 0 || c.uploadMbps > 0)
         .toList()
@@ -334,7 +342,12 @@ class _HomeState extends State<Home> {
       return PageBody(
         child: CustomScrollView(
           slivers: [
-            const SliverToBoxAdapter(child: _Header()),
+            SliverToBoxAdapter(
+              child: HomeHeader(
+                identity: AppControllers.identity,
+                collections: AppControllers.collections,
+              ),
+            ),
             SliverFillRemaining(
               hasScrollBody: false,
               child: CollectionsErrorState(message: error),
@@ -347,8 +360,13 @@ class _HomeState extends State<Home> {
     return PageBody(
       child: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: _Header()),
-          if (!Collections.instance.engineReady)
+          SliverToBoxAdapter(
+            child: HomeHeader(
+              identity: AppControllers.identity,
+              collections: AppControllers.collections,
+            ),
+          ),
+          if (!AppControllers.collections.engineReady)
             const SliverToBoxAdapter(child: EngineStartingNotice()),
           if (hero != null)
             SliverToBoxAdapter(
@@ -430,312 +448,6 @@ class _HomeState extends State<Home> {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Header extends StatefulWidget {
-  const _Header();
-
-  @override
-  State<_Header> createState() => _HeaderState();
-}
-
-class _HeaderState extends State<_Header> {
-  String _initials = '·';
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final identity = await bridge.deviceIdentity();
-      if (mounted && identity.nickname.isNotEmpty) {
-        setState(() => _initials = identity.nickname[0].toUpperCase());
-      }
-    } catch (_) {
-      // Backend unavailable — keep the neutral placeholder rather than
-      // inventing a name.
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final peers = Collections.instance.collections
-        .fold<int>(0, (s, c) => s + c.livePeers);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
-      child: Row(
-        children: [
-          Avatar(initials: _initials, size: 34, primary: true),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Portalis', style: displayText(size: 16)),
-                if (peers > 0)
-                  Text(
-                    '$peers PEER${peers == 1 ? '' : 'S'} CONNECTED',
-                    style: monoLabel(size: 10, color: AppColors.signal),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddTorrentButton extends StatelessWidget {
-  const _AddTorrentButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Add a torrent',
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.control),
-        child: InkWell(
-          key: const Key('addTorrentButton'),
-          borderRadius: BorderRadius.circular(AppRadius.control),
-          onTap: onTap,
-          child: Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.control),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Icon(Icons.download_outlined,
-                size: 18, color: AppColors.ember),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The desktop list, once there is something in it.
-class _CollectionList extends StatelessWidget {
-  const _CollectionList({
-    required this.collections,
-    required this.openId,
-    required this.onOpen,
-  });
-
-  final List<Collection> collections;
-  final String? openId;
-  final ValueChanged<Collection> onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(kScreenGutter, 0, kScreenGutter, 28),
-      itemCount: collections.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) {
-        final c = collections[i];
-        final open = c.id == openId;
-        return CollectionRow(
-          collection: c,
-          selected: open,
-          onTap: () => onOpen(c),
-          // The card *is* the view. Keyed by id so opening another starts
-          // fresh rather than carrying the previous one's disclosure across.
-          detail: open
-              ? CollectionDetail(
-                  key: ValueKey(c.id),
-                  collection: c,
-                  showHeading: false,
-                )
-              : null,
-        );
-      },
-    );
-  }
-}
-
-/// The welcome, for when there is nothing to list yet — desktop's version;
-/// mobile shows the same [Welcome] widget inline in its scroll view instead.
-class _EmptyWelcome extends StatelessWidget {
-  const _EmptyWelcome();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Welcome(titleSize: 34),
-            const SizedBox(height: 26),
-            Text(
-              'NO ACCOUNT · NOTHING LEAVES THIS DEVICE UNASKED',
-              textAlign: TextAlign.center,
-              style: monoLabel(size: 10.5, color: AppColors.textGhost),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The hero card for whatever is moving right now — mobile only, see
-/// [Home.build]. Every figure on it comes from the engine.
-class LiveTransferCard extends StatelessWidget {
-  const LiveTransferCard({
-    super.key,
-    required this.collection,
-    required this.onTap,
-  });
-
-  final Collection collection;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final torrent = !collection.isShared;
-    final accent = torrent ? AppColors.ember : AppColors.signal;
-    // Direction is whichever side is actually carrying bytes.
-    final receiving = collection.downloadMbps >= collection.uploadMbps;
-    final rate = receiving ? collection.downloadMbps : collection.uploadMbps;
-
-    return SurfaceCard(
-      onTap: onTap,
-      radius: AppRadius.card,
-      padding: const EdgeInsets.all(18),
-      // The hero card carries the same energy as the row it stands for, wash
-      // and halo together — and brightens as the transfer speeds up.
-      glow: collection.glow,
-      glowColor: accent,
-      glowIntensity: collection.liveIntensity,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        LiveDot(color: accent, size: 7),
-                        const SizedBox(width: 7),
-                        Text(
-                          receiving ? 'RECEIVING' : 'SENDING',
-                          style: monoLabel(size: 10, color: accent),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      collection.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: displayText(size: 19),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    rate.toStringAsFixed(1),
-                    style: displayText(size: 20, color: accent),
-                  ),
-                  Text('MB/S',
-                      style: monoLabel(size: 10, color: AppColors.signalMuted)),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: LinearProgressIndicator(
-              value: collection.progress.clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: AppColors.borderStrong,
-              valueColor: AlwaysStoppedAnimation(accent),
-            ),
-          ),
-          const SizedBox(height: 11),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${_size(collection.downloadedBytes)} / '
-                  '${_size(collection.totalBytes)}'
-                  '${collection.etaLabel == null ? '' : ' · ${collection.etaLabel}'}',
-                  overflow: TextOverflow.ellipsis,
-                  style: monoLabel(
-                      size: 11, color: AppColors.textDim, letterSpacing: 0.2),
-                ),
-              ),
-              if (collection.collaborators.isNotEmpty) ...[
-                _AvatarStack(collaborators: collection.collaborators),
-                const SizedBox(width: 7),
-              ],
-              Text(
-                collection.peersLabel,
-                style: monoLabel(
-                    size: 11, color: AppColors.textDim, letterSpacing: 0.2),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _size(int bytes) {
-    const gb = 1000000000;
-    const mb = 1000000;
-    if (bytes >= gb) return '${(bytes / gb).toStringAsFixed(1)} GB';
-    return '${(bytes / mb).toStringAsFixed(0)} MB';
-  }
-}
-
-class _AvatarStack extends StatelessWidget {
-  const _AvatarStack({required this.collaborators});
-
-  final List<Collaborator> collaborators;
-
-  @override
-  Widget build(BuildContext context) {
-    final shown = collaborators.take(3).toList();
-    return SizedBox(
-      width: 16.0 + (shown.length - 1) * 11,
-      height: 16,
-      child: Stack(
-        children: [
-          for (var i = 0; i < shown.length; i++)
-            Positioned(
-              left: i * 11.0,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.surfaceDeep, width: 1.5),
-                ),
-                child: Avatar(initials: shown[i].initials, size: 16),
-              ),
-            ),
         ],
       ),
     );
