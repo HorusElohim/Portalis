@@ -40,6 +40,9 @@ pub struct EngineSettings {
     pub download_limit_bps: Option<u32>,
 
     // ---- Restart-required ----
+    /// Root folder used for newly added torrents. `None` keeps Portalis's
+    /// platform default (Downloads on desktop, Documents on mobile).
+    pub download_dir: Option<String>,
     /// Range to pick the incoming-peer TCP port from. librqbit takes the
     /// first free port in it; with no range it binds *no* listener at all
     /// and nobody can download from this device.
@@ -93,6 +96,7 @@ impl Default for EngineSettings {
         Self {
             upload_limit_bps: None,
             download_limit_bps: None,
+            download_dir: None,
             // The conventional BitTorrent range. Must be non-empty: see the
             // field doc and `torrent::session`.
             listen_port_start: 6881,
@@ -136,7 +140,7 @@ pub async fn set_engine_settings(settings: EngineSettings) -> anyhow::Result<boo
 }
 
 mod native {
-        use std::sync::Mutex;
+    use std::{path::Path, sync::Mutex};
 
     
     use crate::log::clog;
@@ -193,6 +197,22 @@ mod native {
             settings.listen_port_start != 0,
             "0 is not a usable listen port"
         );
+        if let Some(download_dir) = settings.download_dir.as_deref() {
+            let path = Path::new(download_dir);
+            anyhow::ensure!(
+                !download_dir.trim().is_empty(),
+                "the download folder cannot be empty"
+            );
+            anyhow::ensure!(path.is_absolute(), "the download folder must be an absolute path");
+            std::fs::create_dir_all(path)
+                .map_err(|e| anyhow::anyhow!("creating download folder {path:?}: {e}"))?;
+            anyhow::ensure!(
+                std::fs::metadata(path)
+                    .map_err(|e| anyhow::anyhow!("reading download folder {path:?}: {e}"))?
+                    .is_dir(),
+                "the download folder is not a directory"
+            );
+        }
 
         let old = load()?;
         save(&settings)?;
@@ -239,6 +259,10 @@ mod native {
                 EngineSettings { disable_dht: true, ..EngineSettings::default() },
                 EngineSettings { persist_session: false, ..EngineSettings::default() },
                 EngineSettings { fastresume: false, ..EngineSettings::default() },
+                EngineSettings {
+                    download_dir: Some("/downloads".into()),
+                    ..EngineSettings::default()
+                },
                 EngineSettings {
                     socks_proxy_url: Some("socks5://127.0.0.1:9050".into()),
                     ..EngineSettings::default()

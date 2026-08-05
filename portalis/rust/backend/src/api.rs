@@ -1089,6 +1089,7 @@ impl SseDecode for crate::settings::EngineSettings {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_uploadLimitBps = <Option<u32>>::sse_decode(deserializer);
         let mut var_downloadLimitBps = <Option<u32>>::sse_decode(deserializer);
+        let mut var_downloadDir = <Option<String>>::sse_decode(deserializer);
         let mut var_listenPortStart = <u16>::sse_decode(deserializer);
         let mut var_listenPortEnd = <u16>::sse_decode(deserializer);
         let mut var_enableUpnpPortForwarding = <bool>::sse_decode(deserializer);
@@ -1107,6 +1108,7 @@ impl SseDecode for crate::settings::EngineSettings {
         return crate::settings::EngineSettings {
             upload_limit_bps: var_uploadLimitBps,
             download_limit_bps: var_downloadLimitBps,
+            download_dir: var_downloadDir,
             listen_port_start: var_listenPortStart,
             listen_port_end: var_listenPortEnd,
             enable_upnp_port_forwarding: var_enableUpnpPortForwarding,
@@ -1608,6 +1610,7 @@ impl flutter_rust_bridge::IntoDart for crate::settings::EngineSettings {
         [
             self.upload_limit_bps.into_into_dart().into_dart(),
             self.download_limit_bps.into_into_dart().into_dart(),
+            self.download_dir.into_into_dart().into_dart(),
             self.listen_port_start.into_into_dart().into_dart(),
             self.listen_port_end.into_into_dart().into_dart(),
             self.enable_upnp_port_forwarding
@@ -1840,6 +1843,7 @@ impl SseEncode for crate::settings::EngineSettings {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<u32>>::sse_encode(self.upload_limit_bps, serializer);
         <Option<u32>>::sse_encode(self.download_limit_bps, serializer);
+        <Option<String>>::sse_encode(self.download_dir, serializer);
         <u16>::sse_encode(self.listen_port_start, serializer);
         <u16>::sse_encode(self.listen_port_end, serializer);
         <bool>::sse_encode(self.enable_upnp_port_forwarding, serializer);

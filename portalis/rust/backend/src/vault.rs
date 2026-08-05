@@ -48,7 +48,11 @@ impl Vault {
     }
 }
 
-#[cfg(test)]
+// Unix mode bits only — Windows' permission model doesn't map onto
+// `PermissionsExt`, so there's no equivalent way to make a directory briefly
+// unwritable here. The whole module is gated rather than just the test so
+// `use super::*` doesn't sit unused on other platforms.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 

@@ -204,13 +204,15 @@ mod native {
     async fn session() -> anyhow::Result<Arc<Session>> {
         SESSION
             .get_or_try_init(|| async {
-                let dir = output_dir();
+                // Read once so the configured output folder and all other
+                // session construction settings are from the same snapshot.
+                let settings = crate::settings::engine_settings().unwrap_or_default();
+                let dir = output_dir_for(&settings);
                 std::fs::create_dir_all(&dir)
                     .with_context(|| format!("creating output dir {dir:?}"))?;
                 // Every knob comes from the persisted settings now — see
                 // settings.rs. librqbit reads these once, here, which is why
                 // changing any of them needs a restart.
-                let settings = crate::settings::engine_settings().unwrap_or_default();
                 let peer_opts = librqbit::PeerConnectionOptions {
                     connect_timeout: settings
                         .peer_connect_timeout_secs
@@ -299,6 +301,20 @@ mod native {
     ///   `LSSupportsOpeningDocumentsInPlace` are set in Info.plist, which
     ///   they now are).
     pub(super) fn output_dir() -> PathBuf {
+        let settings = crate::settings::engine_settings().unwrap_or_default();
+        output_dir_for(&settings)
+    }
+
+    fn output_dir_for(settings: &crate::settings::EngineSettings) -> PathBuf {
+        if let Some(dir) = settings
+            .download_dir
+            .as_deref()
+            .map(str::trim)
+            .filter(|dir| !dir.is_empty())
+        {
+            return PathBuf::from(dir);
+        }
+
         #[cfg(any(target_os = "ios", target_os = "android"))]
         let base = dirs::document_dir().unwrap_or_else(std::env::temp_dir);
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -382,7 +398,12 @@ mod native {
     /// picked for this torrent (including the subfolder it auto-creates for
     /// multi-file torrents), which isn't reachable from `ManagedTorrent`'s
     /// own public API.
-    fn files_for(api: &Api, id: usize, stats: &librqbit::TorrentStats) -> Vec<TorrentFile> {
+    fn files_for(
+        api: &Api,
+        id: usize,
+        stats: &librqbit::TorrentStats,
+        initializing: bool,
+    ) -> Vec<TorrentFile> {
         let Ok(details) = api.api_torrent_details(TorrentIdOrHash::Id(id)) else {
             return Vec::new();
         };
@@ -397,13 +418,35 @@ mod native {
                 absolute_path: output_folder.join(&f.name).to_string_lossy().into_owned(),
                 name: f.name,
                 length_bytes: f.length,
-                downloaded_bytes: stats.file_progress.get(i).copied().unwrap_or(0),
+                // See `to_info`: file_progress isn't meaningful yet either
+                // while the startup integrity scan is still running.
+                downloaded_bytes: if initializing {
+                    0
+                } else {
+                    stats.file_progress.get(i).copied().unwrap_or(0)
+                },
             })
             .collect()
     }
 
     fn to_info(api: &Api, id: usize, handle: &Arc<librqbit::ManagedTorrent>) -> TorrentInfo {
         let stats = handle.stats();
+        let state = format!("{:?}", stats.state);
+        // While a resumed torrent is being verified at startup (state
+        // "Initializing", with or without fastresume), librqbit's
+        // `progress_bytes` is the scan's own read cursor — bytes *scanned*
+        // so far, matched or not — not bytes confirmed to actually match
+        // their hash (see librqbit's `TorrentStateLocked::stats`, the
+        // `Initializing` arm, backed by `checked_bytes` in
+        // `file_ops::initial_check`, which is incremented unconditionally
+        // per piece before the hash comparison). That climbs to the full
+        // size by the time the scan finishes regardless of how much of a
+        // partially-downloaded file actually matched, so a collection could
+        // flash "complete" for as long as the check takes. The real,
+        // have-bitmap-derived figure only exists once the state moves on to
+        // Paused/Live, so until then this reports nothing rather than a
+        // number that lies in the optimistic direction.
+        let initializing = state == "Initializing";
         let (download_mbps, upload_mbps, live_peers) = stats
             .live
             .as_ref()
@@ -415,14 +458,14 @@ mod native {
                 )
             })
             .unwrap_or((0.0, 0.0, 0));
-        let files = files_for(api, id, &stats);
+        let files = files_for(api, id, &stats, initializing);
 
         TorrentInfo {
             id,
             info_hash: handle.info_hash().as_string(),
             name: handle.name().unwrap_or_else(|| "(unnamed)".to_string()),
-            state: format!("{:?}", stats.state),
-            progress_bytes: stats.progress_bytes,
+            state,
+            progress_bytes: if initializing { 0 } else { stats.progress_bytes },
             total_bytes: stats.total_bytes,
             uploaded_bytes: stats.uploaded_bytes,
             download_mbps,
@@ -647,4 +690,3 @@ mod native {
         response_to_info(&api(session), response)
     }
 }
-
