@@ -45,7 +45,7 @@ function Maybe-Codegen {
   Write-Info "Regenerating flutter_rust_bridge bindings..."
   flutter_rust_bridge_codegen generate `
     --rust-root "rust/backend" `
-    --rust-input crate `
+    --rust-input "crate::bridge,crate::torrent,crate::device,crate::collections,crate::settings" `
     --dart-output "lib/bridge_generated" `
     --rust-output "rust/backend/src/api.rs"
   Write-Ok "Codegen complete."
