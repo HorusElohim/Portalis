@@ -16,7 +16,7 @@ export 'package:portalis/features/collections/domain/paste.dart';
 export 'package:portalis/features/collections/presentation/collection_detail.dart';
 export 'package:portalis/features/collections/presentation/collection_join.dart';
 export 'package:portalis/features/collections/presentation/collection_share.dart';
-export 'package:portalis/features/collections/presentation/torrent_add.dart';
+export 'package:portalis/features/collections/presentation/command_bar.dart';
 export 'package:portalis/features/media/domain/media_item.dart';
 export 'package:portalis/features/media/presentation/media_viewer_screen.dart';
 export 'package:portalis/features/settings/domain/engine_settings.dart';

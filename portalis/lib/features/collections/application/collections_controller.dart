@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/collections_repository.dart';
 import '../domain/collection.dart';
+import '../domain/transfer_history.dart';
 import '../platform/media_gallery_importer.dart';
 
 /// Owns collection application state: lifecycle, polling cadence, commands,
@@ -24,6 +25,7 @@ class CollectionsController extends ChangeNotifier {
   final MediaGalleryImporter _galleryImporter;
 
   List<Collection> _collections = const [];
+  final Map<String, TransferHistory> _transferHistories = {};
   List<Collection> get collections => List.unmodifiable(_collections);
   List<Collection> get shared =>
       _collections.where((collection) => collection.isShared).toList(growable: false);
@@ -69,8 +71,10 @@ class CollectionsController extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
+    var historyChanged = false;
     try {
       _collections = await _repository.list();
+      historyChanged = _recordTransferHistory(_collections);
       engineReady = await _repository.isEngineReady();
       lastError = null;
       unawaited(_galleryImporter.importReadyMedia(_collections));
@@ -78,7 +82,7 @@ class CollectionsController extends ChangeNotifier {
       lastError = '$error';
     }
     _retuneInterval();
-    if (_changed()) notifyListeners();
+    if (_changed() || historyChanged) notifyListeners();
   }
 
   double get liveRate => _collections.fold<double>(
@@ -93,6 +97,9 @@ class CollectionsController extends ChangeNotifier {
     }
     return null;
   }
+
+  TransferHistory? historyFor(String collectionId) =>
+      _transferHistories[collectionId];
 
   Future<Collection> create(String name) => _refreshAfter(
         () => _repository.create(name),
@@ -146,10 +153,43 @@ class CollectionsController extends ChangeNotifier {
   @visibleForTesting
   void debugSeed(List<Collection> collections, {String? error}) {
     stop();
+    _transferHistories.clear();
     _collections = List.of(collections);
     lastError = error;
     _lastSeen = null;
     notifyListeners();
+  }
+
+  bool _recordTransferHistory(List<Collection> collections) {
+    final now = DateTime.now();
+    var changed = false;
+    final ids = collections.map((collection) => collection.id).toSet();
+    _transferHistories.removeWhere((id, _) => !ids.contains(id));
+
+    for (final collection in collections) {
+      final history = _transferHistories[collection.id];
+      if (history?.completedAt != null) continue;
+      final hasTransferStarted = history != null ||
+          collection.downloadedBytes > 0 ||
+          collection.downloadMbps > 0 ||
+          collection.isComplete;
+      if (!hasTransferStarted) continue;
+
+      final active = history ?? TransferHistory(startedAt: now);
+      _transferHistories[collection.id] = active;
+      changed = active.record(
+        at: now,
+        downloadMbps: collection.downloadMbps,
+        uploadMbps: collection.uploadMbps,
+        progress: collection.progress,
+      ) ||
+          changed;
+      if (collection.isComplete && active.completedAt == null) {
+        active.completedAt = now;
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   Future<T> _refreshAfter<T>(Future<T> Function() operation) async {

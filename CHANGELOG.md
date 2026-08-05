@@ -11,6 +11,17 @@
 
 ### Changed
 
+- Made Stop non-destructive: it now halts transfer activity while retaining the
+  collection and torrent for later restart.
+- Exposed the complete collection command strip directly on every collection
+  card; desktop expansion now focuses on the detailed preview without repeating
+  those controls.
+- Reworked transfer previews around polling-backed download/upload history from
+  transfer start to current or completion, with date-time labels and a lighter
+  energy treatment.
+- Replaced the separate New share and Add torrent controls with one command
+  input; Enter on an empty input opens the add flow and `.torrent` selection is
+  restricted to torrent files.
 - Unified collection detail presentation across mobile and desktop, removed the
   redundant information toggle, and replaced the desktop sidebar with a top
   identity and event rail.

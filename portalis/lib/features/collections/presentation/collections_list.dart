@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../design/design.dart';
 import '../domain/collection.dart';
+import 'collection_commands.dart';
 import 'collection_views.dart';
 
 /// The wide-layout collection list. The caller supplies optional detail so
@@ -13,12 +14,14 @@ class CollectionsList extends StatelessWidget {
     required this.openId,
     required this.onOpen,
     required this.detailFor,
+    required this.onCommand,
   });
 
   final List<Collection> collections;
   final String? openId;
   final ValueChanged<Collection> onOpen;
   final Widget? Function(Collection collection) detailFor;
+  final ValueChanged<(Collection, CollectionCommand)> onCommand;
 
   @override
   Widget build(BuildContext context) => ListView.separated(
@@ -33,6 +36,7 @@ class CollectionsList extends StatelessWidget {
             selected: isOpen,
             onTap: () => onOpen(collection),
             detail: isOpen ? detailFor(collection) : null,
+            onCommand: (command) => onCommand((collection, command)),
           );
         },
       );

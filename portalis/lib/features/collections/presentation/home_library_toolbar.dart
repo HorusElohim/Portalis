@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../domain/collection_filter.dart';
-import 'add_collection_action.dart';
-import 'add_torrent_action.dart';
 import 'collection_filter_action.dart';
 import 'command_bar.dart';
 
@@ -19,7 +16,6 @@ class HomeLibraryToolbar extends StatelessWidget {
     required this.onFilterChanged,
     required this.onShare,
     required this.onJoin,
-    required this.onAddTorrent,
   });
 
   final bool wide;
@@ -29,30 +25,16 @@ class HomeLibraryToolbar extends StatelessWidget {
   final ValueChanged<CollectionFilter> onFilterChanged;
   final VoidCallback onShare;
   final ValueChanged<String> onJoin;
-  final VoidCallback onAddTorrent;
 
   @override
   Widget build(BuildContext context) {
-    final commandBar = PortalisCommandBar(onSearch: onSearch, onInvite: onJoin);
+    final commandBar = PortalisCommandBar(
+      onSearch: onSearch,
+      onInvite: onJoin,
+      onEmptySubmit: () => _showAddSheet(context),
+    );
     if (wide) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: commandBar),
-          const SizedBox(width: 12),
-          PrimaryActionButton(
-            key: const Key('shareSomethingButton'),
-            label: 'New share',
-            tone: ActionButtonTone.signal,
-            icon: Icons.add,
-            trailingChevron: false,
-            expand: false,
-            onTap: onShare,
-          ),
-          const SizedBox(width: 8),
-          AddTorrentAction(onTap: onAddTorrent),
-        ],
-      );
+      return commandBar;
     }
 
     return Row(
@@ -65,10 +47,6 @@ class HomeLibraryToolbar extends StatelessWidget {
             onChanged: onFilterChanged,
           ),
         ],
-        const SizedBox(width: 6),
-        AddCollectionAction(
-          onTap: () => _showAddSheet(context),
-        ),
       ],
     );
   }
@@ -98,16 +76,6 @@ class HomeLibraryToolbar extends StatelessWidget {
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   onJoin('');
-                },
-              ),
-              ListTile(
-                key: const Key('addTorrentAction'),
-                leading: const Icon(Icons.download_outlined),
-                title: const Text('Add torrent'),
-                subtitle: const Text('Paste a magnet link or choose a file'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onAddTorrent();
                 },
               ),
             ],

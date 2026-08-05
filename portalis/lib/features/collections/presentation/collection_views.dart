@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../theme.dart';
 import '../../media/presentation/media_thumbnail.dart';
 import '../domain/collection.dart';
+import 'collection_commands.dart';
 import 'collection_presentation.dart';
 import '../../../design/indicators.dart';
 import '../../../design/primitives.dart';
@@ -21,6 +22,7 @@ class CollectionRow extends StatelessWidget {
     required this.onTap,
     this.selected = false,
     this.detail,
+    this.onCommand,
   });
 
   final Collection collection;
@@ -31,6 +33,7 @@ class CollectionRow extends StatelessWidget {
   /// opening a collection means this card growing to hold it — not a second
   /// panel beside the list describing the same thing twice.
   final Widget? detail;
+  final ValueChanged<CollectionCommand>? onCommand;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +56,13 @@ class CollectionRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _row(),
+          if (onCommand != null) ...[
+            const SizedBox(height: 12),
+            CollectionCommandBar(
+              onCommand: onCommand!,
+              busy: false,
+            ),
+          ],
           if (detail != null) ...[
             const Divider(height: 26, color: AppColors.border),
             detail!,

@@ -24,9 +24,11 @@ class CollectionDetail extends StatefulWidget {
   const CollectionDetail({
     super.key,
     required this.collection,
+    this.showCommands = true,
   });
 
   final Collection collection;
+  final bool showCommands;
 
   @override
   State<CollectionDetail> createState() => _CollectionDetailState();
@@ -299,6 +301,8 @@ class _CollectionDetailState extends State<CollectionDetail> {
           collection: collection,
           busy: _busy,
           onCommand: _command,
+          history: AppControllers.collections.historyFor(collection.id),
+          showCommands: widget.showCommands,
           onInvite: _showInvite,
           onAddMedia: _addMedia,
           onSync: _sync,
@@ -321,9 +325,11 @@ class _CollectionDetailState extends State<CollectionDetail> {
             ),
           )
         else
-          CollectionContents(
-            collection: collection,
-            onOpenMedia: (media) => _openMedia(collection, media),
+          _ResizableMediaPreview(
+            child: CollectionContents(
+              collection: collection,
+              onOpenMedia: (media) => _openMedia(collection, media),
+            ),
           ),
       ],
     );
@@ -345,7 +351,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
           await AppControllers.collections.restart(id);
         case CollectionCommand.pause:
           await AppControllers.collections.pause(id);
-        case CollectionCommand.stop:
+        case CollectionCommand.forget:
           await AppControllers.collections.stopCollection(id);
         case CollectionCommand.delete:
         case CollectionCommand.deleteFiles:
@@ -353,5 +359,67 @@ class _CollectionDetailState extends State<CollectionDetail> {
       }
       _toast('${command.label} applied');
     }));
+  }
+}
+
+/// A fixed-height, drag-to-resize frame around the media grid.
+///
+/// The grid itself still sizes to its own content (`shrinkWrap: true` in
+/// [CollectionContents]) — a large collection could otherwise push the whole
+/// card, and the list, far down the page. Scrolling inside a height the
+/// person controls themselves is the same trade every other resizable panel
+/// makes.
+class _ResizableMediaPreview extends StatefulWidget {
+  const _ResizableMediaPreview({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ResizableMediaPreview> createState() => _ResizableMediaPreviewState();
+}
+
+class _ResizableMediaPreviewState extends State<_ResizableMediaPreview> {
+  static const double _minHeight = 160;
+  static const double _maxHeight = 640;
+  static const double _defaultHeight = 280;
+
+  double _height = _defaultHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: _height,
+          child: SingleChildScrollView(child: widget.child),
+        ),
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeUpDown,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (details) {
+              setState(() {
+                _height = (_height + details.delta.dy)
+                    .clamp(_minHeight, _maxHeight);
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderStrong,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -8,10 +9,11 @@ import '../design/design.dart';
 import '../features/collections/domain/collection.dart';
 import '../features/collections/domain/collection_filter.dart';
 import '../features/collections/presentation/collection_detail.dart';
+import '../features/collections/presentation/collection_commands.dart';
 import '../features/collections/presentation/collection_join.dart';
 import '../features/collections/presentation/collection_library.dart';
 import '../features/collections/presentation/collection_share.dart';
-import '../features/collections/presentation/torrent_add.dart';
+import '../features/collections/presentation/collection_removal.dart';
 
 /// App-shell adapter for the Collections library. Presentation lives in the
 /// feature; this screen only coordinates navigation and desktop file drops.
@@ -68,7 +70,51 @@ class _HomeState extends State<Home> {
     }
   }
 
-  void _openAddTorrent() => _push(const AddTorrentScreen());
+  void _handleCommand((Collection, CollectionCommand) action) {
+    final (collection, command) = action;
+    if (command == CollectionCommand.delete) {
+      unawaited(confirmAndRemoveCollection(
+        context,
+        collection,
+        setBusy: (_) {},
+      ));
+      return;
+    }
+    if (command == CollectionCommand.deleteFiles) {
+      unawaited(confirmAndDeleteCollectionFiles(
+        context,
+        collection,
+        setBusy: (_) {},
+      ));
+      return;
+    }
+
+    unawaited(_runCommand(collection, command));
+  }
+
+  Future<void> _runCommand(
+    Collection collection,
+    CollectionCommand command,
+  ) async {
+    try {
+      switch (command) {
+        case CollectionCommand.restart:
+          await AppControllers.collections.restart(collection.id);
+        case CollectionCommand.pause:
+          await AppControllers.collections.pause(collection.id);
+        case CollectionCommand.forget:
+          await AppControllers.collections.stopCollection(collection.id);
+        case CollectionCommand.delete:
+        case CollectionCommand.deleteFiles:
+          return;
+      }
+      if (mounted) showToast(context, '${command.label} applied');
+    } catch (error) {
+      if (mounted) {
+        showToast(context, '$error', severity: ToastSeverity.error);
+      }
+    }
+  }
 
   bool _matchesQuery(Collection collection) {
     if (_query.isEmpty) return true;
@@ -141,7 +187,7 @@ class _HomeState extends State<Home> {
           onFilterChanged: (filter) => setState(() => _filter = filter),
           onShare: () => _openShare(),
           onJoin: _openJoin,
-          onAddTorrent: _openAddTorrent,
+          onCommand: _handleCommand,
         );
         if (!widget.embedded) return library;
         return DropTarget(

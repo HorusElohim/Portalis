@@ -2,14 +2,15 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../app/app_controllers.dart';
 import '../../../theme.dart';
 import '../../../design/toast.dart';
 import '../domain/paste.dart';
 
-/// One field that takes whatever you paste.
+/// One field for magnets, invites, collection search, and the `.torrent`
+/// picker. The input kind decides what Enter does, so the home screen needs
+/// no separate creation buttons.
 ///
 /// Replaces the sidebar's magnet field, its Paste and Add buttons, its
 /// .torrent picker and its "Join with a key" action — five controls, three of
@@ -26,6 +27,7 @@ class PortalisCommandBar extends StatefulWidget {
     super.key,
     required this.onSearch,
     required this.onInvite,
+    this.onEmptySubmit,
     this.autofocus = false,
   });
 
@@ -37,6 +39,7 @@ class PortalisCommandBar extends StatefulWidget {
   /// from here — joining names you to strangers, so it keeps its confirmation
   /// step.
   final ValueChanged<String> onInvite;
+  final VoidCallback? onEmptySubmit;
 
   final bool autofocus;
 
@@ -72,11 +75,15 @@ class _CommandBarState extends State<PortalisCommandBar> {
     final text = _controller.text.trim();
     switch (PasteKind.of(text)) {
       case PasteKind.empty:
+        _focus.unfocus();
+        widget.onEmptySubmit?.call();
+        return;
       case PasteKind.search:
         return;
       case PasteKind.invite:
         _clear();
         widget.onInvite(text);
+        return;
       case PasteKind.magnet:
         setState(() {
           _busy = true;
@@ -108,8 +115,11 @@ class _CommandBarState extends State<PortalisCommandBar> {
   /// sidebar's text controls — it was the only capability there that the bar
   /// does not otherwise absorb.
   Future<void> _pickTorrentFile() async {
-    final result =
-        await FilePicker.pickFiles(withData: true, type: FileType.any);
+    final result = await FilePicker.pickFiles(
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: ['torrent'],
+    );
     final bytes = result?.files.single.bytes;
     if (bytes == null) return;
     setState(() {
@@ -126,15 +136,6 @@ class _CommandBarState extends State<PortalisCommandBar> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _pasteFromClipboard() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim();
-    if (text == null || text.isEmpty) return;
-    _controller.text = text;
-    _onChanged(text);
-    if (mounted) _focus.requestFocus();
   }
 
   @override
@@ -179,7 +180,7 @@ class _CommandBarState extends State<PortalisCommandBar> {
                     isDense: true,
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    hintText: 'Paste an invite key or magnet link, or search…',
+                    hintText: 'Magnet, invite, or search…  Press Enter',
                     hintStyle: monoLabel(size: 12.5, letterSpacing: 0),
                   ),
                   onChanged: _onChanged,
@@ -188,17 +189,14 @@ class _CommandBarState extends State<PortalisCommandBar> {
               ),
               // What the bar has decided the text is, so the dispatch is never
               // a surprise. Nothing to read when the field is empty.
-              if (kind != PasteKind.empty) ...[
-                const SizedBox(width: 10),
-                _Hint(kind: kind, busy: _busy, onSubmit: _submit),
-              ] else
-                _IconAction(
-                  icon: Icons.content_paste_outlined,
-                  tooltip: 'Paste',
-                  onTap: _pasteFromClipboard,
-                ),
-              // Always reachable, whatever is in the field: it is the one
-              // thing a paste cannot express.
+              const SizedBox(width: 10),
+              _Hint(
+                kind: kind,
+                busy: _busy,
+                onSubmit: _submit,
+                enabled: kind != PasteKind.search &&
+                    (kind != PasteKind.empty || widget.onEmptySubmit != null),
+              ),
               const SizedBox(width: 4),
               _IconAction(
                 key: const Key('commandBarTorrentFile'),
@@ -225,11 +223,17 @@ class _CommandBarState extends State<PortalisCommandBar> {
 
 /// The right-hand end of the bar: what will happen if you press enter.
 class _Hint extends StatelessWidget {
-  const _Hint({required this.kind, required this.busy, required this.onSubmit});
+  const _Hint({
+    required this.kind,
+    required this.busy,
+    required this.onSubmit,
+    required this.enabled,
+  });
 
   final PasteKind kind;
   final bool busy;
   final VoidCallback onSubmit;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -244,11 +248,10 @@ class _Hint extends StatelessWidget {
     final label = switch (kind) {
       PasteKind.magnet => 'ADD TORRENT',
       PasteKind.invite => 'JOIN',
-      // Filtering happens as you type; there is nothing to press.
       PasteKind.search => 'FILTERING',
-      PasteKind.empty => '',
+      PasteKind.empty => 'PRESS ENTER',
     };
-    final actionable = kind == PasteKind.magnet || kind == PasteKind.invite;
+    final actionable = enabled;
     if (!actionable) {
       return Text(label, style: monoLabel(size: 9.5, letterSpacing: 1));
     }

@@ -7,6 +7,7 @@ import '../theme.dart';
 import 'desktop_pane.dart';
 import 'desktop_top_bar.dart';
 import 'home.dart';
+import '../features/collections/presentation/collection_detail.dart';
 import '../features/collections/presentation/collection_join.dart';
 import '../features/collections/presentation/collection_share.dart';
 import 'people.dart';
@@ -107,10 +108,15 @@ class _DesktopShellState extends State<DesktopShell> {
     _select(DesktopPane.share);
   }
 
-  /// Clicking an open collection closes it again — the card is the view, so
-  /// there is nothing else for a second click to mean.
+  /// Toggles one complete collection preview inside its row.
   void _open(String id) {
-    setState(() => _openId = _openId == id ? null : id);
+    setState(() {
+      if (_openId != id) {
+        _openId = id;
+      } else {
+        _openId = null;
+      }
+    });
     _select(DesktopPane.home);
   }
 

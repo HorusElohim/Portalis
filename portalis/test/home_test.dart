@@ -152,19 +152,18 @@ group('how long is left', () {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets(
-        'offers one contextual add action and the command bar',
+    testWidgets('opens the add flow from an empty command submission',
         (tester) async {
       await pumpApp(tester);
 
-      expect(find.byKey(const Key('addCollectionButton')), findsOneWidget);
       expect(find.byKey(const Key('commandBarField')), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('addCollectionButton')));
+      await tester.tap(find.byKey(const Key('commandBarField')));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await pumpTransition(tester);
       expect(find.byKey(const Key('addShareAction')), findsOneWidget);
       expect(find.byKey(const Key('addJoinAction')), findsOneWidget);
-      expect(find.byKey(const Key('addTorrentAction')), findsOneWidget);
+      expect(find.byKey(const Key('addTorrentAction')), findsNothing);
       await tester.tap(find.byKey(const Key('addShareAction')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -306,4 +305,3 @@ group('how long is left', () {
     });
   });
 }
-

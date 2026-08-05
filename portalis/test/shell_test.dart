@@ -139,11 +139,11 @@ group('shell', () {
       // cannot express. The sidebar's own New share, Join, magnet field,
       // Paste, Add and .torrent picker are all gone â€” the command bar takes any
       // of them as a paste.
-      expect(find.text('New share'), findsOneWidget);
+      expect(find.text('New share'), findsNothing);
       expect(find.text('Join with a key'), findsNothing);
       expect(find.byKey(const Key('sidebarMagnetField')), findsNothing);
       expect(find.byKey(const Key('commandBarField')), findsOneWidget);
-      expect(find.byKey(const Key('addTorrentButton')), findsOneWidget);
+      expect(find.byKey(const Key('addTorrentButton')), findsNothing);
       // A .torrent is a file, so it is the one thing the bar cannot absorb
       // as a paste â€” it keeps an affordance, or desktop loses the capability.
       expect(find.byKey(const Key('commandBarTorrentFile')), findsOneWidget);
@@ -225,7 +225,8 @@ group('shell', () {
       // The distinction that makes it a Home button and not just a tab: one
       // tap lands you at the start, not one screen shallower.
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('addCollectionButton')));
+      await tester.tap(find.byKey(const Key('commandBarField')));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await pumpTransition(tester);
       await tester.tap(find.byKey(const Key('addShareAction')));
       await tester.pump();
@@ -246,4 +247,3 @@ group('shell', () {
     });
   });
 }
-

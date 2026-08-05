@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../design/design.dart';
 
 /// Lifecycle and destructive actions reserved for a collection command API.
-enum CollectionCommand { restart, pause, stop, delete, deleteFiles }
+enum CollectionCommand { restart, pause, forget, delete, deleteFiles }
 
 extension CollectionCommandPresentation on CollectionCommand {
   String get label => switch (this) {
         CollectionCommand.restart => 'Restart',
         CollectionCommand.pause => 'Pause',
-        CollectionCommand.stop => 'Stop',
+        CollectionCommand.forget => 'Forget',
         CollectionCommand.delete => 'Delete',
         CollectionCommand.deleteFiles => 'Delete files',
       };
@@ -17,7 +17,7 @@ extension CollectionCommandPresentation on CollectionCommand {
   IconData get icon => switch (this) {
         CollectionCommand.restart => Icons.restart_alt,
         CollectionCommand.pause => Icons.pause_outlined,
-        CollectionCommand.stop => Icons.stop_outlined,
+        CollectionCommand.forget => Icons.link_off,
         CollectionCommand.delete => Icons.delete_outline,
         CollectionCommand.deleteFiles => Icons.delete_sweep_outlined,
       };
@@ -25,7 +25,11 @@ extension CollectionCommandPresentation on CollectionCommand {
   String get tooltip => switch (this) {
         CollectionCommand.restart => 'Restart transfer',
         CollectionCommand.pause => 'Pause transfer',
-        CollectionCommand.stop => 'Stop transfer',
+        // Matches the backend's own term for this (`forget_torrent`): removes
+        // it from the active session — stops tracking and seeding it — but
+        // never touches the bytes already on disk. "Stop" read as a milder
+        // pause and hid that distinction.
+        CollectionCommand.forget => 'Forget this torrent, keeping its downloaded files',
         CollectionCommand.delete => 'Remove collection from this device',
         CollectionCommand.deleteFiles => 'Delete downloaded files',
       };

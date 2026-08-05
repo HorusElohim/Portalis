@@ -234,7 +234,7 @@ pub async fn restart_collection(collection_id: String) -> anyhow::Result<()> {
     native::restart_collection(collection_id).await
 }
 
-/// Stops a collection while retaining its downloaded files on disk.
+/// Stops transfer activity while retaining the collection and torrent.
 pub async fn stop_collection(collection_id: String) -> anyhow::Result<()> {
     native::stop_collection(collection_id).await
 }
@@ -1222,7 +1222,9 @@ mod native {
 
     pub(super) async fn stop_collection(collection_id: String) -> anyhow::Result<()> {
         for info_hash in exclusive_collection_hashes(&collection_id)? {
-            crate::torrent::forget_torrent(&info_hash).await?;
+            // Stop is non-destructive: forgetting the torrent removes it from
+            // the collection view and is reserved for explicit deletion.
+            crate::torrent::pause_torrent(&info_hash).await?;
         }
         Ok(())
     }

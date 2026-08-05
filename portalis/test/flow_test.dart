@@ -3,26 +3,35 @@ import 'test_support.dart';
 void main() {
   tearDown(resetTestState);
 
-group('flows still surface backend errors', () {
-    testWidgets('torrent screen validates input', (tester) async {
+  group('flows still surface backend errors', () {
+    testWidgets('command bar surfaces magnet backend errors', (tester) async {
       await tester.binding.setSurfaceSize(phoneSize);
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(const MaterialApp(home: AddTorrentScreen()));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PortalisCommandBar(
+              onSearch: (_) {},
+              onInvite: (_) {},
+            ),
+          ),
+        ),
+      );
       await tester.pump();
 
       await tester.enterText(
-        find.byKey(const Key('magnetField')),
+        find.byKey(const Key('commandBarField')),
         'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567',
       );
       await tester.pump();
-      expect(find.text('READY TO ADD'), findsOneWidget);
+      expect(find.text('ADD TORRENT'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('addMagnetButton')));
+      await tester.tap(find.byKey(const Key('commandBarSubmit')));
       await tester.pump();
       // RustLib isn't initialized, so the add is expected to fail â€” inline
       // error, screen stays open, no uncaught exception.
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byType(AddTorrentScreen), findsOneWidget);
+      expect(find.byKey(const Key('commandBarField')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -64,4 +73,3 @@ group('flows still surface backend errors', () {
     });
   });
 }
-

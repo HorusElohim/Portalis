@@ -6,7 +6,7 @@ import 'transfer_graph.dart';
 
 /// The primary transfer summary for a collection preview.
 ///
-/// It gives the percentage, byte totals, live speed graph, peers, and ETA one
+/// It gives the percentage, byte totals, transfer history, peers, and ETA one
 /// visual priority so the user does not have to scan several small labels.
 class TransferPanel extends StatelessWidget {
   const TransferPanel({
@@ -18,6 +18,9 @@ class TransferPanel extends StatelessWidget {
     this.uploadMbps = 0,
     this.livePeers = 0,
     this.etaLabel,
+    this.history = const [],
+    this.startedAt,
+    this.completedAt,
     this.color = AppColors.signal,
     this.pendingLabel,
   });
@@ -29,6 +32,9 @@ class TransferPanel extends StatelessWidget {
   final double uploadMbps;
   final int livePeers;
   final String? etaLabel;
+  final List<TransferPoint> history;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
   final Color color;
   final String? pendingLabel;
 
@@ -79,11 +85,15 @@ class TransferPanel extends StatelessWidget {
               ),
             ],
           ),
-          if (moving) ...[
+          if (hasTotal || moving || history.isNotEmpty) ...[
             const SizedBox(height: 14),
             TransferGraph(
+              progress: progress,
               downloadMbps: downloadMbps,
               uploadMbps: uploadMbps,
+              history: history,
+              startedAt: startedAt,
+              completedAt: completedAt,
               color: color,
             ),
           ],

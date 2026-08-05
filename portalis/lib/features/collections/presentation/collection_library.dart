@@ -7,6 +7,7 @@ import '../application/collections_controller.dart';
 import '../domain/collection.dart';
 import '../domain/collection_filter.dart';
 import 'collection_detail.dart';
+import 'collection_commands.dart';
 import 'collection_views.dart';
 import 'collections_list.dart';
 import 'empty_collections_call_to_action.dart';
@@ -34,7 +35,7 @@ class CollectionLibrary extends StatelessWidget {
     required this.onFilterChanged,
     required this.onShare,
     required this.onJoin,
-    required this.onAddTorrent,
+    required this.onCommand,
   });
 
   final bool wide;
@@ -52,7 +53,7 @@ class CollectionLibrary extends StatelessWidget {
   final ValueChanged<CollectionFilter> onFilterChanged;
   final VoidCallback onShare;
   final ValueChanged<String> onJoin;
-  final VoidCallback onAddTorrent;
+  final ValueChanged<(Collection, CollectionCommand)> onCommand;
 
   @override
   Widget build(BuildContext context) => wide ? _wide() : _compact();
@@ -66,7 +67,6 @@ class CollectionLibrary extends StatelessWidget {
         onFilterChanged: onFilterChanged,
         onShare: onShare,
         onJoin: onJoin,
-        onAddTorrent: onAddTorrent,
       );
 
   Widget _wide() => AppScreen(
@@ -112,9 +112,11 @@ class CollectionLibrary extends StatelessWidget {
         collections: shown,
         openId: openId,
         onOpen: onOpen,
+        onCommand: onCommand,
         detailFor: (collection) => CollectionDetail(
           key: ValueKey(collection.id),
           collection: collection,
+          showCommands: false,
         ),
       );
     }
@@ -180,6 +182,8 @@ class CollectionLibrary extends StatelessWidget {
                   itemBuilder: (context, index) => CollectionRow(
                     collection: shown[index],
                     onTap: () => onOpen(shown[index]),
+                    onCommand: (command) =>
+                        onCommand((shown[index], command)),
                   ),
                 ),
               ),

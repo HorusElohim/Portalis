@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../domain/collection.dart';
+import '../domain/transfer_history.dart';
 import 'collection_commands.dart';
 import 'collection_presentation.dart';
 
@@ -13,6 +14,8 @@ class CollectionOverview extends StatelessWidget {
     required this.collection,
     required this.busy,
     required this.onCommand,
+    this.history,
+    this.showCommands = true,
     required this.onInvite,
     required this.onAddMedia,
     required this.onSync,
@@ -22,6 +25,8 @@ class CollectionOverview extends StatelessWidget {
   final Collection collection;
   final bool busy;
   final ValueChanged<CollectionCommand> onCommand;
+  final TransferHistory? history;
+  final bool showCommands;
   final VoidCallback onInvite;
   final VoidCallback onAddMedia;
   final VoidCallback onSync;
@@ -30,6 +35,14 @@ class CollectionOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shown = collection.collaborators.take(6).toList();
+    final transferHistory = [
+      for (final sample in history?.samples ?? const <TransferSample>[])
+        TransferPoint(
+          at: sample.at,
+          downloadMbps: sample.downloadMbps,
+          uploadMbps: sample.uploadMbps,
+        ),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -59,7 +72,8 @@ class CollectionOverview extends StatelessWidget {
         ),
         if (collection.totalBytes > 0 ||
             collection.downloadMbps > 0 ||
-            collection.uploadMbps > 0) ...[
+            collection.uploadMbps > 0 ||
+            transferHistory.isNotEmpty) ...[
           const SizedBox(height: 10),
           TransferPanel(
             progress: collection.progress,
@@ -67,17 +81,22 @@ class CollectionOverview extends StatelessWidget {
             totalBytes: collection.totalBytes,
             downloadMbps: collection.downloadMbps,
             uploadMbps: collection.uploadMbps,
+            history: transferHistory,
+            startedAt: history?.startedAt,
+            completedAt: history?.completedAt,
             livePeers: collection.livePeers,
             etaLabel: collection.etaLabel,
             color: collection.hue,
           ),
         ],
-        const SizedBox(height: 14),
-        CollectionCommandBar(
-          busy: busy,
-          onCommand: onCommand,
-        ),
-        const SizedBox(height: 16),
+        if (showCommands) ...[
+          const SizedBox(height: 14),
+          CollectionCommandBar(
+            busy: busy,
+            onCommand: onCommand,
+          ),
+          const SizedBox(height: 16),
+        ],
         _CollectionIdentifiers(collection: collection),
         const SizedBox(height: 14),
         _Collaborators(

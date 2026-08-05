@@ -123,11 +123,13 @@ class _MediaGrid extends StatelessWidget {
   Widget build(BuildContext context) => GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
+        // One more column than before, at tighter spacing — smaller tiles
+        // that show more of a large collection at a glance.
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 8,
-          childAspectRatio: 1.02,
+          crossAxisCount: 4,
+          mainAxisSpacing: 7,
+          crossAxisSpacing: 6,
+          childAspectRatio: 0.92,
         ),
         itemCount: media.length,
         itemBuilder: (context, index) {
