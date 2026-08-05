@@ -903,26 +903,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   EngineSettings dco_decode_engine_settings(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 17)
-      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return EngineSettings(
       uploadLimitBps: dco_decode_opt_box_autoadd_u_32(arr[0]),
       downloadLimitBps: dco_decode_opt_box_autoadd_u_32(arr[1]),
-      listenPortStart: dco_decode_u_16(arr[2]),
-      listenPortEnd: dco_decode_u_16(arr[3]),
-      enableUpnpPortForwarding: dco_decode_bool(arr[4]),
-      socksProxyUrl: dco_decode_opt_String(arr[5]),
-      disableDht: dco_decode_bool(arr[6]),
-      disableDhtPersistence: dco_decode_bool(arr[7]),
-      persistSession: dco_decode_bool(arr[8]),
-      fastresume: dco_decode_bool(arr[9]),
-      deferWritesUpToMb: dco_decode_opt_box_autoadd_u_32(arr[10]),
-      concurrentInitLimit: dco_decode_opt_box_autoadd_u_32(arr[11]),
-      peerConnectTimeoutSecs: dco_decode_opt_box_autoadd_u_32(arr[12]),
-      peerReadWriteTimeoutSecs: dco_decode_opt_box_autoadd_u_32(arr[13]),
-      peerKeepAliveIntervalSecs: dco_decode_opt_box_autoadd_u_32(arr[14]),
-      blocklistUrl: dco_decode_opt_String(arr[15]),
-      trackers: dco_decode_list_String(arr[16]),
+      downloadDir: dco_decode_opt_String(arr[2]),
+      listenPortStart: dco_decode_u_16(arr[3]),
+      listenPortEnd: dco_decode_u_16(arr[4]),
+      enableUpnpPortForwarding: dco_decode_bool(arr[5]),
+      socksProxyUrl: dco_decode_opt_String(arr[6]),
+      disableDht: dco_decode_bool(arr[7]),
+      disableDhtPersistence: dco_decode_bool(arr[8]),
+      persistSession: dco_decode_bool(arr[9]),
+      fastresume: dco_decode_bool(arr[10]),
+      deferWritesUpToMb: dco_decode_opt_box_autoadd_u_32(arr[11]),
+      concurrentInitLimit: dco_decode_opt_box_autoadd_u_32(arr[12]),
+      peerConnectTimeoutSecs: dco_decode_opt_box_autoadd_u_32(arr[13]),
+      peerReadWriteTimeoutSecs: dco_decode_opt_box_autoadd_u_32(arr[14]),
+      peerKeepAliveIntervalSecs: dco_decode_opt_box_autoadd_u_32(arr[15]),
+      blocklistUrl: dco_decode_opt_String(arr[16]),
+      trackers: dco_decode_list_String(arr[17]),
     );
   }
 
@@ -1245,6 +1246,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_uploadLimitBps = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_downloadLimitBps = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_downloadDir = sse_decode_opt_String(deserializer);
     var var_listenPortStart = sse_decode_u_16(deserializer);
     var var_listenPortEnd = sse_decode_u_16(deserializer);
     var var_enableUpnpPortForwarding = sse_decode_bool(deserializer);
@@ -1266,6 +1268,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return EngineSettings(
         uploadLimitBps: var_uploadLimitBps,
         downloadLimitBps: var_downloadLimitBps,
+        downloadDir: var_downloadDir,
         listenPortStart: var_listenPortStart,
         listenPortEnd: var_listenPortEnd,
         enableUpnpPortForwarding: var_enableUpnpPortForwarding,
@@ -1660,6 +1663,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_u_32(self.uploadLimitBps, serializer);
     sse_encode_opt_box_autoadd_u_32(self.downloadLimitBps, serializer);
+    sse_encode_opt_String(self.downloadDir, serializer);
     sse_encode_u_16(self.listenPortStart, serializer);
     sse_encode_u_16(self.listenPortEnd, serializer);
     sse_encode_bool(self.enableUpnpPortForwarding, serializer);

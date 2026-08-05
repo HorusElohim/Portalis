@@ -35,6 +35,10 @@ class EngineSettings {
   /// Download cap in bytes/sec across all torrents. `None` = unlimited.
   final int? downloadLimitBps;
 
+  /// Root folder used for newly added torrents. `None` keeps Portalis's
+  /// platform default (Downloads on desktop, Documents on mobile).
+  final String? downloadDir;
+
   /// Range to pick the incoming-peer TCP port from. librqbit takes the
   /// first free port in it; with no range it binds *no* listener at all
   /// and nobody can download from this device.
@@ -91,6 +95,7 @@ class EngineSettings {
   const EngineSettings({
     this.uploadLimitBps,
     this.downloadLimitBps,
+    this.downloadDir,
     required this.listenPortStart,
     required this.listenPortEnd,
     required this.enableUpnpPortForwarding,
@@ -115,6 +120,7 @@ class EngineSettings {
   int get hashCode =>
       uploadLimitBps.hashCode ^
       downloadLimitBps.hashCode ^
+      downloadDir.hashCode ^
       listenPortStart.hashCode ^
       listenPortEnd.hashCode ^
       enableUpnpPortForwarding.hashCode ^
@@ -138,6 +144,7 @@ class EngineSettings {
           runtimeType == other.runtimeType &&
           uploadLimitBps == other.uploadLimitBps &&
           downloadLimitBps == other.downloadLimitBps &&
+          downloadDir == other.downloadDir &&
           listenPortStart == other.listenPortStart &&
           listenPortEnd == other.listenPortEnd &&
           enableUpnpPortForwarding == other.enableUpnpPortForwarding &&

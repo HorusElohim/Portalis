@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -163,6 +164,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (!mounted) return;
       showToast(context, 'Couldn\'t save: $e', severity: ToastSeverity.error);
+    }
+  }
+
+  Future<void> _pickDownloadFolder(EngineSettings settings) async {
+    try {
+      final folder = await FilePicker.getDirectoryPath();
+      if (folder == null) return;
+
+      final path = folder.trim();
+      // Some Android document providers report the filesystem root for a
+      // location the app cannot write to. Reject it here with a useful error
+      // rather than failing only when a torrent starts.
+      if (path.isEmpty || path == '/' || path == r'\') {
+        if (mounted) {
+          showToast(context, 'Choose a writable folder, not the device root.',
+              severity: ToastSeverity.error);
+        }
+        return;
+      }
+      await _apply(_copy(settings, downloadDir: path));
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, 'Couldn\'t choose that folder: $e',
+          severity: ToastSeverity.error);
     }
   }
 
@@ -456,8 +481,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       SettingsSection(
-        label: 'STORAGE',
+        label: 'STORAGE · DOWNLOAD FOLDER NEEDS RESTART',
         children: [
+          ValueRow(
+            label: 'Download folder',
+            value: s.downloadDir ?? 'Portalis default',
+            subtitle: s.downloadDir == null
+                ? 'Downloads/Portalis-TorrentDebug on desktop; Documents on mobile.'
+                : 'New torrents use this folder after restarting Portalis.',
+            onTap: () => _pickDownloadFolder(s),
+          ),
+          if (s.downloadDir != null)
+            ValueRow(
+              label: 'Use Portalis default folder',
+              value: 'Reset',
+              subtitle: 'Does not move torrents already added.',
+              onTap: () => _apply(_copy(s, clearDownloadDir: true)),
+            ),
           ValueRow(
             label: 'Storage used',
             value: formatBytes(_settings.storageUsedBytes),
@@ -729,6 +769,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool clearUpload = false,
     int? downloadLimitBps,
     bool clearDownload = false,
+    String? downloadDir,
+    bool clearDownloadDir = false,
     int? listenPortStart,
     int? listenPortEnd,
     bool? enableUpnpPortForwarding,
@@ -756,6 +798,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       uploadLimitBps: clearUpload ? null : (uploadLimitBps ?? s.uploadLimitBps),
       downloadLimitBps:
           clearDownload ? null : (downloadLimitBps ?? s.downloadLimitBps),
+      downloadDir:
+          clearDownloadDir ? null : (downloadDir ?? s.downloadDir),
       listenPortStart: listenPortStart ?? s.listenPortStart,
       listenPortEnd: listenPortEnd ?? s.listenPortEnd,
       enableUpnpPortForwarding:
