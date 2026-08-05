@@ -1,4 +1,5 @@
 import '../../../bridge_generated/collections.dart' as bridge;
+import '../../media/domain/media_item.dart';
 import '../domain/collection.dart';
 
 /// Converts generated Flutter-Rust Bridge DTOs into the frontend's stable,

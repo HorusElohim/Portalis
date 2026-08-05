@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:gal/gal.dart';
 
-import '../../../media/formats.dart';
+import '../../media/application/media_formats.dart';
+import '../../media/domain/media_item.dart';
 import '../domain/collection.dart';
 
 /// A platform-owned side effect after media becomes complete. The transfer

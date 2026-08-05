@@ -1,13 +1,13 @@
-// Part of the Portalis UI kit — see ui.dart.
+// Collection presentation shared by compact and wide layouts.
 
 import 'package:flutter/material.dart';
 
-import '../features/collections/domain/collection.dart';
-import '../features/collections/presentation/collection_presentation.dart';
-import '../theme.dart';
-import 'indicators.dart';
-import 'media.dart';
-import 'primitives.dart';
+import '../../../theme.dart';
+import '../../media/presentation/media_thumbnail.dart';
+import '../domain/collection.dart';
+import 'collection_presentation.dart';
+import '../../../design/indicators.dart';
+import '../../../design/primitives.dart';
 
 /// One collection as a list row — shared by Home and the desktop centre pane
 /// so a collection reads identically in both.

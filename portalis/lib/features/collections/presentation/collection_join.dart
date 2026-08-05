@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/app_controllers.dart';
 import '../../../design/design.dart';
-import '../../../features/collections/domain/paste.dart';
+import '../domain/paste.dart';
 import '../../../theme.dart';
 
 /// "Join a collection" — the invite-code half of the old combined Add

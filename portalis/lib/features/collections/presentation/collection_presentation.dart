@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme.dart';
-import '../../../ui/formatters.dart';
+import '../../../design/formatters.dart';
 import '../domain/collection.dart';
 
 /// Rendering facts derived from a collection. Keeping them outside the domain

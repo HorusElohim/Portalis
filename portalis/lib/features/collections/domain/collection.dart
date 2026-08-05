@@ -1,3 +1,5 @@
+import '../../media/domain/media_item.dart';
+
 /// Pure collection state used by the Flutter application.
 ///
 /// This model deliberately knows nothing about Flutter widgets, colours, text
@@ -5,37 +7,6 @@
 /// screens share; adapters map native DTOs into it and presentation extensions
 /// decide how to render it.
 enum CollectionKind { shared, torrent }
-
-class MediaItem {
-  const MediaItem({
-    required this.label,
-    required this.infoHash,
-    String? entryLabel,
-    this.localPath,
-    this.progress = 0.0,
-    this.sizeBytes = 0,
-    this.downloadedBytes = 0,
-    this.fetched = true,
-    this.addedBy,
-  }) : _entryLabel = entryLabel;
-
-  final String label;
-  final String? _entryLabel;
-  final String infoHash;
-  final String? localPath;
-  final double progress;
-  final int sizeBytes;
-  final int downloadedBytes;
-  final bool fetched;
-  final String? addedBy;
-
-  /// The signed name of the batch that introduced this file.
-  String get entryLabel => _entryLabel ?? label;
-
-  /// A path is intentionally present only after the backend has verified the
-  /// file is complete, so callers never try to open partial media.
-  bool get isReady => localPath != null && progress >= 1.0;
-}
 
 class Collaborator {
   const Collaborator({

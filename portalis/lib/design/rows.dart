@@ -1,4 +1,4 @@
-// Part of the Portalis UI kit — see ui.dart.
+// Cross-feature row design primitive.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

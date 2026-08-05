@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../design/design.dart';
 import '../../../theme.dart';
-import '../../../ui/collection_views.dart';
-import '../../../ui/welcome.dart';
 import '../application/collections_controller.dart';
 import '../domain/collection.dart';
 import 'collection_presentation.dart';
+import 'collection_views.dart';
+import 'welcome.dart';
 import '../../identity/application/identity_controller.dart';
 
 /// Identity and peer summary for the compact Home layout.

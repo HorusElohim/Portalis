@@ -4,14 +4,14 @@
 /// `features/collections/presentation/components.dart`, not here.
 library;
 
-export '../ui/ambient_background.dart';
-export '../ui/controls.dart';
-export '../ui/dialogs.dart';
-export '../ui/formatters.dart';
-export '../ui/identity.dart';
-export '../ui/indicators.dart';
-export '../ui/primitives.dart';
-export '../ui/rows.dart';
-export '../ui/screen.dart';
-export '../ui/toast.dart';
-export '../ui/window.dart';
+export 'ambient_background.dart';
+export 'controls.dart';
+export 'dialogs.dart';
+export 'formatters.dart';
+export 'identity.dart';
+export 'indicators.dart';
+export 'primitives.dart';
+export 'rows.dart';
+export 'screen.dart';
+export 'toast.dart';
+export 'window.dart';

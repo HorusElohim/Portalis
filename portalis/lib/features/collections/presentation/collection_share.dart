@@ -7,9 +7,10 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/app_controllers.dart';
 import '../../../design/design.dart';
-import '../../../media/formats.dart';
 import '../../../theme.dart';
+import '../../media/application/media_formats.dart';
 
+/// One locally selected file, ready to become a shared manifest entry.
 typedef PickedFile = ({String name, Uint8List bytes});
 
 /// The registry already names every type it knows, so this reads the label

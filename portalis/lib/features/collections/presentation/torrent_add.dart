@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../../app/app_controllers.dart';
 import '../../../design/design.dart';
-import '../../../features/collections/domain/paste.dart';
+import '../domain/paste.dart';
 import '../../../theme.dart';
 
 /// "Torrent" — the join-a-swarm half of the old combined Add screen,

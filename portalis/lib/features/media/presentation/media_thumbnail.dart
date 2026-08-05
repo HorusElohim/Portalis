@@ -1,12 +1,12 @@
-// Part of the Portalis UI kit — see ui.dart.
+// Collection media presentation shared by list, grid and viewer surfaces.
 
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../media/formats.dart';
-import '../features/collections/domain/collection.dart';
-import '../theme.dart';
+import '../../../theme.dart';
+import '../application/media_formats.dart';
+import '../domain/media_item.dart';
 
 /// Placeholder tile standing in for real thumbnails/covers/media — shown
 /// for anything not downloaded yet, and for any file type real thumbnails

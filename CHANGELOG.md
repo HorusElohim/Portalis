@@ -1,5 +1,25 @@
 # Changelog
 
+## Portalis 1.0.3 / backend 0.1.2 — 2026-08-05
+
+### Changed
+
+- Reorganized the Flutter frontend around explicit Collections and Media
+  feature boundaries, with route-level screens and reusable presentation
+  components colocated with their feature.
+- Made Media independently reusable: file metadata, format capabilities, HEIC
+  conversion, thumbnails, and the in-app viewer now live under
+  `features/media`.
+- Moved the remaining cross-feature visual primitives into `design/`; removed
+  the transitional `ui/` implementation layer.
+
+### Engineering
+
+- Kept collection transfer, collaboration, and persistence state in the
+  Collections feature while exposing `MediaPreview` as the extension point for
+  future in-app image, text, audio, document, and richer video previews.
+- Updated tests and imports to use feature-level public paths.
+
 ## Portalis 1.0.2 / backend 0.1.2 — 2026-08-05
 
 ### Fixed

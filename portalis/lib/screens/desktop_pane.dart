@@ -18,7 +18,8 @@
 /// Portalis is, and the ways to start something — which the sidebar already
 /// said outright with its own actions beside a list that is always visible,
 /// and which the list itself said the same way ([Welcome], from
-/// `ui/welcome.dart`) when there was nothing in it yet. Folding [home] and
+/// `features/collections/presentation/welcome.dart`) when there was nothing
+/// in it yet. Folding [home] and
 /// [collections] into one pane matches what `home.dart` now is on mobile too
 /// — one screen for "what do I have and how do I add something" rather than
 /// two.

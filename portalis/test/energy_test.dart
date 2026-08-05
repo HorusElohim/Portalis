@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/features/collections/domain/collection.dart';
 import 'package:portalis/features/collections/presentation/collection_presentation.dart';
+import 'package:portalis/features/media/domain/media_item.dart';
 import 'package:portalis/theme.dart';
 
 Collection _c({

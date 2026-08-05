@@ -1,10 +1,10 @@
-// Part of the Portalis UI kit — see ui.dart.
+// Empty-state presentation for the collections feature.
 
 import 'package:flutter/material.dart';
 
-import '../theme.dart';
-import 'indicators.dart';
-import 'primitives.dart';
+import '../../../theme.dart';
+import '../../../design/indicators.dart';
+import '../../../design/primitives.dart';
 
 /// The shared "what Portalis is" moment: the pulsing mark, the headline and
 /// the one line under it.

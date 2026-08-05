@@ -1,13 +1,13 @@
-// Part of the Portalis UI kit — see ui.dart.
+// Collection-entry presentation for magnets, invites and local torrents.
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../app/app_controllers.dart';
-import '../features/collections/domain/paste.dart';
-import '../theme.dart';
-import 'toast.dart';
+import '../../../app/app_controllers.dart';
+import '../../../theme.dart';
+import '../../../design/toast.dart';
+import '../domain/paste.dart';
 
 /// One field that takes whatever you paste.
 ///

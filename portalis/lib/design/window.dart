@@ -1,4 +1,4 @@
-// Part of the Portalis UI kit — see ui.dart.
+// Cross-feature window layout primitive.
 
 import 'package:flutter/material.dart';
 

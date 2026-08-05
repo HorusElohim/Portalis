@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_controllers.dart';
 import '../../../design/design.dart';
-import '../../../features/collections/domain/collection.dart';
+import '../domain/collection.dart';
 import '../../../theme.dart';
 
 /// Confirms, then removes a collection from this device.

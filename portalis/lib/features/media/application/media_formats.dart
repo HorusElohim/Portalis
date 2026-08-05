@@ -2,8 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../media_convert.dart';
-import '../theme.dart';
+import '../data/heic_converter.dart';
+import '../../../theme.dart';
 
 /// What the app can actually do with a file of a given type, in the app.
 ///

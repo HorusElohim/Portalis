@@ -8,10 +8,10 @@ import '../design/design.dart';
 import '../features/collections/domain/collection.dart';
 import '../features/collections/presentation/components.dart';
 import '../theme.dart';
-import 'home/collection/collection.dart';
-import 'home/collection/join.dart';
-import 'home/collection/share.dart';
-import 'home/torrent/add.dart';
+import '../features/collections/presentation/collection_detail.dart';
+import '../features/collections/presentation/collection_join.dart';
+import '../features/collections/presentation/collection_share.dart';
+import '../features/collections/presentation/torrent_add.dart';
 
 export '../features/collections/presentation/home_sections.dart'
     show LiveTransferCard;

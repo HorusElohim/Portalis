@@ -7,8 +7,8 @@ import '../theme.dart';
 import 'desktop_pane.dart';
 import 'desktop_sidebar.dart';
 import 'home.dart';
-import 'home/collection/join.dart';
-import 'home/collection/share.dart';
+import '../features/collections/presentation/collection_join.dart';
+import '../features/collections/presentation/collection_share.dart';
 import 'people.dart';
 import 'settings.dart';
 
