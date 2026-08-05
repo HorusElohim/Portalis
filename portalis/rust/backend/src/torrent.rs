@@ -186,6 +186,18 @@ pub(crate) async fn forget_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
     native::forget_torrent(info_hash_hex).await
 }
 
+pub(crate) async fn pause_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
+    native::pause_torrent(info_hash_hex).await
+}
+
+pub(crate) async fn restart_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
+    native::restart_torrent(info_hash_hex).await
+}
+
+pub(crate) async fn delete_torrent_files(info_hash_hex: &str) -> anyhow::Result<()> {
+    native::delete_torrent_files(info_hash_hex).await
+}
+
 mod native {
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -657,6 +669,9 @@ mod native {
         let session = session().await?;
         let id = TorrentIdOrHash::try_from(info_hash_hex)
             .map_err(|e| anyhow::anyhow!("{info_hash_hex} isn't a valid info hash: {e}"))?;
+        if session.get(id).is_none() {
+            return Ok(());
+        }
         // `false` = forget only. Downloaded files stay on disk: removing a
         // collection from the app shouldn't silently destroy the user's
         // media, which `delete(.., true)` would.
@@ -665,6 +680,42 @@ mod native {
             .await
             .context("forgetting torrent")?;
         Ok(())
+    }
+
+    pub(super) async fn pause_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
+        let session = session().await?;
+        let id = TorrentIdOrHash::try_from(info_hash_hex)
+            .map_err(|e| anyhow::anyhow!("{info_hash_hex} isn't a valid info hash: {e}"))?;
+        let Some(handle) = session.get(id) else {
+            return Ok(());
+        };
+        session.pause(&handle).await.context("pausing torrent")
+    }
+
+    pub(super) async fn restart_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
+        let session = session().await?;
+        let id = TorrentIdOrHash::try_from(info_hash_hex)
+            .map_err(|e| anyhow::anyhow!("{info_hash_hex} isn't a valid info hash: {e}"))?;
+        if let Some(handle) = session.get(id) {
+            return session.unpause(&handle).await.context("restarting torrent");
+        }
+
+        session
+            .add_torrent(AddTorrent::from_url(info_hash_hex), Some(add_opts()))
+            .await
+            .with_context(|| format!("re-adding torrent {info_hash_hex}"))?;
+        Ok(())
+    }
+
+    pub(super) async fn delete_torrent_files(info_hash_hex: &str) -> anyhow::Result<()> {
+        crate::log::clog!("torrent", "delete_torrent_files: info_hash={info_hash_hex}");
+        let session = session().await?;
+        let id = TorrentIdOrHash::try_from(info_hash_hex)
+            .map_err(|e| anyhow::anyhow!("{info_hash_hex} isn't a valid info hash: {e}"))?;
+        if session.get(id).is_none() {
+            return Ok(());
+        }
+        session.delete(id, true).await.context("deleting torrent files")
     }
 
     pub(super) async fn add_info_hash_with_peers(

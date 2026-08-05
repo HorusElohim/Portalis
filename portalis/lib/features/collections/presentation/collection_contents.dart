@@ -127,7 +127,7 @@ class _MediaGrid extends StatelessWidget {
           crossAxisCount: 3,
           mainAxisSpacing: 10,
           crossAxisSpacing: 8,
-          childAspectRatio: 0.76,
+          childAspectRatio: 1.02,
         ),
         itemCount: media.length,
         itemBuilder: (context, index) {

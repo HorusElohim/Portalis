@@ -224,6 +224,26 @@ pub async fn delete_collection(collection_id: String) -> anyhow::Result<()> {
     native::delete_collection(collection_id).await
 }
 
+/// Pauses every torrent currently belonging to a collection.
+pub async fn pause_collection(collection_id: String) -> anyhow::Result<()> {
+    native::pause_collection(collection_id).await
+}
+
+/// Resumes a paused collection, or re-adds its torrents when they were stopped.
+pub async fn restart_collection(collection_id: String) -> anyhow::Result<()> {
+    native::restart_collection(collection_id).await
+}
+
+/// Stops a collection while retaining its downloaded files on disk.
+pub async fn stop_collection(collection_id: String) -> anyhow::Result<()> {
+    native::stop_collection(collection_id).await
+}
+
+/// Deletes the downloaded files belonging to a collection and keeps its record.
+pub async fn delete_collection_files(collection_id: String) -> anyhow::Result<()> {
+    native::delete_collection_files(collection_id).await
+}
+
 /// This device's manifest-sync endpoints (LAN, plus public IP when
 /// discoverable), comma-separated. Starts the sync listener as a side
 /// effect, so calling it makes this device reachable.
@@ -1122,6 +1142,96 @@ mod native {
             return Ok(());
         }
         crate::substrate::current().release(&collection_id).await
+    }
+
+    fn collection_hashes(collection_id: &str) -> anyhow::Result<Vec<String>> {
+        if let Ok(id) = CollectionId::from_string(collection_id) {
+            return read_store(|collections| {
+                collections
+                    .iter()
+                    .find(|collection| collection.id == id)
+                    .map(|collection| {
+                        collection
+                            .manifest()
+                            .entries()
+                            .map(|entry| entry.info_hash.to_hex())
+                            .collect()
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("no such collection"))
+            });
+        }
+        Ok(vec![collection_id.to_string()])
+    }
+
+    /// Only return hashes this collection owns exclusively. A manifest entry
+    /// shared by two collections must keep serving the other collection when
+    /// one of them is stopped or has its local files removed.
+    fn exclusive_collection_hashes(collection_id: &str) -> anyhow::Result<Vec<String>> {
+        if let Ok(id) = CollectionId::from_string(collection_id) {
+            return read_store(|collections| {
+                let current = collections
+                    .iter()
+                    .find(|collection| collection.id == id)
+                    .ok_or_else(|| anyhow::anyhow!("no such collection"))?;
+                let own: HashSet<String> = current
+                    .manifest()
+                    .entries()
+                    .map(|entry| norm(&entry.info_hash.to_hex()))
+                    .collect();
+                let claimed_elsewhere: HashSet<String> = collections
+                    .iter()
+                    .filter(|collection| collection.id != id)
+                    .flat_map(|collection| collection.manifest().entries())
+                    .map(|entry| norm(&entry.info_hash.to_hex()))
+                    .collect();
+                Ok(own
+                    .difference(&claimed_elsewhere)
+                    .cloned()
+                    .collect())
+            });
+        }
+
+        let claimed_by_shared = read_store(|collections| {
+            Ok(collections.iter().any(|collection| {
+                collection
+                    .manifest()
+                    .entries()
+                    .any(|entry| norm(&entry.info_hash.to_hex()) == norm(collection_id))
+            }))
+        })?;
+        if claimed_by_shared {
+            Ok(Vec::new())
+        } else {
+            Ok(vec![collection_id.to_string()])
+        }
+    }
+
+    pub(super) async fn pause_collection(collection_id: String) -> anyhow::Result<()> {
+        for info_hash in collection_hashes(&collection_id)? {
+            crate::torrent::pause_torrent(&info_hash).await?;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn restart_collection(collection_id: String) -> anyhow::Result<()> {
+        for info_hash in collection_hashes(&collection_id)? {
+            crate::torrent::restart_torrent(&info_hash).await?;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn stop_collection(collection_id: String) -> anyhow::Result<()> {
+        for info_hash in exclusive_collection_hashes(&collection_id)? {
+            crate::torrent::forget_torrent(&info_hash).await?;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn delete_collection_files(collection_id: String) -> anyhow::Result<()> {
+        for info_hash in exclusive_collection_hashes(&collection_id)? {
+            crate::torrent::delete_torrent_files(&info_hash).await?;
+        }
+        Ok(())
     }
 
     pub(super) async fn sync_address() -> anyhow::Result<String> {

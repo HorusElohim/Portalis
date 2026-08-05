@@ -2,6 +2,7 @@
 library;
 
 export 'collection_contents.dart';
+export 'collection_commands.dart';
 export 'collection_overview.dart';
 export 'collection_library.dart';
 export 'collection_views.dart';

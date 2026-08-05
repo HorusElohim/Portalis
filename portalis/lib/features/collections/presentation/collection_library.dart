@@ -115,7 +115,6 @@ class CollectionLibrary extends StatelessWidget {
         detailFor: (collection) => CollectionDetail(
           key: ValueKey(collection.id),
           collection: collection,
-          showHeading: false,
         ),
       );
     }

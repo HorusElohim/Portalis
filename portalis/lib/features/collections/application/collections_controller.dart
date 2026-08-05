@@ -38,12 +38,17 @@ class CollectionsController extends ChangeNotifier {
 
   static const _activeInterval = Duration(milliseconds: 500);
   static const _idleInterval = Duration(seconds: 5);
+  // Backgrounded still polls, just slowly and at a fixed rate — enough to
+  // keep a transfer's numbers honest for whoever glances at a still-visible
+  // window or comes back to it, without redrawing at foreground speed for a
+  // window nobody is actively looking at.
+  static const _backgroundInterval = Duration(seconds: 1);
 
   void start() {
     if (_timer != null) return;
     unawaited(Future.microtask(_repository.startEngine).catchError((_) {}));
     unawaited(refresh());
-    _schedule(_interval);
+    _schedule(_paused ? _backgroundInterval : _interval);
   }
 
   void setPaused(bool paused) {
@@ -52,12 +57,7 @@ class CollectionsController extends ChangeNotifier {
     unawaited(
       Future.microtask(() => _repository.setActive(!paused)).catchError((_) {}),
     );
-    if (paused) {
-      _timer?.cancel();
-      _timer = null;
-      return;
-    }
-    start();
+    _schedule(paused ? _backgroundInterval : _activeInterval);
     unawaited(refresh());
   }
 
@@ -119,6 +119,18 @@ class CollectionsController extends ChangeNotifier {
 
   Future<void> delete(String collectionId) =>
       _refreshAfter(() => _repository.delete(collectionId));
+
+  Future<void> pause(String collectionId) =>
+      _refreshAfter(() => _repository.pause(collectionId));
+
+  Future<void> restart(String collectionId) =>
+      _refreshAfter(() => _repository.restart(collectionId));
+
+  Future<void> stopCollection(String collectionId) =>
+      _refreshAfter(() => _repository.stop(collectionId));
+
+  Future<void> deleteFiles(String collectionId) =>
+      _refreshAfter(() => _repository.deleteFiles(collectionId));
 
   Future<String> syncAddress() => _repository.syncAddress();
 

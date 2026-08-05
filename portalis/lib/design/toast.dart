@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'identity.dart';
 
 /// How much the message matters, which is the only thing that decides its
 /// colour.
@@ -140,8 +141,9 @@ class ToastScopeState extends State<ToastScope> {
           Positioned(
             left: 0,
             right: 0,
-            // Clear of the bottom nav, which the old docked SnackBar sat under.
-            bottom: media.padding.bottom + 88,
+            // The event rail belongs to the top of the experience, clear of
+            // the system inset and the desktop/mobile navigation chrome.
+            top: media.padding.top + 12,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -278,6 +280,8 @@ class _BalloonState extends State<_Balloon> with TickerProviderStateMixin {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  PortalisLogo(size: 20, energized: true),
+                  const SizedBox(width: 8),
                   Icon(severity.icon, size: 16, color: color),
                   const SizedBox(width: 10),
                   Flexible(

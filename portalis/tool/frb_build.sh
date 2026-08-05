@@ -28,7 +28,8 @@ function maybe_codegen() {
     --rust-root "$CRATE" \
     --rust-input crate::bridge,crate::torrent,crate::device,crate::collections,crate::settings \
     --dart-output "lib/bridge_generated" \
-    --rust-output "$CRATE/src/api.rs"
+    --rust-output "$CRATE/src/api.rs" \
+    --no-add-mod-to-lib
 }
 
 function build_macos() {

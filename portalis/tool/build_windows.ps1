@@ -47,7 +47,8 @@ function Maybe-Codegen {
     --rust-root "rust/backend" `
     --rust-input "crate::bridge,crate::torrent,crate::device,crate::collections,crate::settings" `
     --dart-output "lib/bridge_generated" `
-    --rust-output "rust/backend/src/api.rs"
+    --rust-output "rust/backend/src/api.rs" `
+    --no-add-mod-to-lib
   Write-Ok "Codegen complete."
 }
 

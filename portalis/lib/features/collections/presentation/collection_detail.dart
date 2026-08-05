@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +13,7 @@ import '../../media/domain/media_item.dart';
 import '../../media/presentation/media_viewer_screen.dart';
 import '../domain/collection.dart';
 import 'collection_contents.dart';
+import 'collection_commands.dart';
 import 'collection_overview.dart';
 import '../../../theme.dart';
 import 'collection_removal.dart';
@@ -21,14 +24,9 @@ class CollectionDetail extends StatefulWidget {
   const CollectionDetail({
     super.key,
     required this.collection,
-    this.showHeading = true,
   });
 
   final Collection collection;
-
-  /// False where the name and item count are already visible in the desktop
-  /// list row above this detail.
-  final bool showHeading;
 
   @override
   State<CollectionDetail> createState() => _CollectionDetailState();
@@ -65,7 +63,6 @@ class CollectionScreen extends StatelessWidget {
 
 class _CollectionDetailState extends State<CollectionDetail> {
   bool _busy = false;
-  bool _showDetails = false;
 
   Collection get _collection =>
       AppControllers.collections.byId(widget.collection.id) ?? widget.collection;
@@ -270,6 +267,14 @@ class _CollectionDetailState extends State<CollectionDetail> {
         },
       );
 
+  Future<void> _deleteFiles() => confirmAndDeleteCollectionFiles(
+        context,
+        _collection,
+        setBusy: (busy) {
+          if (mounted) setState(() => _busy = busy);
+        },
+      );
+
   void _openMedia(Collection collection, MediaItem media) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -292,11 +297,8 @@ class _CollectionDetailState extends State<CollectionDetail> {
       children: [
         CollectionOverview(
           collection: collection,
-          showHeading: widget.showHeading,
-          showDetails: _showDetails,
           busy: _busy,
-          onToggleDetails: () => setState(() => _showDetails = !_showDetails),
-          onDelete: _delete,
+          onCommand: _command,
           onInvite: _showInvite,
           onAddMedia: _addMedia,
           onSync: _sync,
@@ -325,5 +327,31 @@ class _CollectionDetailState extends State<CollectionDetail> {
           ),
       ],
     );
+  }
+
+  void _command(CollectionCommand command) {
+    if (command == CollectionCommand.delete) {
+      unawaited(_delete());
+      return;
+    }
+    if (command == CollectionCommand.deleteFiles) {
+      unawaited(_deleteFiles());
+      return;
+    }
+    unawaited(_run(() async {
+      final id = _collection.id;
+      switch (command) {
+        case CollectionCommand.restart:
+          await AppControllers.collections.restart(id);
+        case CollectionCommand.pause:
+          await AppControllers.collections.pause(id);
+        case CollectionCommand.stop:
+          await AppControllers.collections.stopCollection(id);
+        case CollectionCommand.delete:
+        case CollectionCommand.deleteFiles:
+          return;
+      }
+      _toast('${command.label} applied');
+    }));
   }
 }

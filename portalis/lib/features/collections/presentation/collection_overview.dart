@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../domain/collection.dart';
+import 'collection_commands.dart';
 import 'collection_presentation.dart';
 
 /// Live collection facts and actions, independent of navigation and commands.
@@ -10,11 +11,8 @@ class CollectionOverview extends StatelessWidget {
   const CollectionOverview({
     super.key,
     required this.collection,
-    required this.showHeading,
-    required this.showDetails,
     required this.busy,
-    required this.onToggleDetails,
-    required this.onDelete,
+    required this.onCommand,
     required this.onInvite,
     required this.onAddMedia,
     required this.onSync,
@@ -22,11 +20,8 @@ class CollectionOverview extends StatelessWidget {
   });
 
   final Collection collection;
-  final bool showHeading;
-  final bool showDetails;
   final bool busy;
-  final VoidCallback onToggleDetails;
-  final VoidCallback onDelete;
+  final ValueChanged<CollectionCommand> onCommand;
   final VoidCallback onInvite;
   final VoidCallback onAddMedia;
   final VoidCallback onSync;
@@ -40,33 +35,33 @@ class CollectionOverview extends StatelessWidget {
       children: [
         _CollectionControls(
           collection: collection,
-          showDetails: showDetails,
-          busy: busy,
-          onToggleDetails: onToggleDetails,
-          onDelete: onDelete,
         ),
-        if (showHeading) ...[
-          Text(collection.name, style: AppText.action()),
-          const SizedBox(height: 6),
-          Text(
-            collection.isShared
-                ? 'Shared collection · ${collection.subtitle}'
-                : 'Torrent · ${collection.subtitle}',
-            style:
-                monoLabel(size: 10.5, color: AppColors.textDim, letterSpacing: 0),
+        Text(
+          collection.name,
+          style: displayText(size: 23, weight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          collection.isShared
+              ? 'Shared collection - ${collection.subtitle}'
+              : 'Torrent - ${collection.subtitle}',
+          style: monoLabel(
+            size: 12,
+            color: AppColors.textDim,
+            letterSpacing: 0,
           ),
-          const SizedBox(height: 6),
-        ],
+        ),
+        const SizedBox(height: 6),
         CopiesIndicator(
           color: collection.hue,
           label: collection.copiesLabel,
-          fontSize: 12,
+          fontSize: 13,
         ),
         if (collection.totalBytes > 0 ||
             collection.downloadMbps > 0 ||
             collection.uploadMbps > 0) ...[
           const SizedBox(height: 10),
-          TransferFacts(
+          TransferPanel(
             progress: collection.progress,
             downloadedBytes: collection.downloadedBytes,
             totalBytes: collection.totalBytes,
@@ -77,14 +72,13 @@ class CollectionOverview extends StatelessWidget {
             color: collection.hue,
           ),
         ],
-        AnimatedSize(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: showDetails
-              ? _CollectionIdentifiers(collection: collection)
-              : const SizedBox(width: double.infinity),
+        const SizedBox(height: 14),
+        CollectionCommandBar(
+          busy: busy,
+          onCommand: onCommand,
         ),
+        const SizedBox(height: 16),
+        _CollectionIdentifiers(collection: collection),
         const SizedBox(height: 14),
         _Collaborators(
           collection: collection,
@@ -104,21 +98,10 @@ class CollectionOverview extends StatelessWidget {
     );
   }
 }
-
 class _CollectionControls extends StatelessWidget {
-  const _CollectionControls({
-    required this.collection,
-    required this.showDetails,
-    required this.busy,
-    required this.onToggleDetails,
-    required this.onDelete,
-  });
+  const _CollectionControls({required this.collection});
 
   final Collection collection;
-  final bool showDetails;
-  final bool busy;
-  final VoidCallback onToggleDetails;
-  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -131,20 +114,6 @@ class _CollectionControls extends StatelessWidget {
             style: monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
           ),
         const Spacer(),
-        IconButton(
-          tooltip: showDetails ? 'Hide details' : 'Details',
-          icon: Icon(
-            showDetails ? Icons.info_rounded : Icons.info_outline,
-            size: 18,
-            color: showDetails ? AppColors.signalSoft : AppColors.textDim,
-          ),
-          onPressed: onToggleDetails,
-        ),
-        IconButton(
-          tooltip: 'Remove from this device',
-          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.textDim),
-          onPressed: busy ? null : onDelete,
-        ),
       ],
     );
   }
@@ -182,7 +151,7 @@ class _CollectionActions extends StatelessWidget {
               ),
               onTap: busy ? null : onInvite,
             ),
-            PillButton(label: '＋ Add media', dim: true, onTap: busy ? null : onAddMedia),
+            PillButton(label: 'Add media', dim: true, onTap: busy ? null : onAddMedia),
             PillButton(label: 'Sync', dim: true, onTap: busy ? null : onSync),
           ],
           if (collection.pendingMedia > 0)
@@ -208,8 +177,8 @@ class _CollectionIdentifiers extends StatelessWidget {
             InfoRow(
               label: 'Type',
               value: collection.isShared
-                  ? 'Shared — invite-based, can grow'
-                  : 'Torrent — fixed contents',
+                  ? 'Shared collection - invite-based, can grow'
+                  : 'Torrent - fixed contents',
             ),
             InfoRow(
               label: 'State',
@@ -248,12 +217,12 @@ class _Collaborators extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel('PEERS · ${collection.livePeers}'),
+          SectionLabel('PEERS - ${collection.livePeers}'),
           const SizedBox(height: 7),
           Text(
             collection.livePeers == 0
                 ? 'No peers connected right now'
-                : '${collection.peersLabel} connected · not identified by name',
+                : '${collection.peersLabel} connected - not identified by name',
             style: monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
           ),
         ],
@@ -262,7 +231,7 @@ class _Collaborators extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionLabel('COLLABORATORS · ${collection.collaborators.length}'),
+        SectionLabel('COLLABORATORS - ${collection.collaborators.length}'),
         const SizedBox(height: 7),
         SizedBox(
           height: 27,

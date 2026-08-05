@@ -180,11 +180,8 @@ group('collection', () {
       ));
       await tester.pump();
 
-      expect(find.text('Collection id'), findsNothing);
-      await tester.tap(find.byTooltip('Details'));
-      await tester.pump(const Duration(milliseconds: 300));
-
       expect(find.text('Collection id'), findsOneWidget);
+      expect(find.byTooltip('Details'), findsNothing);
       expect(find.byType(CollectionScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -228,4 +225,3 @@ group('collection', () {
     });
   });
 }
-

@@ -59,3 +59,48 @@ Future<void> confirmAndRemoveCollection(
     setBusy(false);
   }
 }
+
+/// Deletes the local bytes while retaining the collection record, so a shared
+/// collection can fetch the same manifest entry again later.
+Future<void> confirmAndDeleteCollectionFiles(
+  BuildContext context,
+  Collection collection, {
+  required ValueChanged<bool> setBusy,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: AppColors.surface,
+      title: Text('Delete files from "${collection.name}"?'),
+      content: Text(
+        'The collection stays available, but downloaded files are permanently removed from this device.',
+        style: AppText.secondary(color: AppColors.textDim),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Delete files'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+
+  setBusy(true);
+  try {
+    await AppControllers.collections.deleteFiles(collection.id);
+    if (context.mounted) {
+      showToast(context, 'Downloaded files deleted', severity: ToastSeverity.success);
+    }
+  } catch (error) {
+    if (context.mounted) {
+      showToast(context, 'Couldn\'t delete files: $error', severity: ToastSeverity.error);
+    }
+  } finally {
+    if (context.mounted) setBusy(false);
+  }
+}

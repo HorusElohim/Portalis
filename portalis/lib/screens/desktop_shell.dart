@@ -5,7 +5,7 @@ import '../design/design.dart';
 import '../services/navigation.dart';
 import '../theme.dart';
 import 'desktop_pane.dart';
-import 'desktop_sidebar.dart';
+import 'desktop_top_bar.dart';
 import 'home.dart';
 import '../features/collections/presentation/collection_join.dart';
 import '../features/collections/presentation/collection_share.dart';
@@ -132,11 +132,12 @@ class _DesktopShellState extends State<DesktopShell> {
             // the one list — a panel beside it was a second, thinner
             // account of the same collection, and a button to get from
             // one to the other.
-            child: Row(
+            child: Column(
               children: [
-                DesktopSidebar(pane: _pane, onPane: _select),
+                DesktopTopBar(pane: _pane, onPane: _select),
                 Expanded(
                   child: SafeArea(
+                    top: false,
                     child: _pane == DesktopPane.home
                         ? Home(
                             embedded: true,

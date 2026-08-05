@@ -38,9 +38,11 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Stop polling whenever the app isn't in front of the user. Seeding
-    // continues in Rust regardless — there is just no reason to wake the Dart
-    // isolate to redraw a list nobody is looking at.
+    // Drop to a slow, fixed-rate background poll whenever the app isn't in
+    // front of the user, rather than stopping outright — a transfer that
+    // finishes while the window is unfocused should still be reflected next
+    // time someone looks, not frozen at whatever it read last. Seeding
+    // itself continues in Rust regardless either way.
     AppControllers.collections.setPaused(state != AppLifecycleState.resumed);
   }
 

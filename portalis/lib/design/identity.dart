@@ -3,6 +3,35 @@
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'indicators.dart';
+
+/// Portalis mark used in persistent chrome and transient event feedback.
+class PortalisLogo extends StatelessWidget {
+  const PortalisLogo({
+    super.key,
+    this.size = 32,
+    this.energized = false,
+  });
+
+  final double size;
+  final bool energized;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.28),
+      child: Image.asset(
+        'assets/PortalisNature.png',
+        width: size,
+        height: size,
+        cacheWidth: (size * 3).round(),
+        cacheHeight: (size * 3).round(),
+        filterQuality: FilterQuality.medium,
+      ),
+    );
+    return energized ? PulseRings(size: size * 1.65, child: image) : image;
+  }
+}
 
 /// Initials avatar. [primary] gives the mint-gradient treatment the design
 /// reserves for *this device's* identity; collaborators get the flat

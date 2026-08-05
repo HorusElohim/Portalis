@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added real collection lifecycle controls for restart, pause, stop, remove,
+  and deleting local files with confirmation.
+- Added a shared live transfer panel with prominent progress, rates, peers,
+  ETA, and download/upload activity graph.
+
+### Changed
+
+- Unified collection detail presentation across mobile and desktop, removed the
+  redundant information toggle, and replaced the desktop sidebar with a top
+  identity and event rail.
+- Moved transient notifications to the energized top event rail.
+- Aligned the Flutter-Rust Bridge toolchain and generated bindings to 2.12.0.
+
 ## Portalis 1.0.3 / backend 0.1.2 — 2026-08-05
 
 ### Changed

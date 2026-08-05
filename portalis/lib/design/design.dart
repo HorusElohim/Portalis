@@ -14,4 +14,6 @@ export 'primitives.dart';
 export 'rows.dart';
 export 'screen.dart';
 export 'toast.dart';
+export 'transfer_graph.dart';
+export 'transfer_panel.dart';
 export 'window.dart';

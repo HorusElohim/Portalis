@@ -24,6 +24,10 @@ abstract interface class CollectionsRepository {
   Future<int> fetchMedia(String collectionId);
   Future<Collection> sync(String collectionId, String peerAddress);
   Future<void> delete(String collectionId);
+  Future<void> pause(String collectionId);
+  Future<void> restart(String collectionId);
+  Future<void> stop(String collectionId);
+  Future<void> deleteFiles(String collectionId);
   Future<String> syncAddress();
   Future<void> addTorrentFromMagnet(String magnetOrHash);
   Future<void> addTorrentFromBytes(Uint8List bytes);
@@ -104,6 +108,22 @@ class FrbCollectionsRepository implements CollectionsRepository {
   @override
   Future<void> delete(String collectionId) =>
       bridge.deleteCollection(collectionId: collectionId);
+
+  @override
+  Future<void> pause(String collectionId) =>
+      bridge.pauseCollection(collectionId: collectionId);
+
+  @override
+  Future<void> restart(String collectionId) =>
+      bridge.restartCollection(collectionId: collectionId);
+
+  @override
+  Future<void> stop(String collectionId) =>
+      bridge.stopCollection(collectionId: collectionId);
+
+  @override
+  Future<void> deleteFiles(String collectionId) =>
+      bridge.deleteCollectionFiles(collectionId: collectionId);
 
   @override
   Future<String> syncAddress() => bridge.syncAddress();
