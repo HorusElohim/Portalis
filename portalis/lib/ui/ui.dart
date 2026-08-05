@@ -20,6 +20,9 @@
 /// - [identity]   — avatars
 /// - [media]      — thumbnails and placeholders
 /// - [collection_views] — the shared collection row
+/// - [omnibar]    — the one field that takes a paste of any kind
+/// - [welcome]    — the pulsing-mark hero shared by Home and the desktop
+///                  empty state
 ///
 /// Design tokens live in `theme.dart` rather than here, since Rust-facing
 /// code and tests reference them too.
@@ -33,8 +36,10 @@ export 'formatters.dart';
 export 'identity.dart';
 export 'indicators.dart';
 export 'media.dart';
+export 'omnibar.dart';
 export 'primitives.dart';
 export 'rows.dart';
 export 'screen.dart';
 export 'toast.dart';
+export 'welcome.dart';
 export 'window.dart';

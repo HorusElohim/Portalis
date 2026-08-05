@@ -45,46 +45,12 @@ class HomeScreen extends StatelessWidget {
           child: CustomScrollView(
             slivers: [
               const SliverToBoxAdapter(child: _Header()),
-              SliverToBoxAdapter(
+              const SliverToBoxAdapter(
+                // Same widget desktop's Collections pane falls back to when
+                // it has nothing to list — see [Welcome].
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(34, 30, 34, 0),
-                  child: Column(
-                    children: [
-                      PulseRings(
-                        size: 168,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(AppRadius.card),
-                          child: Image.asset(
-                            'assets/PortalisNature.png',
-                            width: 72,
-                            height: 72,
-                            // Decoded at roughly the size it is drawn rather
-                            // than at the source's 1254², so the
-                            // full-resolution bitmap never enters the image
-                            // cache for a 72pt slot.
-                            cacheWidth: 216,
-                            cacheHeight: 216,
-                            filterQuality: FilterQuality.medium,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 22),
-                      const CanvasTitle(
-                        'Send anything,\nstraight to a friend',
-                        size: 32,
-                        textAlign: TextAlign.center,
-                        height: 1.02,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'No uploads, no size limits. Files move device to '
-                        'device — and stay on yours.',
-                        textAlign: TextAlign.center,
-                        style:
-                            AppText.body(color: AppColors.textDim, height: 1.5),
-                      ),
-                    ],
-                  ),
+                  padding: EdgeInsets.fromLTRB(34, 30, 34, 0),
+                  child: Welcome(titleSize: 32),
                 ),
               ),
               if (error != null)

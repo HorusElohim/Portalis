@@ -1,0 +1,1939 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#07090A; color:#E6EDEA; font-family:'Instrument Sans',system-ui,sans-serif; }
+  a { color:#5CE7A3; text-decoration:none; }
+  a:hover { color:#8CF2C0; }
+  @keyframes fill { 0%{width:12%} 100%{width:74%} }
+  @keyframes fill2 { 0%{width:4%} 100%{width:38%} }
+  @keyframes pulse { 0%,100%{opacity:.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.35)} }
+  @keyframes ring { 0%{transform:scale(.7);opacity:.55} 100%{transform:scale(1.9);opacity:0} }
+  @keyframes drift { 0%{background-position:0 0} 100%{background-position:120px 0} }
+</style>
+</helmet>
+
+<section style="padding:64px 56px 40px;display:flex;flex-direction:column;gap:40px">
+  <div id="2a" style="display:flex;flex-direction:column;gap:32px">
+    <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.12em;color:#07090A;background:#5CE7A3;padding:5px 10px;border-radius:6px;font-weight:500">2a</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:600;letter-spacing:-.02em;color:#EDF4F1">Revisiting the built app</div>
+        <div style="font-size:15px;color:#8B9A95;max-width:760px;text-wrap:pretty">Three structural fixes to what your eng shipped. <strong style="color:#C9D6D1;font-weight:600">One</strong>: the sidebar's magnet field, Paste/Add buttons and duplicate icon buttons are gone — replaced by a single paste-or-search bar at the top of every page that accepts an invite key, a magnet link, an info hash, or a search term. The sidebar becomes pure navigation. <strong style="color:#C9D6D1;font-weight:600">Two</strong>: the empty right-hand canvas is now a two-column workspace, so pages have a rail of live context instead of 900px of black. <strong style="color:#C9D6D1;font-weight:600">Three</strong>: People and collection detail come back on mobile, and every empty state does a job instead of apologising.</div>
+      </div>
+    </div>
+
+    <div style="border-radius:16px;border:1px solid rgba(240,179,87,.3);background:rgba(240,179,87,.06);padding:18px 20px;max-width:860px;display:flex;gap:14px;align-items:flex-start">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F0B357" stroke-width="1.9" style="flex-shrink:0;margin-top:1px"><path d="M12 8v5"/><circle cx="12" cy="16.6" r=".9" fill="#F0B357" stroke="none"/><circle cx="12" cy="12" r="8.5"/></svg>
+      <div style="flex:1">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#F6D9A6">Not in the build yet — needs a spec before it goes to engineering</div>
+        <div style="font-size:13.5px;color:#C7B392;margin-top:7px;line-height:1.55;text-wrap:pretty">Two things below are new product surface, not a restyle of what exists: the desktop <strong style="color:#F6D9A6;font-weight:600">Activity feed</strong> (needs an event model — what gets logged, retention, whether it is per-collection or global) and the mobile <strong style="color:#F6D9A6;font-weight:600">Nearby right now</strong> list (needs a local-discovery + trust-prompt flow) and the mobile <strong style="color:#F6D9A6;font-weight:600">This week</strong> stats chart (needs a metrics store — what is counted, per-day buckets, how long history is kept). All are marked in place. When either one goes into a dev prompt, ask me first so we can write the UX properly rather than shipping the mock.</div>
+      </div>
+    </div>
+
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">DESKTOP · 1440×900</div>
+
+    <!-- ===================== DESKTOP · HOME ===================== -->
+    <div data-screen-label="Desktop home" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">D1 · HOME — BASE UI</div>
+        <div style="font-size:12.5px;color:#7C8B86">Identity moved to the top-left of the window; clicking your name collapses the left menu. The paste-or-search bar now sits under the greeting.</div>
+      </div>
+      <div style="width:1440px;height:900px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#0B1110;display:flex;flex-direction:column;box-shadow:0 60px 100px -40px rgba(0,0,0,.9)">
+        <div style="height:46px;background:#0E1413;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 14px;gap:14px;flex-shrink:0;position:relative">
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+            <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+            <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;padding:5px 9px 5px 5px;border-radius:11px;background:#16211F;border:1px solid rgba(255,255,255,.08);position:relative;z-index:1">
+            <div style="width:24px;height:24px;border-radius:8px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;flex-shrink:0">M</div>
+            <div style="font-size:12.5px;font-weight:600;color:#EDF4F1">MarkNo1</div>
+            <div style="width:1px;height:14px;background:rgba(255,255,255,.1)"></div>
+            <div style="display:flex;align-items:center;gap:5px">
+              <div style="width:5px;height:5px;border-radius:50%;background:#5CE7A3;animation:pulse 1.6s ease-in-out infinite"></div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#5CE7A3">3 PEERS</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C8B86" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15"/><path d="M15.5 9.5L13 12l2.5 2.5"/></svg>
+          </div>
+          <div style="position:absolute;left:0;right:0;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.1em;color:#5F6E69">PORTALIS</div>
+        </div>
+        <div style="flex:1;display:flex;min-height:0">
+
+          <div style="width:216px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.06);background:#080D0C;display:flex;flex-direction:column;padding:16px 12px">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;background:#16211F;font-size:13.5px;font-weight:600;color:#EDF4F1">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.9"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+                Home
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+                Collections<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5F6E69">3</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c1-2.9 3-4.2 5.5-4.2S13.5 16.1 14.5 19"/><path d="M16 6.4a3 3 0 010 5.4"/><path d="M18 19c-.4-1.6-1-2.8-1.8-3.6 2.2.3 3.6 1.5 4.3 3.6"/></svg>
+                People<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5F6E69">7</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.6 3.4"/></svg>
+                Settings
+              </div>
+            </div>
+
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#5F6E69;padding:22px 12px 8px">PINNED</div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:11px;font-size:13px;color:#C9D6D1">
+                <div style="width:6px;height:6px;border-radius:50%;background:#5CE7A3;flex-shrink:0;animation:pulse 1.6s ease-in-out infinite"></div>
+                <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Iceland trip</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:11px;font-size:13px;color:#8B9A95">
+                <div style="width:6px;height:6px;border-radius:50%;background:#3E4C48;flex-shrink:0"></div>
+                <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Band demos</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:11px;font-size:13px;color:#8B9A95">
+                <div style="width:6px;height:6px;border-radius:50%;background:#F0B357;flex-shrink:0"></div>
+                <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ubuntu-24.04.iso</div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto;padding:13px 14px;border-radius:14px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#5F6E69">LIVE THROUGHPUT</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5CE7A3">DHT ON</div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:2.5px;height:30px;margin-top:10px">
+                <div style="flex:1;height:34%;background:#22302D;border-radius:2px"></div>
+                <div style="flex:1;height:58%;background:#2A3D38;border-radius:2px"></div>
+                <div style="flex:1;height:41%;background:#22302D;border-radius:2px"></div>
+                <div style="flex:1;height:76%;background:#3E7A63;border-radius:2px"></div>
+                <div style="flex:1;height:54%;background:#2A3D38;border-radius:2px"></div>
+                <div style="flex:1;height:92%;background:#5CE7A3;border-radius:2px"></div>
+                <div style="flex:1;height:68%;background:#3E7A63;border-radius:2px"></div>
+                <div style="flex:1;height:80%;background:#5CE7A3;border-radius:2px"></div>
+                <div style="flex:1;height:47%;background:#2A3D38;border-radius:2px"></div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#C9D6D1;margin-top:9px">↓ 42.6 <span style="color:#5F6E69">·</span> ↑ 8.1 <span style="color:#7C8B86">MB/S</span></div>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <div style="flex:1;min-height:0;display:flex">
+              <div style="flex:1;min-width:0;padding:26px;display:flex;flex-direction:column;gap:22px;overflow:hidden">
+                <div>
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1">Good evening, MarkNo1</div>
+                  <div style="font-size:14px;color:#8B9A95;margin-top:7px">1 transfer in flight · 3 collections · 2.1 GB shared out</div>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:12px;margin-top:-6px">
+                  <div style="flex:1;display:flex;align-items:center;gap:11px;padding:13px 16px;border-radius:14px;background:#121A18;border:1px solid rgba(255,255,255,.09)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+                    <div style="flex:1;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5F6E69">Paste an invite key or magnet link, or search…</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#4E5C58;border:1px solid rgba(255,255,255,.09);border-radius:5px;padding:2px 6px">⌘K</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;padding:13px 18px;border-radius:14px;background:#5CE7A3;color:#06120D;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;flex-shrink:0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    New share
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:7px">
+                  <div style="padding:7px 13px;border-radius:999px;background:#E6EDEA;color:#0B1110;font-size:12.5px;font-weight:600">All</div>
+                  <div style="padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:12.5px">Sharing</div>
+                  <div style="padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:12.5px">Torrents</div>
+                </div>
+
+                <div style="border-radius:22px;padding:22px;background:linear-gradient(120deg,rgba(92,231,163,.15),rgba(92,231,163,.03));border:1px solid rgba(92,231,163,.28);display:flex;gap:24px;align-items:center">
+                  <div style="width:96px;height:96px;border-radius:18px;background:repeating-linear-gradient(45deg,#1D2926 0 8px,#16211F 8px 16px);flex-shrink:0"></div>
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <div style="width:7px;height:7px;border-radius:50%;background:#5CE7A3;animation:pulse 1.6s ease-in-out infinite"></div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#5CE7A3">RECEIVING FROM ANA</div>
+                    </div>
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:7px">Iceland trip</div>
+                    <div style="height:8px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:14px;overflow:hidden">
+                      <div style="height:100%;border-radius:99px;background:linear-gradient(90deg,#2FA97A,#5CE7A3);width:74%;animation:fill 6s ease-out infinite alternate;box-shadow:0 0 18px rgba(92,231,163,.55)"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95">
+                      <div>1.4 / 1.9 GB · 128 PHOTOS</div>
+                      <div>ETA 24S</div>
+                    </div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0;padding-left:8px">
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:600;color:#5CE7A3;letter-spacing:-.03em;line-height:1">42.6</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7F9E92;margin-top:4px">MB/S</div>
+                    <div style="display:flex;gap:6px;margin-top:14px">
+                      <div style="width:34px;height:34px;border-radius:11px;border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><path d="M9 5v14"/><path d="M15 5v14"/></svg>
+                      </div>
+                      <div style="width:34px;height:34px;border-radius:11px;border:1px solid rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="5.5" r="1.6"/><circle cx="12" cy="18.5" r="1.6"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;gap:16px;padding:15px 18px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+                    <div style="width:46px;height:46px;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px);flex-shrink:0"></div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:600">Band demos</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95;margin-top:5px">9 FILES · 240 MB · SEEDING TO 2</div>
+                    </div>
+                    <div style="display:flex;flex-shrink:0">
+                      <div style="width:24px;height:24px;border-radius:50%;background:#2E4A41;border:2px solid #121A18;font-size:10px;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-weight:600">A</div>
+                      <div style="width:24px;height:24px;border-radius:50%;background:#3A4A5A;border:2px solid #121A18;margin-left:-7px;font-size:10px;display:flex;align-items:center;justify-content:center;color:#BFD6EA;font-weight:600">J</div>
+                    </div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#C9D6D1;border:1px solid rgba(255,255,255,.12);padding:6px 11px;border-radius:9px;flex-shrink:0">COPY KEY</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:16px;padding:15px 18px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+                    <div style="width:46px;height:46px;border-radius:14px;background:rgba(240,179,87,.13);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F0B357" stroke-width="1.9"><path d="M12 4v11"/><path d="M7 12l5 5 5-5"/><path d="M5 20h14"/></svg>
+                    </div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">ubuntu-24.04.2-desktop-amd64.iso</div>
+                      <div style="height:6px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:9px;overflow:hidden">
+                        <div style="height:100%;border-radius:99px;background:#F0B357;width:38%;animation:fill2 7s ease-out infinite alternate"></div>
+                      </div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95;margin-top:7px">2.3 / 6.1 GB · 128 SEEDS · ETA 4M</div>
+                    </div>
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;color:#F0B357;flex-shrink:0">38%</div>
+                  </div>
+                </div>
+
+                <div style="margin-top:auto;border-radius:18px;border:1.5px dashed rgba(92,231,163,.28);background:rgba(92,231,163,.03);padding:18px;display:flex;align-items:center;gap:14px">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.9" style="flex-shrink:0"><path d="M12 16V5"/><path d="M7.5 9.5L12 5l4.5 4.5"/><path d="M5 19h14"/></svg>
+                  <div style="flex:1">
+                    <div style="font-size:14px;font-weight:600">Drop files anywhere to start a new share</div>
+                    <div style="font-size:12.5px;color:#7C8B86;margin-top:3px">Read from their original folders — nothing is copied or uploaded.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="width:308px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);background:#080D0C;padding:24px 22px;display:flex;flex-direction:column;gap:22px">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#7C8B86">PEOPLE ONLINE</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5CE7A3">3 / 7</div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;align-items:center;gap:11px">
+                      <div style="width:30px;height:30px;border-radius:10px;background:#2E4A41;font-size:12px;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-weight:600;flex-shrink:0">A</div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600">Ana</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#7C8B86;margin-top:1px">SAME WI-FI</div>
+                      </div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5CE7A3">↑28.1</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:11px">
+                      <div style="width:30px;height:30px;border-radius:10px;background:#3A4A5A;font-size:12px;display:flex;align-items:center;justify-content:center;color:#BFD6EA;font-weight:600;flex-shrink:0">J</div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600">Jonas</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#7C8B86;margin-top:1px">INTERNET</div>
+                      </div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5CE7A3">↑11.4</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:11px">
+                      <div style="width:30px;height:30px;border-radius:10px;background:#4A3F2E;font-size:12px;display:flex;align-items:center;justify-content:center;color:#EBD3A6;font-weight:600;flex-shrink:0">R</div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600">Rosa</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#7C8B86;margin-top:1px">CONNECTED</div>
+                      </div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5F6E69">idle</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="height:1px;background:rgba(255,255,255,.06)"></div>
+
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:13px">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#7C8B86">ACTIVITY</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;color:#F0B357;border:1px solid rgba(240,179,87,.35);background:rgba(240,179,87,.09);border-radius:5px;padding:2px 5px">SPEC NEEDED</div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:14px">
+                    <div style="display:flex;gap:11px">
+                      <div style="width:6px;height:6px;border-radius:50%;background:#5CE7A3;margin-top:5px;flex-shrink:0"></div>
+                      <div style="flex:1">
+                        <div style="font-size:12.5px;line-height:1.45"><span style="font-weight:600">Ana</span> started sending Iceland trip</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69;margin-top:3px">2 MIN AGO</div>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:11px">
+                      <div style="width:6px;height:6px;border-radius:50%;background:#3E4C48;margin-top:5px;flex-shrink:0"></div>
+                      <div style="flex:1">
+                        <div style="font-size:12.5px;line-height:1.45"><span style="font-weight:600">Jonas</span> joined Band demos</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69;margin-top:3px">1 H AGO</div>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:11px">
+                      <div style="width:6px;height:6px;border-radius:50%;background:#3E4C48;margin-top:5px;flex-shrink:0"></div>
+                      <div style="flex:1">
+                        <div style="font-size:12.5px;line-height:1.45">Finished <span style="font-weight:600">Wedding raw</span> — 4.2 GB to 3 people</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69;margin-top:3px">YESTERDAY</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:auto;padding:14px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#7C8B86">THIS DEVICE</div>
+                  <div style="display:flex;align-items:center;gap:9px;margin-top:9px">
+                    <div style="flex:1;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#C9D6D1;word-break:break-all">192.168.1.155:47821</div>
+                    <div style="width:28px;height:28px;border-radius:9px;background:#1B2523;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.9"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5H6.5A1.5 1.5 0 005 7v8.5"/></svg>
+                    </div>
+                  </div>
+                  <div style="font-size:11.5px;color:#7C8B86;margin-top:8px;line-height:1.45">Rotates every launch. Nothing to configure.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== DESKTOP · PEOPLE ===================== -->
+    <div data-screen-label="Desktop people" style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">D2 · PEOPLE — WAS AN EMPTY 900px CANVAS</div>
+      <div style="width:1440px;height:900px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#0B1110;display:flex;flex-direction:column;box-shadow:0 60px 100px -40px rgba(0,0,0,.9)">
+        <div style="height:40px;background:#0E1413;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0">
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.1em;color:#5F6E69">PORTALIS</div>
+        </div>
+        <div style="flex:1;display:flex;min-height:0">
+          <div style="width:216px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.06);background:#080D0C;display:flex;flex-direction:column;padding:16px 12px">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px">
+              <div style="width:32px;height:32px;border-radius:11px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;flex-shrink:0">M</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13.5px;font-weight:600">MarkNo1</div>
+                <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
+                  <div style="width:5px;height:5px;border-radius:50%;background:#5CE7A3"></div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#5CE7A3">3 PEERS</div>
+                </div>
+              </div>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,.06);margin:14px 8px"></div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+                Home
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+                Collections<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5F6E69">3</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;background:#16211F;font-size:13.5px;font-weight:600;color:#EDF4F1">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.9"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c1-2.9 3-4.2 5.5-4.2S13.5 16.1 14.5 19"/><path d="M16 6.4a3 3 0 010 5.4"/><path d="M18 19c-.4-1.6-1-2.8-1.8-3.6 2.2.3 3.6 1.5 4.3 3.6"/></svg>
+                People<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5CE7A3">7</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.6 3.4"/></svg>
+                Settings
+              </div>
+            </div>
+            <div style="margin-top:auto;padding:13px 14px;border-radius:14px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#5F6E69">LIVE THROUGHPUT</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#C9D6D1;margin-top:8px">↓ 42.6 <span style="color:#5F6E69">·</span> ↑ 8.1 <span style="color:#7C8B86">MB/S</span></div>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <div style="padding:18px 26px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <div style="flex:1;display:flex;align-items:center;gap:11px;padding:11px 15px;border-radius:13px;background:#121A18;border:1px solid rgba(255,255,255,.09)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+                <div style="flex:1;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5F6E69">Search people…</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:11px 18px;border-radius:13px;background:#5CE7A3;color:#06120D;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;flex-shrink:0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                Invite someone
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;padding:26px;display:flex;flex-direction:column;gap:20px">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between">
+                <div>
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1">People</div>
+                  <div style="font-size:14px;color:#8B9A95;margin-top:7px">7 collaborators · 3 reachable right now</div>
+                </div>
+                <div style="display:flex;gap:7px">
+                  <div style="padding:7px 13px;border-radius:999px;background:#E6EDEA;color:#0B1110;font-size:12.5px;font-weight:600">Online</div>
+                  <div style="padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:12.5px">Everyone</div>
+                  <div style="padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:12.5px">Nearby</div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                <div style="padding:18px;border-radius:20px;background:linear-gradient(150deg,rgba(92,231,163,.11),rgba(92,231,163,.02));border:1px solid rgba(92,231,163,.26);display:flex;flex-direction:column;gap:14px">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <div style="width:44px;height:44px;border-radius:15px;background:#2E4A41;font-size:17px;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-family:'Space Grotesk',sans-serif;font-weight:700;flex-shrink:0">A</div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600">Ana</div>
+                      <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+                        <div style="width:5px;height:5px;border-radius:50%;background:#5CE7A3;animation:pulse 1.6s ease-in-out infinite"></div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#5CE7A3">SENDING · SAME WI-FI</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.05);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#5CE7A3">28.1</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7F9E92;margin-top:2px">MB/S</div>
+                    </div>
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.05);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">2</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7C8B86;margin-top:2px">SHARED</div>
+                    </div>
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.05);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">12.4</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7C8B86;margin-top:2px">GB TOTAL</div>
+                    </div>
+                  </div>
+                  <div style="font-size:12.5px;color:#A9B7B2;line-height:1.5">Iceland trip · Band demos</div>
+                </div>
+
+                <div style="padding:18px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:14px">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <div style="width:44px;height:44px;border-radius:15px;background:#3A4A5A;font-size:17px;display:flex;align-items:center;justify-content:center;color:#BFD6EA;font-family:'Space Grotesk',sans-serif;font-weight:700;flex-shrink:0">J</div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600">Jonas</div>
+                      <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+                        <div style="width:5px;height:5px;border-radius:50%;background:#5CE7A3"></div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#7F9E92">ONLINE · INTERNET</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.04);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#5CE7A3">11.4</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7F9E92;margin-top:2px">MB/S</div>
+                    </div>
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.04);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">1</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7C8B86;margin-top:2px">SHARED</div>
+                    </div>
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.04);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">3.1</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7C8B86;margin-top:2px">GB TOTAL</div>
+                    </div>
+                  </div>
+                  <div style="font-size:12.5px;color:#8B9A95;line-height:1.5">Band demos</div>
+                </div>
+
+                <div style="padding:18px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:14px">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <div style="width:44px;height:44px;border-radius:15px;background:#4A3F2E;font-size:17px;display:flex;align-items:center;justify-content:center;color:#EBD3A6;font-family:'Space Grotesk',sans-serif;font-weight:700;flex-shrink:0">R</div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600">Rosa</div>
+                      <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+                        <div style="width:5px;height:5px;border-radius:50%;background:#5CE7A3"></div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#7F9E92">ONLINE · IDLE</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.04);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#5F6E69">—</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7C8B86;margin-top:2px">MB/S</div>
+                    </div>
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.04);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">2</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7C8B86;margin-top:2px">SHARED</div>
+                    </div>
+                    <div style="flex:1;padding:9px;border-radius:11px;background:rgba(255,255,255,.04);text-align:center">
+                      <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">8.7</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7C8B86;margin-top:2px">GB TOTAL</div>
+                    </div>
+                  </div>
+                  <div style="font-size:12.5px;color:#8B9A95;line-height:1.5">Iceland trip · Wedding raw</div>
+                </div>
+              </div>
+
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#7C8B86">OFFLINE · 4</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+                <div style="padding:14px;border-radius:16px;background:#0F1615;border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:11px">
+                  <div style="width:34px;height:34px;border-radius:11px;background:#232E2B;font-size:13px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600;flex-shrink:0">L</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13.5px;color:#A9B7B2">Luca</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69;margin-top:2px">SEEN 3D AGO</div>
+                  </div>
+                </div>
+                <div style="padding:14px;border-radius:16px;background:#0F1615;border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:11px">
+                  <div style="width:34px;height:34px;border-radius:11px;background:#232E2B;font-size:13px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600;flex-shrink:0">S</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13.5px;color:#A9B7B2">Sofia</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69;margin-top:2px">SEEN 1W AGO</div>
+                  </div>
+                </div>
+                <div style="padding:14px;border-radius:16px;background:#0F1615;border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:11px">
+                  <div style="width:34px;height:34px;border-radius:11px;background:#232E2B;font-size:13px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600;flex-shrink:0">T</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13.5px;color:#A9B7B2">Theo</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69;margin-top:2px">SEEN 2W AGO</div>
+                  </div>
+                </div>
+                <div style="padding:14px;border-radius:16px;background:#0F1615;border:1px solid rgba(255,255,255,.055);display:flex;align-items:center;gap:11px">
+                  <div style="width:34px;height:34px;border-radius:11px;background:#232E2B;font-size:13px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600;flex-shrink:0">N</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13.5px;color:#A9B7B2">Nadia</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69;margin-top:2px">SEEN 1M AGO</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:auto;display:flex;gap:12px">
+                <div style="flex:1;padding:18px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:14px">
+                  <div style="width:56px;height:56px;border-radius:12px;background:#E6EDEA;padding:7px;flex-shrink:0;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(5,1fr);gap:2px">
+                    <div style="background:#0B1110"></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div>
+                    <div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div>
+                    <div></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div><div></div>
+                    <div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div>
+                    <div style="background:#0B1110"></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div>
+                  </div>
+                  <div style="flex:1">
+                    <div style="font-size:14px;font-weight:600">Add someone new</div>
+                    <div style="font-size:12.5px;color:#7C8B86;margin-top:4px;line-height:1.45">They scan this from their phone, or paste your invite key. No account needed on either side.</div>
+                  </div>
+                </div>
+                <div style="width:300px;flex-shrink:0;padding:18px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#7C8B86">DISCOVERED ON THIS WI-FI</div>
+                  <div style="display:flex;align-items:center;gap:11px;margin-top:13px">
+                    <div style="width:32px;height:32px;border-radius:10px;background:#232E2B;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.9"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M8 20h8"/></svg>
+                    </div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13px;font-weight:600">studio-imac</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#7C8B86;margin-top:2px">NOT YET TRUSTED</div>
+                    </div>
+                    <div style="font-size:12.5px;font-weight:600;color:#5CE7A3;flex-shrink:0">Ask</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== DESKTOP · SETTINGS ===================== -->
+    <div data-screen-label="Desktop settings" style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">D3 · SETTINGS — GROUPED, NOT SPLIT MID-AIR</div>
+      <div style="width:1440px;height:900px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#0B1110;display:flex;flex-direction:column;box-shadow:0 60px 100px -40px rgba(0,0,0,.9)">
+        <div style="height:40px;background:#0E1413;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0">
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.1em;color:#5F6E69">PORTALIS</div>
+        </div>
+        <div style="flex:1;display:flex;min-height:0">
+          <div style="width:216px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.06);background:#080D0C;display:flex;flex-direction:column;padding:16px 12px">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px">
+              <div style="width:32px;height:32px;border-radius:11px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;flex-shrink:0">M</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13.5px;font-weight:600">MarkNo1</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#5CE7A3;margin-top:2px">3 PEERS</div>
+              </div>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,.06);margin:14px 8px"></div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+                Home
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+                Collections<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5F6E69">3</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c1-2.9 3-4.2 5.5-4.2S13.5 16.1 14.5 19"/><path d="M16 6.4a3 3 0 010 5.4"/><path d="M18 19c-.4-1.6-1-2.8-1.8-3.6 2.2.3 3.6 1.5 4.3 3.6"/></svg>
+                People<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5F6E69">7</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;background:#16211F;font-size:13.5px;font-weight:600;color:#EDF4F1">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.6 3.4"/></svg>
+                Settings
+              </div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#5F6E69;padding:22px 12px 8px">SECTIONS</div>
+            <div style="display:flex;flex-direction:column;gap:1px;font-size:12.5px">
+              <div style="padding:7px 12px;border-radius:9px;color:#5CE7A3;background:rgba(92,231,163,.08)">Speed</div>
+              <div style="padding:7px 12px;border-radius:9px;color:#8B9A95">Sharing</div>
+              <div style="padding:7px 12px;border-radius:9px;color:#8B9A95">Storage</div>
+              <div style="padding:7px 12px;border-radius:9px;color:#8B9A95">Network &amp; engine</div>
+              <div style="padding:7px 12px;border-radius:9px;color:#8B9A95">Identity</div>
+            </div>
+            <div style="margin-top:auto;padding:13px 14px;border-radius:14px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#5F6E69">LIVE THROUGHPUT</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#C9D6D1;margin-top:8px">↓ 42.6 <span style="color:#5F6E69">·</span> ↑ 8.1 <span style="color:#7C8B86">MB/S</span></div>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <div style="padding:18px 26px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <div style="flex:1;display:flex;align-items:center;gap:11px;padding:11px 15px;border-radius:13px;background:#121A18;border:1px solid rgba(255,255,255,.09)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+                <div style="flex:1;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5F6E69">Search settings…</div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;color:#7F9E92;border:1px solid rgba(92,231,163,.25);background:rgba(92,231,163,.07);padding:9px 13px;border-radius:11px;flex-shrink:0">CHANGES APPLY IMMEDIATELY</div>
+            </div>
+
+            <div style="flex:1;min-height:0;padding:26px;display:flex;flex-direction:column;gap:18px">
+              <div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1">Settings</div>
+              </div>
+
+              <div style="border-radius:20px;padding:18px 22px;background:linear-gradient(120deg,rgba(92,231,163,.13),rgba(92,231,163,.02));border:1px solid rgba(92,231,163,.24);display:flex;align-items:center;gap:26px">
+                <div style="width:38px;height:38px;border-radius:50%;background:rgba(92,231,163,.16);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+                </div>
+                <div style="flex:1">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600">Everything is healthy</div>
+                  <div style="font-size:13px;color:#8B9A95;margin-top:3px">Nothing needs your attention. Port reachable, peers connected.</div>
+                </div>
+                <div style="display:flex;gap:22px;flex-shrink:0">
+                  <div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#7C8B86">PORT</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;margin-top:4px">47821 OPEN</div></div>
+                  <div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#7C8B86">DHT</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#5CE7A3;margin-top:4px">ON</div></div>
+                  <div><div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#7C8B86">PEERS</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;margin-top:4px">14</div></div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+                <div style="border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);overflow:hidden">
+                  <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.055);font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#7C8B86">SPEED</div>
+                  <div style="padding:16px 18px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,.055)">
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:600">Upload limit</div>
+                      <div style="font-size:12.5px;color:#7C8B86;margin-top:3px">Across all transfers, not per transfer.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:7px;flex-shrink:0"><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5CE7A3">UNLIMITED</div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+                  </div>
+                  <div style="padding:16px 18px;display:flex;align-items:center;gap:16px">
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:600">Download limit</div>
+                      <div style="font-size:12.5px;color:#7C8B86;margin-top:3px">Across all transfers, not per transfer.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:7px;flex-shrink:0"><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5CE7A3">UNLIMITED</div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+                  </div>
+                </div>
+
+                <div style="border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);overflow:hidden">
+                  <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.055);font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#7C8B86">SHARING</div>
+                  <div style="padding:16px 18px;display:flex;align-items:center;gap:16px;border-bottom:1px solid rgba(255,255,255,.055)">
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:600">Keep sharing after restart</div>
+                      <div style="font-size:12.5px;color:#7C8B86;margin-top:3px;line-height:1.45">Friends can pull your collections when Portalis starts again.</div>
+                    </div>
+                    <div style="width:44px;height:26px;border-radius:99px;background:#5CE7A3;position:relative;flex-shrink:0"><div style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#06120D"></div></div>
+                  </div>
+                  <div style="padding:16px 18px;display:flex;align-items:center;gap:16px">
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:600">Find friends on this Wi-Fi</div>
+                      <div style="font-size:12.5px;color:#7C8B86;margin-top:3px;line-height:1.45">Faster transfers, no internet needed.</div>
+                    </div>
+                    <div style="width:44px;height:26px;border-radius:99px;background:#5CE7A3;position:relative;flex-shrink:0"><div style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#06120D"></div></div>
+                  </div>
+                </div>
+
+                <div style="border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);overflow:hidden">
+                  <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.055);font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;color:#7C8B86">STORAGE</div>
+                  <div style="padding:18px">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between">
+                      <div style="font-size:14.5px;font-weight:600">618 MB in the Portalis folder</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7C8B86">OF 512 GB DISK</div>
+                    </div>
+                    <div style="display:flex;height:8px;border-radius:99px;overflow:hidden;margin-top:13px;background:rgba(255,255,255,.07)">
+                      <div style="width:22%;background:#5CE7A3"></div>
+                      <div style="width:14%;background:#F0B357"></div>
+                      <div style="width:9%;background:#3E4C48"></div>
+                    </div>
+                    <div style="display:flex;gap:18px;margin-top:13px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95">
+                      <div style="display:flex;align-items:center;gap:6px"><div style="width:7px;height:7px;border-radius:2px;background:#5CE7A3"></div>SHARES 284 MB</div>
+                      <div style="display:flex;align-items:center;gap:6px"><div style="width:7px;height:7px;border-radius:2px;background:#F0B357"></div>TORRENTS 262 MB</div>
+                      <div style="display:flex;align-items:center;gap:6px"><div style="width:7px;height:7px;border-radius:2px;background:#3E4C48"></div>CACHE 72 MB</div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:16px">
+                      <div style="padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.12);font-size:12.5px;font-weight:600;color:#C9D6D1">Change folder</div>
+                      <div style="padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.12);font-size:12.5px;font-weight:600;color:#C9D6D1">Clear cache</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <div style="border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);padding:18px;display:flex;align-items:center;gap:14px">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8" style="flex-shrink:0"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.6 3.4"/></svg>
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:600">Network &amp; engine</div>
+                      <div style="font-size:12.5px;color:#7C8B86;margin-top:3px">Ports, DHT, proxy, trackers, encryption</div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+                  </div>
+                  <div style="border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);padding:18px;display:flex;gap:14px;align-items:flex-start">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.8" style="flex-shrink:0;margin-top:2px"><path d="M12 3.5l7 3v5.2c0 4.2-2.9 7.6-7 8.8-4.1-1.2-7-4.6-7-8.8V6.5z"/></svg>
+                    <div style="flex:1">
+                      <div style="font-size:14.5px;font-weight:600">Identity lives on this device</div>
+                      <div style="font-size:12.5px;color:#7C8B86;margin-top:4px;line-height:1.45">A key pair, no account, no server. Back it up before you switch machines.</div>
+                      <div style="display:inline-flex;margin-top:12px;padding:8px 14px;border-radius:10px;background:rgba(92,231,163,.12);border:1px solid rgba(92,231,163,.3);font-size:12.5px;font-weight:600;color:#5CE7A3">Back up identity</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== DESKTOP · EMPTY HOME ===================== -->
+    <div data-screen-label="Desktop first run" style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">D4 · FIRST RUN — THE EMPTY STATE DOES WORK</div>
+      <div style="width:1440px;height:900px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#0B1110;display:flex;flex-direction:column;position:relative;box-shadow:0 60px 100px -40px rgba(0,0,0,.9)">
+        <div style="height:40px;background:#0E1413;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0;position:relative;z-index:2">
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#3A4240"></div>
+          <div style="flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.1em;color:#5F6E69">PORTALIS</div>
+        </div>
+        <div style="position:absolute;inset:40px 0 0 0;background:radial-gradient(70% 46% at 50% 24%, rgba(92,231,163,.1), transparent 70%);pointer-events:none"></div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 120px;gap:36px;position:relative">
+          <div style="width:132px;height:132px;position:relative;display:flex;align-items:center;justify-content:center">
+            <div style="position:absolute;width:66px;height:66px;border-radius:50%;border:1px solid rgba(92,231,163,.5);animation:ring 3.4s ease-out infinite"></div>
+            <div style="position:absolute;width:66px;height:66px;border-radius:50%;border:1px solid rgba(92,231,163,.5);animation:ring 3.4s ease-out infinite 1.1s"></div>
+            <div style="position:absolute;width:66px;height:66px;border-radius:50%;border:1px solid rgba(92,231,163,.5);animation:ring 3.4s ease-out infinite 2.2s"></div>
+            <div style="width:52px;height:52px;border-radius:18px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(92,231,163,.4)">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.2"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+            </div>
+          </div>
+          <div style="text-align:center;max-width:640px">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:46px;font-weight:600;letter-spacing:-.03em;line-height:1.08">Send anything, straight to a friend</div>
+            <div style="font-size:16px;color:#8B9A95;margin-top:14px;line-height:1.55;text-wrap:pretty">No uploads, no size limits, no account. Files move device to device and stay on yours.</div>
+          </div>
+          <div style="width:100%;max-width:900px;display:flex;align-items:center;gap:12px">
+            <div style="flex:1;display:flex;align-items:center;gap:12px;padding:16px 18px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.1)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+              <div style="flex:1;font-family:'JetBrains Mono',monospace;font-size:13px;color:#5F6E69">Paste an invite key or magnet link to get started…</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#4E5C58;border:1px solid rgba(255,255,255,.09);border-radius:5px;padding:2px 6px">⌘K</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;padding:16px 24px;border-radius:16px;background:#5CE7A3;color:#06120D;font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:600;flex-shrink:0;box-shadow:0 14px 30px -10px rgba(92,231,163,.5)">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              New share
+            </div>
+          </div>
+          <div style="width:100%;max-width:900px;border-radius:22px;border:1.5px dashed rgba(92,231,163,.3);background:rgba(92,231,163,.03);padding:34px;display:flex;flex-direction:column;align-items:center;gap:12px">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.8"><path d="M12 16V5"/><path d="M7.5 9.5L12 5l4.5 4.5"/><path d="M5 19h14"/></svg>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:600">Drop a folder here to make your first collection</div>
+            <div style="font-size:13.5px;color:#7C8B86">Files are read where they live — nothing is copied or uploaded.</div>
+          </div>
+          <div style="display:flex;gap:26px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;color:#5F6E69">
+            <div>NO ACCOUNT</div>
+            <div>NO SERVER</div>
+            <div>NOTHING LEAVES THIS DEVICE UNASKED</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86;margin-top:14px">MOBILE · THE PAGES THAT WENT MISSING</div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+      <!-- MOBILE PEOPLE -->
+      <div data-screen-label="Mobile people" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">M1 · PEOPLE — RESTORED</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="position:absolute;inset:0;background:radial-gradient(90% 34% at 50% 0%, rgba(92,231,163,.12), transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+
+          <div style="padding:22px 22px 0;position:relative">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1">People</div>
+            <div style="font-size:14px;color:#8B9A95;margin-top:6px">3 of 7 reachable right now</div>
+          </div>
+
+          <div style="margin:18px 22px 0;display:flex;align-items:center;gap:10px;padding:12px 15px;border-radius:15px;background:#141D1B;border:1px solid rgba(255,255,255,.07);position:relative">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+            <div style="flex:1;font-size:14px;color:#63736E">Search people</div>
+          </div>
+
+          <div style="padding:20px 22px 0;display:flex;flex-direction:column;gap:10px;position:relative">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86">ONLINE</div>
+            <div style="padding:15px 16px;border-radius:20px;background:linear-gradient(150deg,rgba(92,231,163,.13),rgba(92,231,163,.03));border:1px solid rgba(92,231,163,.26);display:flex;align-items:center;gap:13px">
+              <div style="width:44px;height:44px;border-radius:15px;background:#2E4A41;font-size:17px;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-family:'Space Grotesk',sans-serif;font-weight:700;flex-shrink:0">A</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600">Ana</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+                  <div style="width:5px;height:5px;border-radius:50%;background:#5CE7A3;animation:pulse 1.6s ease-in-out infinite"></div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#5CE7A3">SENDING · SAME WI-FI</div>
+                </div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;color:#5CE7A3">28.1</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7F9E92">MB/S</div>
+              </div>
+            </div>
+            <div style="padding:15px 16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:13px">
+              <div style="width:44px;height:44px;border-radius:15px;background:#3A4A5A;font-size:17px;display:flex;align-items:center;justify-content:center;color:#BFD6EA;font-family:'Space Grotesk',sans-serif;font-weight:700;flex-shrink:0">J</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600">Jonas</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#7C8B86;margin-top:4px">1 SHARED · 3.1 GB</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;color:#5CE7A3">11.4</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#7F9E92">MB/S</div>
+              </div>
+            </div>
+            <div style="padding:15px 16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:13px">
+              <div style="width:44px;height:44px;border-radius:15px;background:#4A3F2E;font-size:17px;display:flex;align-items:center;justify-content:center;color:#EBD3A6;font-family:'Space Grotesk',sans-serif;font-weight:700;flex-shrink:0">R</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600">Rosa</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em;color:#7C8B86;margin-top:4px">2 SHARED · IDLE</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2" style="flex-shrink:0"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+
+          <div style="padding:22px 22px 0;display:flex;flex-direction:column;gap:8px;position:relative">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86">OFFLINE</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:8px;padding:9px 13px 9px 9px;border-radius:999px;background:#0F1615;border:1px solid rgba(255,255,255,.055)">
+                <div style="width:24px;height:24px;border-radius:8px;background:#232E2B;font-size:11px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600">L</div>
+                <div style="font-size:13px;color:#A9B7B2">Luca</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:9px 13px 9px 9px;border-radius:999px;background:#0F1615;border:1px solid rgba(255,255,255,.055)">
+                <div style="width:24px;height:24px;border-radius:8px;background:#232E2B;font-size:11px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600">S</div>
+                <div style="font-size:13px;color:#A9B7B2">Sofia</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:9px 13px 9px 9px;border-radius:999px;background:#0F1615;border:1px solid rgba(255,255,255,.055)">
+                <div style="width:24px;height:24px;border-radius:8px;background:#232E2B;font-size:11px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600">T</div>
+                <div style="font-size:13px;color:#A9B7B2">Theo</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:9px 13px 9px 9px;border-radius:999px;background:#0F1615;border:1px solid rgba(255,255,255,.055)">
+                <div style="width:24px;height:24px;border-radius:8px;background:#232E2B;font-size:11px;display:flex;align-items:center;justify-content:center;color:#7C8B86;font-weight:600">N</div>
+                <div style="font-size:13px;color:#A9B7B2">Nadia</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin:22px 22px 0;padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:13px;position:relative">
+            <div style="width:44px;height:44px;border-radius:12px;background:#E6EDEA;padding:6px;flex-shrink:0;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(5,1fr);gap:1.5px">
+              <div style="background:#0B1110"></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div>
+              <div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div>
+              <div></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div><div></div>
+              <div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div>
+              <div style="background:#0B1110"></div><div style="background:#0B1110"></div><div></div><div style="background:#0B1110"></div><div style="background:#0B1110"></div>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:14.5px;font-weight:600">Add someone new</div>
+              <div style="font-size:12.5px;color:#7C8B86;margin-top:3px;line-height:1.4">Let them scan this, or send your key.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding:12px 26px 26px;display:flex;justify-content:space-between;align-items:center;position:relative">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+              <div style="font-size:10px">Home</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+              <div style="font-size:10px">Collections</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#E6EDEA">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c1-2.9 3-4.2 5.5-4.2S13.5 16.1 14.5 19"/><path d="M16 6.4a3 3 0 010 5.4"/><path d="M18 19c-.4-1.6-1-2.8-1.8-3.6 2.2.3 3.6 1.5 4.3 3.6"/></svg>
+              <div style="font-size:10px;font-weight:600">People</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.6-3.6 4-5.2 7-5.2s5.4 1.6 7 5.2"/></svg>
+              <div style="font-size:10px">You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOBILE COLLECTION DETAIL -->
+      <div data-screen-label="Mobile collection detail" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">M2 · COLLECTION DETAIL — NEW</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="height:220px;flex-shrink:0;background:repeating-linear-gradient(45deg,#1D2926 0 10px,#16211F 10px 20px);position:relative">
+            <div style="position:absolute;inset:0;background:linear-gradient(to top,#0B1110 6%,rgba(11,17,16,.2) 60%,rgba(11,17,16,.55))"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+              <div>9:41</div>
+              <div style="display:flex;gap:5px;align-items:center">
+                <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+                <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:14px 22px 0;position:relative">
+              <div style="width:38px;height:38px;border-radius:14px;background:rgba(7,9,10,.6);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E6EDEA" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+              </div>
+              <div style="width:38px;height:38px;border-radius:14px;background:rgba(7,9,10,.6);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E6EDEA" stroke-width="2"><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="5.5" r="1.6"/><circle cx="12" cy="18.5" r="1.6"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div style="padding:0 22px;margin-top:-16px;position:relative">
+            <div style="display:flex;align-items:center;gap:7px">
+              <div style="width:7px;height:7px;border-radius:50%;background:#5CE7A3;animation:pulse 1.6s ease-in-out infinite"></div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#5CE7A3">RECEIVING FROM ANA</div>
+            </div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;margin-top:7px;line-height:1.05">Iceland trip</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:7px">128 PHOTOS · 1.9 GB · 3 PEOPLE</div>
+            <div style="height:8px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:16px;overflow:hidden">
+              <div style="height:100%;border-radius:99px;background:linear-gradient(90deg,#2FA97A,#5CE7A3);width:74%;animation:fill 6s ease-out infinite alternate;box-shadow:0 0 18px rgba(92,231,163,.55)"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95">
+              <div>1.4 / 1.9 GB · 42.6 MB/S</div>
+              <div>ETA 24S</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:9px;padding:20px 22px 0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:16px;background:#5CE7A3;color:#06120D;font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.2"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5H6.5A1.5 1.5 0 005 7v8.5"/></svg>
+              Share key
+            </div>
+            <div style="width:52px;height:50px;border-radius:16px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><path d="M9 5v14"/><path d="M15 5v14"/></svg>
+            </div>
+            <div style="width:52px;height:50px;border-radius:16px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/></svg>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;padding:22px 22px 0">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86">PEOPLE</div>
+            <div style="flex:1;height:1px;background:rgba(255,255,255,.07)"></div>
+          </div>
+          <div style="display:flex;gap:8px;padding:14px 22px 0">
+            <div style="flex:1;padding:12px 10px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;gap:7px">
+              <div style="width:32px;height:32px;border-radius:11px;background:#2E4A41;font-size:13px;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-weight:600">A</div>
+              <div style="font-size:12.5px;font-weight:600">Ana</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5CE7A3">↑28.1</div>
+            </div>
+            <div style="flex:1;padding:12px 10px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;gap:7px">
+              <div style="width:32px;height:32px;border-radius:11px;background:#3A4A5A;font-size:13px;display:flex;align-items:center;justify-content:center;color:#BFD6EA;font-weight:600">J</div>
+              <div style="font-size:12.5px;font-weight:600">Jonas</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5CE7A3">↑11.4</div>
+            </div>
+            <div style="flex:1;padding:12px 10px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;gap:7px">
+              <div style="width:32px;height:32px;border-radius:11px;background:#4A3F2E;font-size:13px;display:flex;align-items:center;justify-content:center;color:#EBD3A6;font-weight:600">R</div>
+              <div style="font-size:12.5px;font-weight:600">Rosa</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5F6E69">idle</div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:24px 22px 0">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86">CONTENTS</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5CE7A3">94 / 128 DONE</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px 22px 0">
+            <div style="aspect-ratio:1;border-radius:12px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:12px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:12px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:12px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:12px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:12px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px);position:relative;overflow:hidden">
+              <div style="position:absolute;inset:0;background:rgba(7,9,10,.62);display:flex;align-items:center;justify-content:center">
+                <div style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(92,231,163,.3);border-top-color:#5CE7A3"></div>
+              </div>
+            </div>
+            <div style="aspect-ratio:1;border-radius:12px;background:#121A18;border:1px solid rgba(255,255,255,.06)"></div>
+            <div style="aspect-ratio:1;border-radius:12px;background:#121A18;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95">+120</div>
+          </div>
+
+          <div style="margin-top:auto;padding:12px 26px 26px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to top,#0B1110 55%,rgba(11,17,16,0))">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+              <div style="font-size:10px">Home</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#E6EDEA">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+              <div style="font-size:10px;font-weight:600">Collections</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c1-2.9 3-4.2 5.5-4.2S13.5 16.1 14.5 19"/><path d="M16 6.4a3 3 0 010 5.4"/><path d="M18 19c-.4-1.6-1-2.8-1.8-3.6 2.2.3 3.6 1.5 4.3 3.6"/></svg>
+              <div style="font-size:10px">People</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.6-3.6 4-5.2 7-5.2s5.4 1.6 7 5.2"/></svg>
+              <div style="font-size:10px">You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOBILE COLLECTIONS EMPTY -->
+      <div data-screen-label="Mobile collections empty" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">M3 · COLLECTIONS — EMPTY, BUT USEFUL</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+
+          <div style="padding:22px 22px 0">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1">Collections</div>
+            <div style="font-size:14px;color:#8B9A95;margin-top:6px">Nothing shared yet. Two ways to start.</div>
+          </div>
+
+          <div style="padding:24px 22px 0;display:flex;flex-direction:column;gap:10px">
+            <div style="padding:20px;border-radius:22px;background:linear-gradient(150deg,rgba(92,231,163,.15),rgba(92,231,163,.03));border:1px solid rgba(92,231,163,.28)">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:42px;height:42px;border-radius:14px;background:#5CE7A3;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.3"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+                </div>
+                <div style="flex:1">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600">Share something</div>
+                  <div style="font-size:13px;color:#A9B7B2;margin-top:3px;line-height:1.4">Pick photos, files or a folder. Stays on this phone.</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:7px;margin-top:16px">
+                <div style="flex:1;padding:10px;border-radius:12px;background:rgba(7,18,13,.35);text-align:center;font-size:13px;font-weight:600;color:#EDF4F1">Photos</div>
+                <div style="flex:1;padding:10px;border-radius:12px;background:rgba(7,18,13,.35);text-align:center;font-size:13px;font-weight:600;color:#EDF4F1">Files</div>
+                <div style="flex:1;padding:10px;border-radius:12px;background:rgba(7,18,13,.35);text-align:center;font-size:13px;font-weight:600;color:#EDF4F1">Folder</div>
+              </div>
+            </div>
+
+            <div style="padding:18px;border-radius:22px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:13px">
+              <div style="width:42px;height:42px;border-radius:14px;background:#1B2523;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.9"><circle cx="8" cy="12" r="3.4"/><circle cx="17" cy="12" r="3.4"/><path d="M11.4 12h2.2"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600">Join with a key</div>
+                <div style="font-size:13px;color:#7C8B86;margin-top:3px">Someone sent you one? Paste it.</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2" style="flex-shrink:0"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+
+            <div style="padding:18px;border-radius:22px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:13px">
+              <div style="width:42px;height:42px;border-radius:14px;background:rgba(240,179,87,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F0B357" stroke-width="1.9"><path d="M12 4v11"/><path d="M7 12l5 5 5-5"/><path d="M5 20h14"/></svg>
+              </div>
+              <div style="flex:1">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600">Add a torrent</div>
+                <div style="font-size:13px;color:#7C8B86;margin-top:3px">Magnet link, info hash or .torrent file.</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2" style="flex-shrink:0"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+
+          <div style="margin:26px 22px 0;padding:16px;border-radius:20px;background:#0F1615;border:1px solid rgba(255,255,255,.055)">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86">NEARBY RIGHT NOW</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;color:#F0B357;border:1px solid rgba(240,179,87,.35);background:rgba(240,179,87,.09);border-radius:5px;padding:2px 5px">SPEC NEEDED</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
+              <div style="width:36px;height:36px;border-radius:12px;background:#2E4A41;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;flex-shrink:0">A</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14.5px;font-weight:600">Ana’s MacBook</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B9A95;margin-top:2px">SAME WI-FI · 2 COLLECTIONS</div>
+              </div>
+              <div style="font-size:13px;font-weight:600;color:#5CE7A3;flex-shrink:0">Ask</div>
+            </div>
+          </div>
+
+          <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#5F6E69;padding:24px 26px 0">NO ACCOUNT · NOTHING LEAVES THIS DEVICE UNASKED</div>
+
+          <div style="margin-top:auto;padding:12px 26px 26px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+              <div style="font-size:10px">Home</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#E6EDEA">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+              <div style="font-size:10px;font-weight:600">Collections</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c1-2.9 3-4.2 5.5-4.2S13.5 16.1 14.5 19"/><path d="M16 6.4a3 3 0 010 5.4"/><path d="M18 19c-.4-1.6-1-2.8-1.8-3.6 2.2.3 3.6 1.5 4.3 3.6"/></svg>
+              <div style="font-size:10px">People</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.6-3.6 4-5.2 7-5.2s5.4 1.6 7 5.2"/></svg>
+              <div style="font-size:10px">You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOBILE YOU -->
+      <div data-screen-label="Mobile you" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#5F6E69">M4 · YOU — TIGHTER, NO 0 B VOIDS</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="position:absolute;inset:0;background:radial-gradient(80% 30% at 50% 8%, rgba(92,231,163,.13), transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:14px;padding:22px 22px 0;position:relative">
+            <div style="width:60px;height:60px;border-radius:20px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;flex-shrink:0;box-shadow:0 0 36px -10px rgba(92,231,163,.5)">M</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:600;letter-spacing:-.02em">MarkNo1</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:#7C8B86;margin-top:4px">THIS DEVICE · 74710D98</div>
+            </div>
+            <div style="padding:9px 15px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:13px;font-weight:600;color:#C9D6D1;flex-shrink:0">Edit</div>
+          </div>
+
+          <div style="margin:24px 22px 0;padding:18px;border-radius:22px;background:#121A18;border:1px solid rgba(255,255,255,.07);position:relative">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86">THIS WEEK</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;color:#F0B357;border:1px solid rgba(240,179,87,.35);background:rgba(240,179,87,.09);border-radius:5px;padding:2px 5px">SPEC NEEDED</div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5CE7A3">↑ 8.1 · ↓ 42.6 MB/S NOW</div>
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:4px;height:52px;margin-top:16px">
+              <div style="flex:1;height:32%;background:#22302D;border-radius:3px"></div>
+              <div style="flex:1;height:54%;background:#2A3D38;border-radius:3px"></div>
+              <div style="flex:1;height:40%;background:#22302D;border-radius:3px"></div>
+              <div style="flex:1;height:74%;background:#3E7A63;border-radius:3px"></div>
+              <div style="flex:1;height:96%;background:#5CE7A3;border-radius:3px"></div>
+              <div style="flex:1;height:62%;background:#3E7A63;border-radius:3px"></div>
+              <div style="flex:1;height:48%;background:#2A3D38;border-radius:3px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:14px">
+              <div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">SENT</div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:600;margin-top:4px;letter-spacing:-.02em">18.4 <span style="font-size:12px;color:#8B9A95">GB</span></div>
+              </div>
+              <div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">RECEIVED</div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:600;margin-top:4px;letter-spacing:-.02em;color:#5CE7A3">42.1 <span style="font-size:12px;color:#7F9E92">GB</span></div>
+              </div>
+              <div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">COLLECTIONS</div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:600;margin-top:4px">3</div>
+              </div>
+              <div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">PEOPLE</div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:600;margin-top:4px">7</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin:12px 22px 0;border-radius:22px;background:#121A18;border:1px solid rgba(255,255,255,.07);overflow:hidden;position:relative">
+            <div style="padding:15px 16px;display:flex;align-items:center;gap:13px;border-bottom:1px solid rgba(255,255,255,.05)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8" style="flex-shrink:0"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.6 3.4"/></svg>
+              <div style="flex:1;font-size:14.5px">Settings</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5CE7A3">HEALTHY</div>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div style="padding:15px 16px;display:flex;align-items:center;gap:13px;border-bottom:1px solid rgba(255,255,255,.05)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8" style="flex-shrink:0"><path d="M4.5 7.5h15v11h-15z"/><path d="M4.5 11.5h15"/></svg>
+              <div style="flex:1;font-size:14.5px">Storage</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95">618 MB</div>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div style="padding:15px 16px;display:flex;align-items:center;gap:13px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8" style="flex-shrink:0"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5H6.5A1.5 1.5 0 005 7v8.5"/></svg>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14.5px">Your address</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:3px">192.168.1.155:47821</div>
+              </div>
+              <div style="font-size:13px;font-weight:600;color:#5CE7A3;flex-shrink:0">Copy</div>
+            </div>
+          </div>
+
+          <div style="margin:12px 22px 0;padding:16px;border-radius:22px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;gap:13px;align-items:flex-start;position:relative">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.8" style="flex-shrink:0;margin-top:2px"><path d="M12 3.5l7 3v5.2c0 4.2-2.9 7.6-7 8.8-4.1-1.2-7-4.6-7-8.8V6.5z"/></svg>
+            <div style="flex:1">
+              <div style="font-size:14.5px;font-weight:600">Identity lives on this phone</div>
+              <div style="font-size:12.5px;color:#7C8B86;margin-top:4px;line-height:1.45">A key pair, no account, no server. Back it up before you switch devices.</div>
+              <div style="display:inline-flex;margin-top:12px;padding:9px 14px;border-radius:11px;background:rgba(92,231,163,.12);border:1px solid rgba(92,231,163,.3);font-size:13px;font-weight:600;color:#5CE7A3">Back up identity</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding:12px 26px 26px;display:flex;justify-content:space-between;align-items:center;position:relative">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 10.5V19h11v-8.5"/></svg>
+              <div style="font-size:10px">Home</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+              <div style="font-size:10px">Collections</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c1-2.9 3-4.2 5.5-4.2S13.5 16.1 14.5 19"/><path d="M16 6.4a3 3 0 010 5.4"/><path d="M18 19c-.4-1.6-1-2.8-1.8-3.6 2.2.3 3.6 1.5 4.3 3.6"/></svg>
+              <div style="font-size:10px">People</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#E6EDEA">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.6-3.6 4-5.2 7-5.2s5.4 1.6 7 5.2"/></svg>
+              <div style="font-size:10px;font-weight:600">You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section style="padding:24px 56px 96px;display:flex;flex-direction:column;gap:40px">
+  <div id="1a" style="display:flex;flex-direction:column;gap:32px">
+    <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.12em;color:#07090A;background:#5CE7A3;padding:5px 10px;border-radius:6px;font-weight:500">1a</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:600;letter-spacing:-.02em;color:#EDF4F1">Portalis — “Signal”</div>
+        <div style="font-size:15px;color:#8B9A95;max-width:720px;text-wrap:pretty">Dark kept, violet retired for a live mint signal accent that only ever means <em>data is moving</em>. Mobile-first: bottom nav, one unmistakable primary action per screen, and the transfer itself promoted to the top of the app. Torrent language is demoted behind progressive disclosure.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:#7C8B86">
+      <div style="border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:7px 13px">BASE #07090A / #0E1413</div>
+      <div style="border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:7px 13px">SIGNAL #5CE7A3</div>
+      <div style="border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:7px 13px">EMBER #F0B357 · TORRENT</div>
+      <div style="border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:7px 13px">SPACE GROTESK / INSTRUMENT SANS / JETBRAINS MONO</div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+
+      <!-- ============ HOME · FILLED ============ -->
+      <div data-screen-label="Home / filled" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">01 · HOME — LIVE</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="position:absolute;inset:0;background:radial-gradient(120% 60% at 50% -10%, rgba(92,231,163,.14), transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+
+          <div style="padding:16px 22px 0;display:flex;justify-content:space-between;align-items:center;position:relative">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:34px;height:34px;border-radius:12px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px">M</div>
+              <div style="display:flex;flex-direction:column">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;letter-spacing:-.01em">Portalis</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:#5CE7A3">2 DEVICES NEARBY</div>
+              </div>
+            </div>
+            <div style="width:38px;height:38px;border-radius:14px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8.4" stroke-dasharray="2.6 3.4"/></svg>
+            </div>
+          </div>
+
+          <div style="padding:26px 22px 0;position:relative">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.1">Moving now</div>
+            <div style="font-size:14px;color:#8B9A95;margin-top:5px">3 collections · 1 transfer in flight</div>
+          </div>
+
+          <div style="margin:20px 22px 0;border-radius:24px;padding:18px;background:linear-gradient(160deg,rgba(92,231,163,.16),rgba(92,231,163,.04));border:1px solid rgba(92,231,163,.28);position:relative;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;align-items:center;gap:7px">
+                  <div style="width:7px;height:7px;border-radius:50%;background:#5CE7A3;animation:pulse 1.6s ease-in-out infinite"></div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#5CE7A3">RECEIVING</div>
+                </div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;letter-spacing:-.01em">Iceland trip</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;color:#5CE7A3;letter-spacing:-.01em">42.6</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#7F9E92">MB/S</div>
+              </div>
+            </div>
+            <div style="height:8px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:16px;overflow:hidden">
+              <div style="height:100%;border-radius:99px;background:linear-gradient(90deg,#2FA97A,#5CE7A3);width:74%;animation:fill 6s ease-out infinite alternate;box-shadow:0 0 18px rgba(92,231,163,.6)"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:11px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95">
+              <div>1.4 / 1.9 GB</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="display:flex">
+                  <div style="width:16px;height:16px;border-radius:50%;background:#2E4A41;border:1.5px solid #0B1110;font-size:9px;display:flex;align-items:center;justify-content:center;color:#9FE9C6">A</div>
+                  <div style="width:16px;height:16px;border-radius:50%;background:#3A4A5A;border:1.5px solid #0B1110;margin-left:-5px;font-size:9px;display:flex;align-items:center;justify-content:center;color:#BFD6EA">J</div>
+                  <div style="width:16px;height:16px;border-radius:50%;background:#4A3F2E;border:1.5px solid #0B1110;margin-left:-5px;font-size:9px;display:flex;align-items:center;justify-content:center;color:#EBD3A6">R</div>
+                </div>
+                <span>3 peers</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;padding:22px 22px 0">
+            <div style="padding:8px 14px;border-radius:999px;background:#E6EDEA;color:#0B1110;font-size:13px;font-weight:600">All</div>
+            <div style="padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:13px">Sharing</div>
+            <div style="padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:13px">Receiving</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;padding:16px 22px 0">
+            <div style="display:flex;gap:14px;align-items:center;padding:14px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="width:52px;height:52px;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px);flex-shrink:0"></div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">Iceland trip</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:3px">128 photos · 1.9 GB</div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5CE7A3;background:rgba(92,231,163,.12);padding:5px 9px;border-radius:8px">74%</div>
+            </div>
+
+            <div style="display:flex;gap:14px;align-items:center;padding:14px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="width:52px;height:52px;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px);flex-shrink:0"></div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">Band demos</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:3px">9 files · 240 MB</div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;border:1px solid rgba(255,255,255,.12);padding:5px 9px;border-radius:8px">SHARING</div>
+            </div>
+
+            <div style="display:flex;gap:14px;align-items:center;padding:14px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="width:52px;height:52px;border-radius:14px;background:repeating-linear-gradient(45deg,#2A2318 0 6px,#1F1B13 6px 12px);flex-shrink:0;display:flex;align-items:center;justify-content:center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F0B357" stroke-width="1.9"><path d="M12 4v11"/><path d="M7 12l5 5 5-5"/></svg>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600">ubuntu-24.04.iso</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:3px">torrent · 38% · 12 seeds</div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#F0B357;background:rgba(240,179,87,.12);padding:5px 9px;border-radius:8px">38%</div>
+            </div>
+          </div>
+
+          <div style="position:absolute;right:20px;bottom:106px;width:62px;height:62px;border-radius:22px;background:#5CE7A3;display:flex;align-items:center;justify-content:center;box-shadow:0 16px 34px -8px rgba(92,231,163,.6)">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.3"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          </div>
+
+          <div style="margin-top:auto;padding:12px 26px 26px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to top,#0B1110 55%,rgba(11,17,16,0));position:relative">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#E6EDEA">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+              <div style="font-size:10px;font-weight:600">Collections</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 9h16"/><path d="M8 5L4 9l4 4"/><path d="M20 15H4"/><path d="M16 11l4 4-4 4"/></svg>
+              <div style="font-size:10px">Transfers</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.6-3.6 4-5.2 7-5.2s5.4 1.6 7 5.2"/></svg>
+              <div style="font-size:10px">You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ HOME · EMPTY ============ -->
+      <div data-screen-label="Home / empty" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">02 · FIRST RUN</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="position:absolute;inset:0;background:radial-gradient(90% 46% at 50% 34%, rgba(92,231,163,.13), transparent 68%);pointer-events:none"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+          <div style="padding:16px 22px 0;display:flex;justify-content:space-between;align-items:center;position:relative">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:34px;height:34px;border-radius:12px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px">M</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;letter-spacing:-.01em">Portalis</div>
+            </div>
+            <div style="width:38px;height:38px;border-radius:14px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8.4" stroke-dasharray="2.6 3.4"/></svg>
+            </div>
+          </div>
+
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:0 34px;position:relative">
+            <div style="width:150px;height:150px;position:relative;display:flex;align-items:center;justify-content:center">
+              <div style="position:absolute;width:74px;height:74px;border-radius:50%;border:1px solid rgba(92,231,163,.5);animation:ring 3.4s ease-out infinite"></div>
+              <div style="position:absolute;width:74px;height:74px;border-radius:50%;border:1px solid rgba(92,231,163,.5);animation:ring 3.4s ease-out infinite 1.1s"></div>
+              <div style="position:absolute;width:74px;height:74px;border-radius:50%;border:1px solid rgba(92,231,163,.5);animation:ring 3.4s ease-out infinite 2.2s"></div>
+              <div style="width:56px;height:56px;border-radius:20px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(92,231,163,.4)">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.2"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+              </div>
+            </div>
+            <div style="text-align:center;display:flex;flex-direction:column;gap:10px">
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:600;letter-spacing:-.025em;line-height:1.15">Send anything,<br>straight to a friend</div>
+              <div style="font-size:14.5px;color:#8B9A95;line-height:1.5;text-wrap:pretty">No uploads, no size limits. Files move device to device — and stay on yours.</div>
+            </div>
+          </div>
+
+          <div style="padding:0 22px 26px;display:flex;flex-direction:column;gap:10px;position:relative">
+            <div style="display:flex;align-items:center;gap:12px;padding:19px 20px;border-radius:20px;background:#5CE7A3;color:#06120D">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.2"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:16.5px;font-weight:600;flex:1">Share something</div>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.2"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+            <div style="display:flex;gap:10px">
+              <div style="flex:1;display:flex;flex-direction:column;gap:8px;padding:16px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.9"><circle cx="8" cy="12" r="3.4"/><circle cx="17" cy="12" r="3.4"/><path d="M11.4 12h2.2"/></svg>
+                <div style="font-size:14.5px;font-weight:600">Join with a key</div>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:8px;padding:16px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F0B357" stroke-width="1.9"><path d="M12 4v11"/><path d="M7 12l5 5 5-5"/><path d="M5 20h14"/></svg>
+                <div style="font-size:14.5px;font-weight:600">Add a torrent</div>
+              </div>
+            </div>
+            <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#5F6E69;margin-top:4px">NO ACCOUNT · NOTHING LEAVES THIS DEVICE UNASKED</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ SHARE SHEET ============ -->
+      <div data-screen-label="Create and share" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">03 · CREATE &amp; SHARE</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px 0">
+            <div style="width:38px;height:38px;border-radius:14px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">STEP 1 OF 2</div>
+            <div style="width:38px"></div>
+          </div>
+
+          <div style="padding:22px 22px 0">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86;margin-bottom:8px">COLLECTION NAME</div>
+            <div style="display:flex;align-items:center;gap:10px;border-bottom:1.5px solid rgba(92,231,163,.5);padding-bottom:10px">
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600;letter-spacing:-.02em">Iceland trip</div>
+              <div style="width:2px;height:26px;background:#5CE7A3;animation:pulse 1.2s steps(2) infinite"></div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:9px;padding:22px 22px 0">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:9px;padding:16px 6px;border-radius:18px;background:rgba(92,231,163,.1);border:1px solid rgba(92,231,163,.3)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.8"><rect x="3" y="6.5" width="18" height="13" rx="3"/><circle cx="12" cy="13" r="3.4"/></svg>
+              <div style="font-size:13px;font-weight:600;color:#9FE9C6">Photos</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:9px;padding:16px 6px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8.5 9h7"/><path d="M8.5 13h7"/></svg>
+              <div style="font-size:13px;font-weight:600;color:#C9D6D1">Files</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:9px;padding:16px 6px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><path d="M3.5 7.5a2 2 0 012-2h3.2l2 2.4h6.8a2 2 0 012 2v8.1a2 2 0 01-2 2h-12a2 2 0 01-2-2z"/></svg>
+              <div style="font-size:13px;font-weight:600;color:#C9D6D1">Folder</div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:26px 22px 10px">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600">6 items</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95">842 MB TOTAL</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 22px">
+            <div style="aspect-ratio:1;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px);position:relative">
+              <div style="position:absolute;top:6px;right:6px;width:18px;height:18px;border-radius:50%;background:rgba(7,9,10,.75);display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#E6EDEA" stroke-width="3"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></div>
+            </div>
+            <div style="aspect-ratio:1;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+            <div style="aspect-ratio:1;border-radius:14px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/></svg>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8B9A95">notes.pdf</div>
+            </div>
+            <div style="aspect-ratio:1;border-radius:14px;border:1.5px dashed rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            </div>
+          </div>
+
+          <div style="margin:22px 22px 0;padding:14px 16px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:12px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.8"><rect x="4.5" y="10" width="15" height="10" rx="2.5"/><path d="M8.2 10V7.5a3.8 3.8 0 017.6 0V10"/></svg>
+            <div style="flex:1;font-size:13px;color:#A9B7B2;line-height:1.4">Files stay on this device. Only people with the code can pull them.</div>
+          </div>
+
+          <div style="margin-top:auto;padding:16px 22px 28px;border-top:1px solid rgba(255,255,255,.06);background:#0B1110">
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:19px;border-radius:20px;background:#5CE7A3;color:#06120D;font-family:'Space Grotesk',sans-serif;font-size:16.5px;font-weight:600;box-shadow:0 14px 30px -10px rgba(92,231,163,.5)">
+              Create &amp; get link
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.3"><path d="M9 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ JOIN ============ -->
+      <div data-screen-label="Join a collection" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">04 · JOIN</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="position:absolute;inset:0;background:radial-gradient(90% 40% at 50% 20%, rgba(92,231,163,.12), transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+          <div style="padding:16px 22px 0;position:relative">
+            <div style="width:38px;height:38px;border-radius:14px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+            </div>
+          </div>
+
+          <div style="padding:30px 26px 0;position:relative">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em;line-height:1.12">Got an invite?</div>
+            <div style="font-size:14.5px;color:#8B9A95;margin-top:8px;line-height:1.5">Paste the invite key you were sent — it identifies the collection and the device holding it.</div>
+          </div>
+
+          <div style="padding:24px 26px 0;position:relative">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86;margin-bottom:9px">INVITE KEY</div>
+            <div style="border-radius:18px;background:rgba(92,231,163,.06);border:1.5px solid #5CE7A3;padding:15px 16px;box-shadow:0 0 30px -10px rgba(92,231,163,.45)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;word-break:break-all;color:#E6EDEA">portalis:8f7a2c41d9<span style="color:#8B9A95">b60e4c7fa3128d5e</span><span style="color:#5CE7A3">9a</span><span style="display:inline-block;width:2px;height:13px;background:#5CE7A3;vertical-align:-2px;margin-left:2px;animation:pulse 1.2s steps(2) infinite"></span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;margin-top:11px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#7F9E92">VALID KEY · ANA’S MACBOOK · 128 PHOTOS</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;padding:20px 26px 0;position:relative">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:14px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07);font-size:14px;font-weight:600;color:#C9D6D1">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><rect x="8" y="4" width="12" height="15" rx="2.5"/><path d="M15.5 19v1a2 2 0 01-2 2H6a2 2 0 01-2-2V9a2 2 0 012-2h1.5"/></svg>
+              Paste
+            </div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:14px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07);font-size:14px;font-weight:600;color:#C9D6D1">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="15" y="15" width="3" height="3"/></svg>
+              Scan QR
+            </div>
+          </div>
+
+          <div style="margin:26px 26px 0;padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);position:relative">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86;margin-bottom:12px">RECENTLY NEARBY</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:36px;height:36px;border-radius:12px;background:#2E4A41;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px">A</div>
+              <div style="flex:1">
+                <div style="font-size:14.5px;font-weight:600">Ana’s MacBook</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95;margin-top:2px">SAME WI-FI · 2 COLLECTIONS</div>
+              </div>
+              <div style="font-size:13px;font-weight:600;color:#5CE7A3">Ask</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding:16px 22px 28px;border-top:1px solid rgba(255,255,255,.06);background:#0B1110;position:relative">
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:19px;border-radius:20px;background:#5CE7A3;color:#06120D;font-family:'Space Grotesk',sans-serif;font-size:16.5px;font-weight:600;box-shadow:0 14px 30px -10px rgba(92,231,163,.5)">Join collection<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.3"><path d="M9 5l7 7-7 7"/></svg></div>
+            <div style="text-align:center;font-size:12.5px;color:#63736E;margin-top:11px">You’ll appear as <span style="color:#A9B7B2">Mark</span> to the others</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ TORRENT ============ -->
+      <div data-screen-label="Add torrent" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">05 · TORRENT</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="position:absolute;inset:0;background:radial-gradient(90% 40% at 50% 16%, rgba(240,179,87,.12), transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+          <div style="padding:16px 22px 0;position:relative">
+            <div style="width:38px;height:38px;border-radius:14px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+            </div>
+          </div>
+
+          <div style="padding:26px 26px 0;position:relative">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.025em">Add a torrent</div>
+            <div style="font-size:14.5px;color:#8B9A95;margin-top:8px">Paste a magnet link or open a .torrent file.</div>
+          </div>
+
+          <div style="margin:22px 26px 0;padding:15px 16px;border-radius:16px;background:#141D1B;border:1px solid rgba(240,179,87,.32);position:relative">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#E6EDEA;word-break:break-all;line-height:1.5">magnet:?xt=urn:btih:8f7a2c<span style="color:#7C8B86">…d41e</span></div>
+          </div>
+
+          <div style="display:flex;gap:10px;padding:12px 26px 0;position:relative">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border-radius:15px;background:#121A18;border:1px solid rgba(255,255,255,.07);font-size:13.5px;font-weight:600;color:#C9D6D1">Paste</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border-radius:15px;background:#121A18;border:1px solid rgba(255,255,255,.07);font-size:13.5px;font-weight:600;color:#C9D6D1">.torrent file</div>
+          </div>
+
+          <div style="margin:22px 26px 0;border-radius:22px;background:#121A18;border:1px solid rgba(255,255,255,.07);overflow:hidden;position:relative">
+            <div style="padding:18px;display:flex;gap:14px;align-items:flex-start">
+              <div style="width:46px;height:46px;border-radius:14px;background:rgba(240,179,87,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F0B357" stroke-width="1.9"><path d="M12 4v11"/><path d="M7 12l5 5 5-5"/><path d="M5 20h14"/></svg>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;line-height:1.3">ubuntu-24.04.2-desktop-amd64.iso</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:5px">6.1 GB · 1 FILE · VERIFIED HASH</div>
+              </div>
+            </div>
+            <div style="display:flex;border-top:1px solid rgba(255,255,255,.06)">
+              <div style="flex:1;padding:14px;text-align:center;border-right:1px solid rgba(255,255,255,.06)">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:600;color:#5CE7A3">128</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:#7C8B86;margin-top:3px">SEEDS</div>
+              </div>
+              <div style="flex:1;padding:14px;text-align:center;border-right:1px solid rgba(255,255,255,.06)">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:600">14</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:#7C8B86;margin-top:3px">PEERS</div>
+              </div>
+              <div style="flex:1;padding:14px;text-align:center">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:600">~4m</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:#7C8B86;margin-top:3px">ETA</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin:14px 26px 0;padding:15px 16px;border-radius:16px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;position:relative">
+            <div>
+              <div style="font-size:14px;font-weight:600">Save to</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:3px">/DOWNLOADS/PORTALIS</div>
+            </div>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+
+          <div style="margin-top:auto;padding:16px 22px 28px;border-top:1px solid rgba(255,255,255,.06);background:#0B1110;position:relative">
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:19px;border-radius:20px;background:#F0B357;color:#1A1206;font-family:'Space Grotesk',sans-serif;font-size:16.5px;font-weight:600;box-shadow:0 14px 30px -10px rgba(240,179,87,.45)">
+              Start download
+            </div>
+            <div style="text-align:center;font-size:12.5px;color:#63736E;margin-top:11px">Begins immediately · pause any time</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ SETTINGS ============ -->
+      <div data-screen-label="Settings" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">06 · SETTINGS — PROGRESSIVE</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+          <div style="padding:16px 22px 0;display:flex;align-items:center;gap:14px">
+            <div style="width:38px;height:38px;border-radius:14px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+            </div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em">Settings</div>
+          </div>
+
+          <div style="margin:18px 22px 0;display:flex;align-items:center;gap:10px;padding:12px 15px;border-radius:15px;background:#141D1B;border:1px solid rgba(255,255,255,.07)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+            <div style="font-size:14px;color:#63736E">Search settings</div>
+          </div>
+
+          <div style="margin:18px 22px 0;padding:16px;border-radius:20px;background:linear-gradient(160deg,rgba(92,231,163,.13),rgba(92,231,163,.03));border:1px solid rgba(92,231,163,.24)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-size:15px;font-weight:600">Everything is healthy</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7F9E92;margin-top:4px">PORT OPEN · DHT ON · 14 PEERS</div>
+              </div>
+              <div style="width:34px;height:34px;border-radius:50%;background:rgba(92,231,163,.16);display:flex;align-items:center;justify-content:center">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86;padding:24px 26px 10px">SPEED</div>
+          <div style="margin:0 22px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);overflow:hidden">
+            <div style="padding:15px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.05)">
+              <div style="font-size:14.5px">Upload limit</div>
+              <div style="display:flex;align-items:center;gap:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5CE7A3">UNLIMITED</div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+            </div>
+            <div style="padding:15px 16px;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:14.5px">Download limit</div>
+              <div style="display:flex;align-items:center;gap:7px"><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5CE7A3">UNLIMITED</div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+            </div>
+          </div>
+
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#7C8B86;padding:22px 26px 10px">SHARING</div>
+          <div style="margin:0 22px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);overflow:hidden">
+            <div style="padding:15px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.05)">
+              <div style="flex:1">
+                <div style="font-size:14.5px">Keep sharing after restart</div>
+                <div style="font-size:12.5px;color:#7C8B86;margin-top:3px;line-height:1.4">Friends can still pull your collections.</div>
+              </div>
+              <div style="width:44px;height:26px;border-radius:99px;background:#5CE7A3;position:relative;flex-shrink:0"><div style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#06120D"></div></div>
+            </div>
+            <div style="padding:15px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px">
+              <div style="flex:1">
+                <div style="font-size:14.5px">Find friends on this Wi-Fi</div>
+                <div style="font-size:12.5px;color:#7C8B86;margin-top:3px;line-height:1.4">Faster transfers, no internet needed.</div>
+              </div>
+              <div style="width:44px;height:26px;border-radius:99px;background:#5CE7A3;position:relative;flex-shrink:0"><div style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#06120D"></div></div>
+            </div>
+          </div>
+
+          <div style="margin:22px 22px 0;padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:13px">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.6 3.4"/></svg>
+            <div style="flex:1">
+              <div style="font-size:14.5px;font-weight:600">Network &amp; engine</div>
+              <div style="font-size:12.5px;color:#7C8B86;margin-top:3px">Ports, DHT, proxy, trackers, disk</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E7D78" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+
+          <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:#4E5C58;padding:20px 26px 0">PORTALIS 2.0 · NO ACCOUNT · NO SERVER</div>
+
+          <div style="margin-top:auto;padding:12px 26px 26px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+              <div style="font-size:10px">Collections</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 9h16"/><path d="M8 5L4 9l4 4"/><path d="M20 15H4"/><path d="M16 11l4 4-4 4"/></svg>
+              <div style="font-size:10px">Transfers</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#E6EDEA">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.6-3.6 4-5.2 7-5.2s5.4 1.6 7 5.2"/></svg>
+              <div style="font-size:10px;font-weight:600">You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ YOU / DEVICE ============ -->
+      <div data-screen-label="You / device" style="display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">07 · YOU</div>
+        <div style="width:390px;height:844px;background:#0B1110;border-radius:46px;border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 50px 90px -30px rgba(0,0,0,.85)">
+          <div style="position:absolute;inset:0;background:radial-gradient(80% 34% at 50% 12%, rgba(92,231,163,.14), transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#E6EDEA;position:relative">
+            <div>9:41</div>
+            <div style="display:flex;gap:5px;align-items:center">
+              <div style="width:16px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:2px"></div>
+              <div style="width:20px;height:9px;border:1px solid rgba(255,255,255,.5);border-radius:3px;position:relative"><div style="position:absolute;inset:1.5px;width:12px;background:#E6EDEA;border-radius:1px"></div></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;align-items:center;padding:28px 26px 0;position:relative">
+            <div style="width:76px;height:76px;border-radius:26px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:32px;box-shadow:0 0 46px -8px rgba(92,231,163,.5)">M</div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600;letter-spacing:-.02em;margin-top:16px">Mark</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.06em;color:#7C8B86;margin-top:6px">THIS DEVICE · 7471…D3C5</div>
+            <div style="margin-top:16px;padding:9px 20px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:13.5px;font-weight:600;color:#C9D6D1">Change name</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:26px 22px 0;position:relative">
+            <div style="padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">SENT</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600;margin-top:6px;letter-spacing:-.02em">18.4 <span style="font-size:14px;color:#8B9A95">GB</span></div>
+            </div>
+            <div style="padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">RECEIVED</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600;margin-top:6px;letter-spacing:-.02em;color:#5CE7A3">42.1 <span style="font-size:14px;color:#7F9E92">GB</span></div>
+            </div>
+            <div style="padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">COLLECTIONS</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600;margin-top:6px">3</div>
+            </div>
+            <div style="padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">PEOPLE</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600;margin-top:6px">7</div>
+            </div>
+          </div>
+
+          <div style="margin:22px 22px 0;padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);position:relative">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:#7C8B86">YOUR ADDRESS</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:9px">
+              <div style="flex:1;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#E6EDEA;word-break:break-all">192.168.1.155:54148</div>
+              <div style="width:32px;height:32px;border-radius:11px;background:#1B2523;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9AA9A4" stroke-width="1.9"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5H6.5A1.5 1.5 0 005 7v8.5"/></svg>
+              </div>
+            </div>
+            <div style="font-size:12.5px;color:#7C8B86;margin-top:9px;line-height:1.45">Rotates every launch. Collaborators find you automatically.</div>
+          </div>
+
+          <div style="margin:12px 22px 0;padding:16px;border-radius:20px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;gap:13px;align-items:flex-start;position:relative">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5CE7A3" stroke-width="1.8" style="flex-shrink:0;margin-top:2px"><path d="M12 3.5l7 3v5.2c0 4.2-2.9 7.6-7 8.8-4.1-1.2-7-4.6-7-8.8V6.5z"/></svg>
+            <div style="flex:1">
+              <div style="font-size:14.5px;font-weight:600">Identity lives on this phone</div>
+              <div style="font-size:12.5px;color:#7C8B86;margin-top:4px;line-height:1.45">A key pair, no account, no server. Back it up before you switch devices.</div>
+              <div style="font-size:13px;font-weight:600;color:#5CE7A3;margin-top:10px">Back up identity</div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding:12px 26px 26px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+              <div style="font-size:10px">Collections</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#6E7D78">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 9h16"/><path d="M8 5L4 9l4 4"/><path d="M20 15H4"/><path d="M16 11l4 4-4 4"/></svg>
+              <div style="font-size:10px">Transfers</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#E6EDEA">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.6-3.6 4-5.2 7-5.2s5.4 1.6 7 5.2"/></svg>
+              <div style="font-size:10px;font-weight:600">You</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ DESKTOP ============ -->
+    <div data-screen-label="Desktop" style="display:flex;flex-direction:column;gap:14px;margin-top:24px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7C8B86">08 · DESKTOP — SAME SYSTEM, THREE PANES</div>
+      <div style="width:1280px;height:800px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#0B1110;display:flex;flex-direction:column;box-shadow:0 60px 100px -40px rgba(0,0,0,.9)">
+        <div style="height:40px;background:#0E1413;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 16px;gap:8px">
+          <div style="width:11px;height:11px;border-radius:50%;background:#FF5F57"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#FEBC2E"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#28C840"></div>
+          <div style="flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.08em;color:#7C8B86">PORTALIS</div>
+        </div>
+        <div style="flex:1;display:flex;min-height:0">
+          <div style="width:236px;border-right:1px solid rgba(255,255,255,.06);padding:20px 14px;display:flex;flex-direction:column;gap:22px;background:#0A0F0E">
+            <div style="display:flex;align-items:center;gap:10px;padding:0 8px">
+              <div style="width:30px;height:30px;border-radius:10px;background:linear-gradient(140deg,#5CE7A3,#2FA97A);display:flex;align-items:center;justify-content:center;color:#06120D;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px">M</div>
+              <div style="flex:1">
+                <div style="font-size:13.5px;font-weight:600">Mark</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5CE7A3;margin-top:1px">ONLINE · 3 PEERS</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:12px;background:#5CE7A3;color:#06120D;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06120D" stroke-width="2.4"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              New share
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;background:#141D1B;font-size:13.5px;font-weight:600">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#E6EDEA" stroke-width="1.9"><rect x="3.5" y="4.5" width="17" height="6" rx="2"/><rect x="3.5" y="13.5" width="17" height="6" rx="2"/></svg>
+                Collections <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#7C8B86">3</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><path d="M4 9h16"/><path d="M8 5L4 9l4 4"/><path d="M20 15H4"/><path d="M16 11l4 4-4 4"/></svg>
+                Transfers <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5CE7A3">2</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><circle cx="8" cy="12" r="3.4"/><circle cx="17" cy="12" r="3.4"/><path d="M11.4 12h2.2"/></svg>
+                People
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;font-size:13.5px;color:#8B9A95">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B9A95" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.6 3.4"/></svg>
+                Settings
+              </div>
+            </div>
+            <div style="margin-top:auto;padding:14px;border-radius:14px;background:#121A18;border:1px solid rgba(255,255,255,.07)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#7C8B86">THIS SESSION</div>
+              <div style="display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:10px">
+                <div style="flex:1;height:38%;background:#243330;border-radius:2px"></div>
+                <div style="flex:1;height:62%;background:#2E4A41;border-radius:2px"></div>
+                <div style="flex:1;height:44%;background:#243330;border-radius:2px"></div>
+                <div style="flex:1;height:82%;background:#5CE7A3;border-radius:2px"></div>
+                <div style="flex:1;height:58%;background:#2E4A41;border-radius:2px"></div>
+                <div style="flex:1;height:96%;background:#5CE7A3;border-radius:2px"></div>
+                <div style="flex:1;height:70%;background:#2E4A41;border-radius:2px"></div>
+                <div style="flex:1;height:48%;background:#243330;border-radius:2px"></div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;margin-top:8px">↓ 42.6 · ↑ 8.1 MB/s</div>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <div style="padding:26px 28px 0;display:flex;align-items:flex-end;justify-content:space-between">
+              <div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:600;letter-spacing:-.025em">Collections</div>
+                <div style="font-size:13.5px;color:#8B9A95;margin-top:4px">1 transfer in flight · 2.1 GB shared</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <div style="padding:7px 13px;border-radius:999px;background:#E6EDEA;color:#0B1110;font-size:12.5px;font-weight:600">All</div>
+                <div style="padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:12.5px">Sharing</div>
+                <div style="padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:#8B9A95;font-size:12.5px">Torrents</div>
+              </div>
+            </div>
+
+            <div style="padding:20px 28px;display:flex;flex-direction:column;gap:10px">
+              <div style="padding:16px 18px;border-radius:18px;background:linear-gradient(120deg,rgba(92,231,163,.14),rgba(92,231,163,.03));border:1px solid rgba(92,231,163,.28);display:flex;align-items:center;gap:18px">
+                <div style="width:48px;height:48px;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="width:6px;height:6px;border-radius:50%;background:#5CE7A3;animation:pulse 1.6s ease-in-out infinite"></div>
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:600">Iceland trip</div>
+                  </div>
+                  <div style="height:6px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:10px;overflow:hidden">
+                    <div style="height:100%;border-radius:99px;background:linear-gradient(90deg,#2FA97A,#5CE7A3);width:74%;animation:fill 6s ease-out infinite alternate"></div>
+                  </div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95;margin-top:7px">1.4 / 1.9 GB · 128 PHOTOS · 3 PEERS</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;color:#5CE7A3">42.6</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#7F9E92">MB/S</div>
+                </div>
+              </div>
+
+              <div style="padding:16px 18px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:18px">
+                <div style="width:48px;height:48px;border-radius:14px;background:repeating-linear-gradient(45deg,#1D2926 0 6px,#16211F 6px 12px)"></div>
+                <div style="flex:1">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:600">Band demos</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95;margin-top:6px">9 FILES · 240 MB · SEEDING</div>
+                </div>
+                <div style="display:flex">
+                  <div style="width:24px;height:24px;border-radius:50%;background:#2E4A41;border:2px solid #121A18;font-size:10px;display:flex;align-items:center;justify-content:center;color:#9FE9C6">A</div>
+                  <div style="width:24px;height:24px;border-radius:50%;background:#3A4A5A;border:2px solid #121A18;margin-left:-7px;font-size:10px;display:flex;align-items:center;justify-content:center;color:#BFD6EA">J</div>
+                </div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8B9A95;border:1px solid rgba(255,255,255,.12);padding:5px 9px;border-radius:8px">COPY KEY</div>
+              </div>
+
+              <div style="padding:16px 18px;border-radius:18px;background:#121A18;border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:18px">
+                <div style="width:48px;height:48px;border-radius:14px;background:rgba(240,179,87,.13);display:flex;align-items:center;justify-content:center">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F0B357" stroke-width="1.9"><path d="M12 4v11"/><path d="M7 12l5 5 5-5"/><path d="M5 20h14"/></svg>
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:15.5px;font-weight:600">ubuntu-24.04.2-desktop-amd64.iso</div>
+                  <div style="height:6px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:10px;overflow:hidden">
+                    <div style="height:100%;border-radius:99px;background:#F0B357;width:38%;animation:fill2 7s ease-out infinite alternate"></div>
+                  </div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95;margin-top:7px">2.3 / 6.1 GB · 128 SEEDS · ETA 4M</div>
+                </div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;color:#F0B357">38%</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="width:314px;border-left:1px solid rgba(255,255,255,.06);padding:24px;display:flex;flex-direction:column;gap:18px;background:#0A0F0E">
+            <div style="width:100%;aspect-ratio:1.4;border-radius:16px;background:repeating-linear-gradient(45deg,#1D2926 0 8px,#16211F 8px 16px);display:flex;align-items:flex-end;padding:12px">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8B9A95">COVER IMAGE — DROP HERE</div>
+            </div>
+            <div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em">Iceland trip</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8B9A95;margin-top:5px">SHARED WITH 3 · KEY 8F7A2C41…5E9A</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;text-align:center;padding:11px;border-radius:12px;background:#5CE7A3;color:#06120D;font-size:13px;font-weight:600">Copy invite key</div>
+              <div style="width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C9D6D1" stroke-width="1.9"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="15" y="15" width="3" height="3"/></svg>
+              </div>
+            </div>
+            <div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#7C8B86;margin-bottom:11px">PEERS</div>
+              <div style="display:flex;flex-direction:column;gap:11px">
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="width:28px;height:28px;border-radius:9px;background:#2E4A41;font-size:11px;display:flex;align-items:center;justify-content:center;color:#9FE9C6;font-weight:600">A</div>
+                  <div style="flex:1;font-size:13px">Ana</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5CE7A3">↓ 28.1</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="width:28px;height:28px;border-radius:9px;background:#3A4A5A;font-size:11px;display:flex;align-items:center;justify-content:center;color:#BFD6EA;font-weight:600">J</div>
+                  <div style="flex:1;font-size:13px">Jonas</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5CE7A3">↓ 11.4</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="width:28px;height:28px;border-radius:9px;background:#4A3F2E;font-size:11px;display:flex;align-items:center;justify-content:center;color:#EBD3A6;font-weight:600">R</div>
+                  <div style="flex:1;font-size:13px">Rosa</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7C8B86">idle</div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:auto;padding:13px 14px;border-radius:14px;background:#121A18;border:1px solid rgba(255,255,255,.07);font-size:12px;color:#8B9A95;line-height:1.45">Files are read from their original folders. Nothing is copied or uploaded.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

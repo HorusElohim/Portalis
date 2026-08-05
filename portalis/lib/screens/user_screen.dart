@@ -4,10 +4,10 @@ import 'package:flutter/services.dart';
 import '../bridge_generated/device.dart' as bridge;
 import '../services/collections.dart';
 import '../services/device_identity.dart';
+import '../services/navigation.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'formats_screen.dart';
-import 'people_screen.dart';
 import 'settings_screen.dart';
 
 /// You — this device's identity and what it has moved.
@@ -156,21 +156,17 @@ class _UserScreenState extends State<UserScreen> {
                       ),
                       _Stat(
                           label: 'COLLECTIONS', value: '${collections.length}'),
-                      // The way in to People on mobile. It used to be a row
-                      // at the very bottom of this screen, below the address,
-                      // the identity notice and File formats — present, but
-                      // three screens' worth of scrolling from the count that
-                      // names it. Desktop puts People behind a button that
-                      // carries the same number; this is that button.
+                      // People now has its own destination on both layouts —
+                      // a bottom tab here, the header button on desktop — so
+                      // this card is a shortcut rather than the only way in.
+                      // It switches the shared tab rather than pushing a
+                      // second copy of the same screen on top of it.
                       _Stat(
                         label: 'PEOPLE',
                         value: '$people',
                         onTap: widget.embedded
                             ? null
-                            : () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                      builder: (_) => const PeopleScreen()),
-                                ),
+                            : () => AppNavigation.tab.value = 2,
                       ),
                     ],
                   ),

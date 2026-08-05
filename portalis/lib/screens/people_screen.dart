@@ -8,15 +8,19 @@ import '../ui/ui.dart';
 /// Distinct collaborators across every collection, and where they appear.
 /// Derived — there is no peer directory in the backend.
 ///
-/// Reached two ways: a sidebar destination on desktop (see `DesktopShell`),
-/// and a row on the You tab on mobile. Same content and the same grid either
+/// A first-class destination on both layouts — a bottom tab on mobile, a
+/// header button beside the sidebar on desktop (see `DesktopShell`) — after
+/// two rounds of being reached only indirectly. The You tab still carries the
+/// same collaborator count as a shortcut, but selects this same screen rather
+/// than pushing a second copy of it. Same content and the same grid either
 /// way — on a phone-width window it simply resolves to one column.
 class PeopleScreen extends StatelessWidget {
   const PeopleScreen({super.key, this.embedded = false});
 
-  /// Set when this is a pane of the desktop shell rather than a pushed
-  /// screen — hides the back button, since the sidebar is the only way in
-  /// or out of it there.
+  /// Set whenever a parent already supplies a Scaffold, SafeArea and back
+  /// button — a desktop shell pane, or this screen's own mobile tab of
+  /// [RootShell] — so this doesn't draw a second set, or a back button with
+  /// nowhere to go.
   final bool embedded;
 
   @override

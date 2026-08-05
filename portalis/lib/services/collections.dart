@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:gal/gal.dart';
@@ -25,6 +26,73 @@ bool get _hasPhotoGallery =>
 bool looksLikeMagnet(String value) {
   final v = value.trim();
   return v.startsWith('magnet:?') || RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(v);
+}
+
+/// Un-hexes an invite code back to `<secret>:<name>[@addr1,addr2]`, or null
+/// if it isn't valid hex / valid UTF-8 / shaped like an invite — mirrors
+/// `collab.rs::parse_invite_code`'s first step. The hex layer isn't
+/// encryption (the code is already the join credential), just enough to keep
+/// the address and name out of plain sight in a screenshot or clipboard
+/// history.
+///
+/// Beside [looksLikeMagnet] for the same reason: it is a fact about what the
+/// backend accepts, and both the join screen and the omnibar have to agree on
+/// it or a code that one recognises the other silently treats as a search.
+String? decodeInviteCode(String code) {
+  final trimmed = code.trim();
+  if (trimmed.isEmpty || trimmed.length.isOdd) return null;
+  final bytes = <int>[];
+  for (var i = 0; i < trimmed.length; i += 2) {
+    final byte = int.tryParse(trimmed.substring(i, i + 2), radix: 16);
+    if (byte == null) return null;
+    bytes.add(byte);
+  }
+  try {
+    final decoded = utf8.decode(bytes);
+    // `<secret>:<name>` at minimum. Without this, any even-length hex string
+    // decodes to *something* and would be offered as a joinable collection.
+    return decoded.contains(':') ? decoded : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// The shape a real invite secret takes — 32 raw bytes, hex-encoded. Shared
+/// so [PasteKind.of] and `JoinCollectionScreen._parsed` check the identical
+/// rule: [decodeInviteCode] alone accepts anything with a colon in it (e.g.
+/// `"3a"` un-hexes to `":"`), which is loose enough that the omnibar could
+/// call a string an invite and hand it to a screen with nothing to preview.
+final RegExp inviteSecretPattern = RegExp(r'^[0-9a-fA-F]{64}$');
+
+/// True when [code] both un-hexes and has a real secret in front of the
+/// colon — the same test the join screen's preview requires, so a code the
+/// omnibar calls an invite is always one the join screen can actually show.
+bool looksLikeInviteCode(String code) {
+  final decoded = decodeInviteCode(code);
+  if (decoded == null) return false;
+  final split = decoded.indexOf(':');
+  if (split == -1) return false;
+  return inviteSecretPattern.hasMatch(decoded.substring(0, split));
+}
+
+/// What a string pasted into the omnibar turns out to be.
+///
+/// One classifier, so every surface that accepts a paste dispatches the same
+/// way. Order matters: a magnet is unmistakable, an invite code is anything
+/// that decodes, and everything else is what the user typed to find something.
+enum PasteKind {
+  empty,
+  magnet,
+  invite,
+  search;
+
+  static PasteKind of(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return PasteKind.empty;
+    if (looksLikeMagnet(v)) return PasteKind.magnet;
+    if (looksLikeInviteCode(v)) return PasteKind.invite;
+    return PasteKind.search;
+  }
 }
 
 /// The app's single source of collections.

@@ -15,6 +15,7 @@ class PrimaryAction extends StatelessWidget {
     this.icon,
     this.trailingChevron = true,
     this.ember = false,
+    this.expand = true,
   });
 
   final String label;
@@ -22,6 +23,11 @@ class PrimaryAction extends StatelessWidget {
   final IconData? icon;
   final bool trailingChevron;
   final bool ember;
+
+  /// Fills the width it is given, which is what a stacked action wants. Set
+  /// false to size to the label instead — beside a field, rather than under
+  /// one.
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +48,7 @@ class PrimaryAction extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
               children: [
                 if (icon != null) ...[
                   Icon(icon, size: 20, color: ink),

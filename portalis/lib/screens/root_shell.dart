@@ -8,6 +8,7 @@ import '../ui/ui.dart';
 import 'desktop_shell.dart';
 import 'collections_screen.dart';
 import 'home_screen.dart';
+import 'people_screen.dart';
 import 'user_screen.dart';
 
 /// App root. Three destinations on mobile — Home, Collections, You — and a
@@ -84,9 +85,14 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                       for (var i = 0; i < AppBottomNav.items.length; i++)
                         TickerMode(
                           enabled: i == _tab,
+                          // PeopleScreen renders through AppScreen, which
+                          // wraps its own Scaffold and back button unless
+                          // told this parent already supplies both — true
+                          // here, same as every other tab.
                           child: const [
                             HomeScreen(),
                             CollectionsScreen(),
+                            PeopleScreen(embedded: true),
                             UserScreen(),
                           ][i],
                         ),
@@ -125,11 +131,18 @@ class AppBottomNav extends StatelessWidget {
   /// There is no Transfers destination. Every collection row carries its own
   /// bar, rate and countdown, Collections filters to what is arriving, and its
   /// header states the aggregate — so Transfers was the same collections in a
-  /// second place. Dropping it also gives the three that remain room to be
-  /// read: four labels at 375pt had to shrink to 9.5 to fit.
+  /// second place.
+  ///
+  /// People *is* its own destination, back after two rounds of being reached
+  /// only indirectly (see the regression note on the "you" test group) —
+  /// desktop already gives it a one-tap header button, and a phone-width
+  /// window burying the same directory three taps deep under You is exactly
+  /// the asymmetry that made it easy to lose track of who a collection is
+  /// even shared with.
   static const items = [
     (icon: null, label: 'Home'),
     (icon: Icons.dashboard_outlined, label: 'Collections'),
+    (icon: Icons.people_outline, label: 'People'),
     (icon: Icons.person_outline, label: 'You'),
   ];
 

@@ -87,6 +87,16 @@ Future<void> _pumpApp(
   await tester.pump();
 }
 
+/// A real invite code: hex-wrapped `<64-hex secret>:<name>`, the shape
+/// `collections.rs::invite_code_for` mints and `decodeInviteCode` reads. Built
+/// rather than pasted as a literal so it stays valid if the format moves.
+String _inviteCode(String name) {
+  final plain = '${'a' * 64}:$name';
+  return plain.codeUnits
+      .map((c) => c.toRadixString(16).padLeft(2, '0'))
+      .join();
+}
+
 /// Switches to the Collections destination, where the list now lives.
 Future<void> _openCollections(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('navTab1')));
@@ -120,24 +130,60 @@ void main() {
     });
   });
 
+  group('what a paste turns out to be', () {
+    test('a magnet link and a bare info hash are both magnets', () {
+      expect(PasteKind.of('magnet:?xt=urn:btih:${'a' * 40}'), PasteKind.magnet);
+      expect(PasteKind.of('a' * 40), PasteKind.magnet);
+      // Whitespace round a pasted link is the norm, not the exception.
+      expect(PasteKind.of('  ${'a' * 40}  '), PasteKind.magnet);
+    });
+
+    test('an invite code is anything that decodes to secret:name', () {
+      expect(PasteKind.of(_inviteCode('Iceland trip')), PasteKind.invite);
+    });
+
+    test('hex that decodes to nothing shaped like an invite is a search', () {
+      // Without the colon check, any even-length hex string decodes to
+      // *something* and would be offered as a joinable collection.
+      expect(PasteKind.of('abcdef'), PasteKind.search);
+    });
+
+    test('a 40-char hash wins over the invite reading', () {
+      // It is valid hex of even length, so ordering is what keeps a torrent
+      // hash from being mistaken for a collection to join.
+      expect(PasteKind.of('a' * 40), PasteKind.magnet);
+    });
+
+    test('ordinary words are a search, and empty is empty', () {
+      expect(PasteKind.of('iceland'), PasteKind.search);
+      expect(PasteKind.of(''), PasteKind.empty);
+      expect(PasteKind.of('   '), PasteKind.empty);
+    });
+  });
+
   group('shell', () {
-    testWidgets('has three destinations and switches between them',
+    testWidgets('has four destinations and switches between them',
         (tester) async {
       await _pumpApp(tester, collections: []);
 
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Collections'), findsWidgets);
+      expect(find.text('People'), findsOneWidget);
       expect(find.text('You'), findsOneWidget);
       // Transfers showed the same collections a second time — every row now
       // carries its own bar, rate and countdown.
       expect(find.text('Transfers'), findsNothing);
-      expect(AppBottomNav.items.length, 3);
+      expect(AppBottomNav.items.length, 4);
 
       await tester.tap(find.byKey(const Key('navTab1')));
       await tester.pump();
       expect(find.byType(CollectionsScreen), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.pump();
+      expect(find.byType(PeopleScreen), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
       expect(find.byType(UserScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -254,25 +300,66 @@ void main() {
       await tester.tap(find.byKey(const Key('headerSettingsButton')));
       await tester.pump();
       expect(find.byType(SettingsScreen), findsNothing);
-      // Every way in reachable from the sidebar, as on mobile's one FAB —
-      // joining with a key used to exist only inside the Home pane.
+      // One primary action beside one field. The sidebar's own New share,
+      // Join, magnet field, Paste, Add and .torrent picker are all gone —
+      // the omnibar takes any of them as a paste.
       expect(find.text('New share'), findsOneWidget);
-      expect(find.text('Join with a key'), findsOneWidget);
-      // A magnet is one line of text — adding one costs no navigation here.
-      expect(find.byKey(const Key('sidebarMagnetField')), findsOneWidget);
-      expect(tester.widget<InkWell>(find.ancestor(
-        of: find.text('Add'),
-        matching: find.byType(InkWell),
-      )).onTap, isNull, reason: 'Add stays disabled until the text is usable');
+      expect(find.text('Join with a key'), findsNothing);
+      expect(find.byKey(const Key('sidebarMagnetField')), findsNothing);
+      expect(find.byKey(const Key('omnibarField')), findsOneWidget);
+      // A .torrent is a file, so it is the one thing the bar cannot absorb
+      // as a paste — it keeps an affordance, or desktop loses the capability.
+      expect(find.byKey(const Key('omnibarTorrentFile')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
 
-      await tester.enterText(find.byKey(const Key('sidebarMagnetField')),
-          'magnet:?xt=urn:btih:${'a' * 40}');
+    testWidgets('the omnibar dispatches on what was pasted', (tester) async {
+      await _pumpApp(tester, size: _desktop, collections: [
+        _collection(name: 'Iceland trip'),
+        _collection(id: 'c2', name: 'Band demos'),
+      ]);
+
+      final field = find.byKey(const Key('omnibarField'));
+
+      // A magnet is unmistakable, so the bar offers to act on it.
+      await tester.enterText(field, 'magnet:?xt=urn:btih:${'a' * 40}');
       await tester.pump();
+      expect(find.text('ADD TORRENT'), findsOneWidget);
+      // ...and does not treat it as a search: both collections stay.
+      expect(find.text('Iceland trip'), findsOneWidget);
+      expect(find.text('Band demos'), findsOneWidget);
 
-      expect(tester.widget<InkWell>(find.ancestor(
-        of: find.text('Add'),
-        matching: find.byType(InkWell),
-      )).onTap, isNotNull);
+      // Anything that is neither a magnet nor a code was meant as a filter,
+      // applied as you type with nothing to press.
+      await tester.enterText(field, 'iceland');
+      await tester.pump();
+      expect(find.text('FILTERING'), findsOneWidget);
+      expect(find.text('Iceland trip'), findsOneWidget);
+      expect(find.text('Band demos'), findsNothing);
+
+      // Emptying it restores the list whatever the text used to be.
+      await tester.enterText(field, '');
+      await tester.pump();
+      expect(find.text('Band demos'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a pasted invite key still has to be confirmed',
+        (tester) async {
+      await _pumpApp(tester, size: _desktop, collections: [_collection()]);
+
+      // Joining announces you to strangers — recognising a code opens the
+      // join screen with it filled in, it never joins on the paste alone.
+      await tester.enterText(
+          find.byKey(const Key('omnibarField')), _inviteCode('Iceland trip'));
+      await tester.pump();
+      expect(find.text('JOIN'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('omnibarSubmit')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(JoinCollectionScreen), findsOneWidget);
+      expect(find.text('Code recognised'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -365,7 +452,7 @@ void main() {
       await _pumpApp(tester, collections: []);
       expect(find.text('Home'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
       expect(find.byType(UserScreen), findsOneWidget);
 
@@ -625,7 +712,7 @@ void main() {
         _collection(id: 'a', collaborators: [ana, jonas]),
         _collection(id: 'b', collaborators: [ana, rosa]),
       ]);
-      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
 
       expect(find.text('PEOPLE'), findsOneWidget);
@@ -638,24 +725,33 @@ void main() {
     // People has gone missing on a platform twice: first it existed only as
     // a desktop sidebar pane, then as a row so far down this screen that it
     // was past the address, the identity notice and File formats. Both times
-    // it was reachable in principle and unfindable in practice, so this pins
-    // the way in rather than the fact that a PeopleScreen class exists.
-    testWidgets('People is one tap from the You tab on mobile',
+    // it was reachable in principle and unfindable in practice. It is now its
+    // own bottom tab on both layouts — direct rather than reachable — and the
+    // count on the You tab is a shortcut onto that same tab, not a second
+    // route to a second copy of it.
+    testWidgets(
+        'People is its own tab, and the You tab count is a shortcut to it',
         (tester) async {
       const ana = Collaborator(deviceId: 'dev-ana', name: 'Ana');
       await _pumpApp(tester, collections: [
         _collection(id: 'a', collaborators: [ana]),
       ]);
+
+      // Direct: no intermediate screen to lose it behind.
       await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
+      expect(find.byType(PeopleScreen), findsOneWidget);
+      expect(find.text('Ana'), findsOneWidget);
 
-      // Reachable without scrolling: tapping fails outright if the count is
-      // off-screen, which is exactly the regression being guarded.
+      // The You tab's count still works, but as a shortcut onto the People
+      // tab rather than a push — tapping it selects the shared tab.
+      await tester.tap(find.byKey(const Key('navTab3')));
+      await tester.pump();
       await tester.tap(find.text('PEOPLE'));
       await tester.pumpAndSettle();
 
       expect(find.byType(PeopleScreen), findsOneWidget);
-      expect(find.text('Ana'), findsOneWidget);
+      expect(AppNavigation.tab.value, 2);
       expect(tester.takeException(), isNull);
     });
   });

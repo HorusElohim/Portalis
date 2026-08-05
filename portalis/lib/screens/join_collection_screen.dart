@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,28 +5,6 @@ import '../bridge_generated/device.dart' as device_bridge;
 import '../services/collections.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
-
-/// Un-hexes an invite code back to `<secret>:<name>[@addr1,addr2]`, or
-/// null if it isn't valid hex / valid UTF-8 — mirrors
-/// `collab.rs::parse_invite_code`'s first step. The hex layer isn't
-/// encryption (the code is already the join credential), just enough to
-/// keep the address/name out of plain sight in a screenshot or clipboard
-/// history.
-String? _unhex(String code) {
-  final trimmed = code.trim();
-  if (trimmed.isEmpty || trimmed.length.isOdd) return null;
-  final bytes = <int>[];
-  for (var i = 0; i < trimmed.length; i += 2) {
-    final byte = int.tryParse(trimmed.substring(i, i + 2), radix: 16);
-    if (byte == null) return null;
-    bytes.add(byte);
-  }
-  try {
-    return utf8.decode(bytes);
-  } catch (_) {
-    return null;
-  }
-}
 
 /// "Join a collection" — the invite-code half of the old combined Add
 /// screen, redesigned per the Portalis Add Flow. The preview card is
@@ -38,11 +14,16 @@ String? _unhex(String code) {
 /// addresses. The display name comes from this device's identity nickname
 /// instead of a second text field.
 class JoinCollectionScreen extends StatefulWidget {
-  const JoinCollectionScreen({super.key, this.onClose});
+  const JoinCollectionScreen({super.key, this.onClose, this.initialCode});
 
   /// Called instead of popping a route — set when this is embedded in the
   /// desktop shell's centre pane rather than pushed over it.
   final VoidCallback? onClose;
+
+  /// A code the omnibar already recognised. Arriving here still shows the
+  /// preview and still asks — joining announces you to strangers, so it is
+  /// never something a paste completes on its own.
+  final String? initialCode;
 
   @override
   State<JoinCollectionScreen> createState() => _JoinCollectionScreenState();
@@ -57,6 +38,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
   @override
   void initState() {
     super.initState();
+    _codeController.text = widget.initialCode ?? '';
     _loadNickname();
   }
 
@@ -83,12 +65,15 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
   /// `(name, addressCount)` when the code un-hexes to
   /// `<64-hex secret>:<name>[@addr1,addr2]`, else null.
   (String, int)? get _parsed {
-    final decoded = _unhex(_codeController.text);
+    final decoded = decodeInviteCode(_codeController.text);
     if (decoded == null) return null;
     final split = decoded.indexOf(':');
     if (split == -1) return null;
     final secret = decoded.substring(0, split);
-    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(secret)) return null;
+    // Same pattern the omnibar's PasteKind checks — see
+    // [inviteSecretPattern] — so a code arriving here already recognised as
+    // an invite is never one this preview then fails to parse.
+    if (!inviteSecretPattern.hasMatch(secret)) return null;
     var rest = decoded.substring(split + 1);
     var addressCount = 0;
     final at = rest.lastIndexOf('@');
