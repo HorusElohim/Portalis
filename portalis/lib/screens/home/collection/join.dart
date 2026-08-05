@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../bridge_generated/device.dart' as device_bridge;
-import '../services/collections.dart';
-import '../theme.dart';
-import '../ui/ui.dart';
+import '../../../bridge_generated/device.dart' as device_bridge;
+import '../../../services/collections.dart';
+import '../../../theme.dart';
+import '../../../ui/ui.dart';
 
 /// "Join a collection" — the invite-code half of the old combined Add
 /// screen, redesigned per the Portalis Add Flow. The preview card is

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/media/formats.dart';
-import 'package:portalis/screens/formats_screen.dart';
+import 'package:portalis/screens/settings/formats.dart';
 
 void main() {
   setUp(MediaFormats.resetToDefaults);

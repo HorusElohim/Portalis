@@ -47,8 +47,10 @@ class DesktopSidebar extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _IdentityChip(
-                      selected: pane == DesktopPane.you,
-                      onTap: () => onPane(DesktopPane.you),
+                      // Your profile lives in Settings now — tapping your
+                      // own name still gets you there in one tap.
+                      selected: pane == DesktopPane.settings,
+                      onTap: () => onPane(DesktopPane.settings),
                     ),
                   ),
                   const SizedBox(width: 4),

@@ -2,22 +2,31 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../bridge_generated/collections.dart' as bridge;
+import '../bridge_generated/device.dart' as device_bridge;
 import '../services/collections.dart';
+import '../services/device_identity.dart';
+import '../services/navigation.dart';
 import '../services/settings_service.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
-import 'storage_screen.dart';
+import 'settings/formats.dart';
+import 'settings/storage.dart';
 
-/// Every setting the BitTorrent engine honours, and nothing else.
+/// Your identity and this device's engine, in one place.
 ///
-/// Each control maps to a real librqbit `SessionOptions` field via
-/// `rust/backend/src/settings.rs` — no app-invented preferences that persist
-/// a value nothing reads. Sections are ordered by how likely they are to
-/// matter, with the two live-adjustable rate limits first; everything below
-/// them is read once at session construction, which the UI states rather than
-/// implying an immediate effect.
+/// Absorbs what used to be the separate You/profile destination
+/// (`user_screen.dart`) as a leading profile section: avatar, nickname,
+/// session stats, sync address, and the "identity lives on this device"
+/// note. Below that, every setting the BitTorrent engine honours, and
+/// nothing else — each control maps to a real librqbit `SessionOptions`
+/// field via `rust/backend/src/settings.rs`, no app-invented preferences
+/// that persist a value nothing reads. Engine sections are ordered by how
+/// likely they are to matter, with the two live-adjustable rate limits
+/// first; everything below them is read once at session construction, which
+/// the UI states rather than implying an immediate effect.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
@@ -53,6 +62,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// pushing it over the shell's sidebar and list — see [_openStorage].
   bool _showStorage = false;
 
+  /// Embedded only: shows [FormatsScreen] in place of Settings instead of
+  /// pushing it over the shell's sidebar and list — see [_openFormats].
+  bool _showFormats = false;
+
+  String? _syncAddress;
+
+  device_bridge.DeviceIdentityInfo? get _identity => DeviceIdentity.instance.info;
+
   @override
   void initState() {
     super.initState();
@@ -62,12 +79,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const Duration(seconds: 2),
       (_) => _settings.refreshStorageUsage(),
     );
+    DeviceIdentity.instance.load();
+    _loadSyncAddress();
   }
 
   @override
   void dispose() {
     _storagePoll?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadSyncAddress() async {
+    // Separate from identity: fetching the sync address is what starts the
+    // listener, making this device reachable for as long as the app runs.
+    try {
+      final addr = await Collections.instance.syncAddress();
+      if (mounted) setState(() => _syncAddress = addr);
+    } catch (_) {
+      // Backend unavailable — the row stays hidden rather than showing a
+      // made-up address.
+    }
+  }
+
+  Future<void> _rename() async {
+    final result = await promptForText(
+      context,
+      title: 'Your name',
+      initialValue: _identity?.nickname,
+      helper: 'This is how you appear to collaborators.',
+    );
+    if (result == null || result.isEmpty || !mounted) return;
+    try {
+      await DeviceIdentity.instance.rename(result);
+    } catch (e) {
+      if (mounted) showToast(context, 'Couldn\'t rename: $e');
+    }
   }
 
   /// "Network & engine" used to always push a second [SettingsScreen] with
@@ -90,10 +136,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         push: (_) => StorageScreen(embedded: widget.embedded),
       );
 
+  void _openFormats() => openNestedScreen(
+        context,
+        embedded: widget.embedded,
+        showInPlace: () => setState(() => _showFormats = true),
+        push: (_) => const FormatsScreen(),
+      );
+
   /// Collapses Advanced back to Basic in place when embedded — there is no
   /// pushed route here to pop. Not embedded, this instance only exists
-  /// because it was pushed (either as Advanced, or from the mobile You
-  /// screen), so it always pops.
+  /// because it was pushed (either as Advanced, or from Home's search-bar
+  /// join/torrent flow reaching Settings some other way), so it always
+  /// pops.
   void _handleBack() {
     if (widget.embedded) {
       setState(() => _advanced = false);
@@ -272,6 +326,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onBack: () => setState(() => _showStorage = false),
       );
     }
+    if (_showFormats) {
+      return FormatsScreen(
+        embedded: widget.embedded,
+        onBack: () => setState(() => _showFormats = false),
+      );
+    }
     return AppScreen(
       // Advanced is a screen in its own right, so it says so rather than
       // sitting under the title of the one it was reached from.
@@ -283,13 +343,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // screen with something to do with it (see _SectionsLayout).
       wideMaxWidth: 1100,
       body: ListenableBuilder(
-        listenable: _settings,
+        listenable: Listenable.merge(
+          [_settings, Collections.instance, DeviceIdentity.instance],
+        ),
         builder: (context, _) {
           final s = _settings.settings;
           return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!_advanced) _ProfileSection(state: this),
                 if (_settings.lastError != null)
                   InfoBanner(
                     color: const Color(0xFFEB5757),
@@ -820,6 +883,235 @@ class _HealthCard extends StatelessWidget {
               peers > 0 ? Icons.check_circle_outline : Icons.circle_outlined,
               size: 20,
               color: peers > 0 ? AppColors.signal : AppColors.textGhost,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// This device's identity and what it has moved this session — the leading
+/// block of the Basic view, folded in from the old You/`user_screen.dart`
+/// destination. The design's lifetime "SENT / RECEIVED" totals are not real:
+/// those counters are per-collection and reset with the session, so they're
+/// labelled as this session rather than implying a running total the backend
+/// never keeps.
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({required this.state});
+
+  final _SettingsScreenState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final identity = state._identity;
+    final error = DeviceIdentity.instance.lastError;
+    // Read from the live listenable, not a value computed once above the
+    // builder: only the builder re-runs when the identity changes, so a name
+    // computed outside would still be the one from before a rename.
+    final nickname = identity?.nickname ?? '…';
+    final initials = identity != null && nickname.isNotEmpty
+        ? nickname[0].toUpperCase()
+        : '·';
+    final collections = Collections.instance.collections;
+    final sent = collections.fold<int>(0, (s, c) => s + c.uploadedBytes);
+    final received =
+        collections.fold<int>(0, (s, c) => s + c.downloadedBytes);
+    // One person can collaborate on several collections; count devices, not
+    // memberships.
+    final people = <String>{
+      for (final c in collections)
+        for (final p in c.collaborators) p.deviceId,
+    }.length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Column(
+              children: [
+                Avatar(initials: initials, size: 76, primary: true),
+                const SizedBox(height: 16),
+                CanvasTitle(nickname, size: 30),
+                const SizedBox(height: 6),
+                Text(
+                  identity == null
+                      ? (error == null ? 'LOADING…' : 'IDENTITY UNAVAILABLE')
+                      : 'THIS DEVICE · '
+                          '${identity.deviceId.substring(0, identity.deviceId.length.clamp(0, 8)).toUpperCase()}',
+                  style: monoLabel(size: 10.5, letterSpacing: 0.6),
+                ),
+                const SizedBox(height: 16),
+                PillButton(
+                  label: 'Change name',
+                  dim: true,
+                  onTap: identity == null ? null : state._rename,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.fromLTRB(kScreenGutter, 26, kScreenGutter, 0),
+            child: GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 2.0,
+              children: [
+                // "This session", not a lifetime total — the engine keeps no
+                // running counter across restarts.
+                _Stat(label: 'SENT · SESSION', value: formatBytes(sent)),
+                _Stat(
+                  label: 'RECEIVED · SESSION',
+                  value: formatBytes(received),
+                  highlight: received > 0,
+                ),
+                _Stat(label: 'COLLECTIONS', value: '${collections.length}'),
+                // People is still its own destination on both layouts — this
+                // card is a shortcut to it, on either platform: on desktop
+                // AppNavigation.tab still drives DesktopShell's pane
+                // selection, the same as it always has.
+                _Stat(
+                  label: 'PEOPLE',
+                  value: '$people',
+                  onTap: () => AppNavigation.tab.value = 1,
+                ),
+              ],
+            ),
+          ),
+          if (state._syncAddress != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  kScreenGutter, 22, kScreenGutter, 0),
+              child: SurfaceCard(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('YOUR ADDRESS', style: monoLabel(size: 10)),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            state._syncAddress!,
+                            style: monoLabel(
+                                size: 12.5,
+                                color: AppColors.text,
+                                letterSpacing: 0),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(
+                                ClipboardData(text: state._syncAddress!));
+                            showToast(context, 'Address copied');
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.copy,
+                                size: 15, color: AppColors.textDim),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 9),
+                    Text(
+                      'Rotates every launch. Collaborators reach this '
+                      'device here to exchange collection contents.',
+                      style: AppText.secondary(height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                kScreenGutter, 12, kScreenGutter, 0),
+            // No "Back up identity" action: nothing in device.rs can export
+            // the keypair yet, and a button that does nothing is worse than
+            // none.
+            child: DestinationRow(
+              icon: Icons.shield_outlined,
+              iconColor: AppColors.signal,
+              title: 'Identity lives on this device',
+              subtitle: 'A key pair, no account, no server. Lose the '
+                  'device and the identity goes with it.',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                kScreenGutter, 12, kScreenGutter, 0),
+            child: DestinationRow(
+              icon: Icons.category_outlined,
+              title: 'File formats',
+              subtitle: 'What Portalis can view, and what it converts',
+              onTap: state._openFormats,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({
+    required this.label,
+    required this.value,
+    this.highlight = false,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+
+  /// Mint only when the figure represents data that actually moved.
+  final bool highlight;
+
+  /// Set when the figure has somewhere to go — PEOPLE opens the directory
+  /// the number counts. A chevron beside the label says so, since a card
+  /// that merely states a number gives no reason to try tapping it.
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      padding: const EdgeInsets.all(14),
+      onTap: onTap,
+      // Scaled to fit rather than fixed: the label is a long uppercase mono
+      // string and the value can be four characters wide, and the card has a
+      // fixed aspect ratio in the grid.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: monoLabel(size: 9.5)),
+                if (onTap != null) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right,
+                      size: 13, color: AppColors.textGhost),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: displayText(
+                size: 24,
+                color: highlight ? AppColors.signal : AppColors.text,
+              ),
             ),
           ],
         ),

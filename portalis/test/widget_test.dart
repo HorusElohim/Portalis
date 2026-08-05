@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/main.dart';
 import 'package:portalis/models.dart';
-import 'package:portalis/screens/add_torrent_screen.dart';
-import 'package:portalis/screens/home_screen.dart';
-import 'package:portalis/screens/collection_screen.dart';
-import 'package:portalis/screens/collections_screen.dart';
-import 'package:portalis/screens/join_collection_screen.dart';
-import 'package:portalis/screens/media_viewer_screen.dart';
-import 'package:portalis/screens/people_screen.dart';
+import 'package:portalis/screens/home.dart';
+import 'package:portalis/screens/home/collection/collection.dart';
+import 'package:portalis/screens/home/collection/join.dart';
+import 'package:portalis/screens/home/collection/media_viewer.dart';
+import 'package:portalis/screens/home/collection/share.dart';
+import 'package:portalis/screens/home/torrent/add.dart';
+import 'package:portalis/screens/people.dart';
 import 'package:portalis/screens/root_shell.dart';
-import 'package:portalis/screens/settings_screen.dart';
-import 'package:portalis/screens/share_screen.dart';
-import 'package:portalis/screens/user_screen.dart';
+import 'package:portalis/screens/settings.dart';
 import 'package:portalis/services/collections.dart';
 import 'package:portalis/services/navigation.dart';
 import 'package:portalis/services/settings_service.dart';
@@ -97,12 +95,6 @@ String _inviteCode(String name) {
       .join();
 }
 
-/// Switches to the Collections destination, where the list now lives.
-Future<void> _openCollections(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('navTab1')));
-  await tester.pump();
-}
-
 void main() {
   // Every test drives the same singletons, so each one states the world it
   // expects rather than inheriting whatever the previous test left behind.
@@ -162,40 +154,36 @@ void main() {
   });
 
   group('shell', () {
-    testWidgets('has four destinations and switches between them',
+    testWidgets('has three destinations and switches between them',
         (tester) async {
       await _pumpApp(tester, collections: []);
 
       expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Collections'), findsWidgets);
       expect(find.text('People'), findsOneWidget);
-      expect(find.text('You'), findsOneWidget);
-      // Transfers showed the same collections a second time — every row now
-      // carries its own bar, rate and countdown.
+      expect(find.text('Settings'), findsOneWidget);
+      // Transfers and Collections both showed the same collections a second
+      // place — every row now carries its own bar, rate and countdown, and
+      // the list lives on Home itself.
       expect(find.text('Transfers'), findsNothing);
-      expect(AppBottomNav.items.length, 4);
+      expect(find.text('Collections'), findsNothing);
+      expect(AppBottomNav.items.length, 3);
 
       await tester.tap(find.byKey(const Key('navTab1')));
       await tester.pump();
-      expect(find.byType(CollectionsScreen), findsOneWidget);
+      expect(find.byType(PeopleScreen), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
-      expect(find.byType(PeopleScreen), findsOneWidget);
-
-      await tester.tap(find.byKey(const Key('navTab3')));
-      await tester.pump();
-      expect(find.byType(UserScreen), findsOneWidget);
+      expect(find.byType(SettingsScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Collections states the aggregate Transfers used to carry',
+    testWidgets('Home states the aggregate Transfers used to carry',
         (tester) async {
-      // The one fact that destination had which this screen didn't.
+      // The one fact that destination had which the plain list didn't.
       await _pumpApp(tester, collections: [
         _collection(state: 'downloading', downloadMbps: 1.5, uploadMbps: 0.5),
       ]);
-      await _openCollections(tester);
 
       expect(find.textContaining('1 transfer'), findsOneWidget);
       expect(find.textContaining('1.5 MB/s'), findsOneWidget);
@@ -264,49 +252,47 @@ void main() {
       await tester.pumpWidget(const MyApp());
       await tester.pump();
 
-      expect(find.byType(UserScreen), findsOneWidget);
+      expect(find.byType(SettingsScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('the desktop list is destinations only, controls sit above it',
         (tester) async {
-      // Home and Transfers said nothing the always-visible list and the
-      // sidebar's own actions don't; You and Settings are controls rather
-      // than things to look at, so they moved out of the list into the
-      // header. What is left in the list is what there is to look at.
+      // Transfers said nothing the always-visible list didn't; People and
+      // Settings are controls rather than things to look at, so they sit in
+      // the header rather than the list. What is left in the list is what
+      // there is to look at.
       await _pumpApp(tester, size: _desktop, collections: [_collection()]);
 
-      for (final gone in ['Transfers', 'Home', 'You', 'Settings', 'People']) {
+      for (final gone in ['Transfers', 'Settings', 'People']) {
         expect(find.text(gone), findsNothing, reason: '$gone is not a row');
       }
-      // Collections is not a destination either — it is what the window is.
       expect(find.byKey(const Key('headerPeopleButton')), findsOneWidget);
       expect(find.byKey(const Key('headerSettingsButton')), findsOneWidget);
 
       // Renaming this device was impossible on desktop before it had any way
-      // in at all; the chip is that way in.
+      // in at all; the identity chip is that way in, and now opens Settings
+      // directly rather than a separate You pane.
       await tester.tap(find.byKey(const Key('identityChip')));
       await tester.pump();
-      expect(find.byType(UserScreen), findsOneWidget);
+      expect(find.byType(SettingsScreen), findsOneWidget);
       expect(find.text('Change name'), findsOneWidget);
 
-      // And the header reaches settings without a row of its own — then
-      // gives the collections back when tapped again, which is the only way
-      // home now that Collections has no button.
-      await tester.tap(find.byKey(const Key('headerSettingsButton')));
-      await tester.pump();
-      expect(find.byType(SettingsScreen), findsOneWidget);
-
+      // Tapping the header button for the pane that is already open closes
+      // it back to Home — the same toggle every pane button gets.
       await tester.tap(find.byKey(const Key('headerSettingsButton')));
       await tester.pump();
       expect(find.byType(SettingsScreen), findsNothing);
-      // One primary action beside one field. The sidebar's own New share,
-      // Join, magnet field, Paste, Add and .torrent picker are all gone —
-      // the omnibar takes any of them as a paste.
+
+      // One primary action beside one field, plus the one thing a paste
+      // cannot express. The sidebar's own New share, Join, magnet field,
+      // Paste, Add and .torrent picker are all gone — the omnibar takes any
+      // of them as a paste.
       expect(find.text('New share'), findsOneWidget);
       expect(find.text('Join with a key'), findsNothing);
       expect(find.byKey(const Key('sidebarMagnetField')), findsNothing);
       expect(find.byKey(const Key('omnibarField')), findsOneWidget);
+      expect(find.byKey(const Key('addTorrentButton')), findsOneWidget);
       // A .torrent is a file, so it is the one thing the bar cannot absorb
       // as a paste — it keeps an affordance, or desktop loses the capability.
       expect(find.byKey(const Key('omnibarTorrentFile')), findsOneWidget);
@@ -389,9 +375,10 @@ void main() {
           ),
         ],
       );
-      await _openCollections(tester);
 
-      expect(find.textContaining('2h 14m left'), findsOneWidget);
+      // Twice: the live hero card states it, and so does the collection's
+      // own row in the list right below.
+      expect(find.textContaining('2h 14m left'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -405,43 +392,32 @@ void main() {
           _collection(state: 'downloading', totalBytes: 1000, downloadedBytes: 400),
         ],
       );
-      await _openCollections(tester);
 
       expect(find.textContaining('left'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
 
-  group('home is the welcome, collections is the list', () {
-    testWidgets('Home shows the welcome whether or not you own anything',
-        (tester) async {
-      // Previously Home changed shape depending on whether you had
-      // collections; it is one thing now.
+  group('home holds both the welcome and the list', () {
+    testWidgets('shows the welcome when there is nothing yet', (tester) async {
       await _pumpApp(tester);
       expect(find.textContaining('SEND ANYTHING'), findsOneWidget);
-
-      await _pumpApp(tester, collections: [_collection(name: 'Iceland trip')]);
-      expect(find.textContaining('SEND ANYTHING'), findsOneWidget);
-      // The list is a different destination, so its rows are not here.
-      expect(find.text('Iceland trip'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Collections holds the list, and Home links across to it',
+    testWidgets('shows the list once you own something, not a second welcome',
         (tester) async {
-      // Taller than a phone so the link below the welcome is actually built —
-      // on a real device you scroll to it.
+      // Home doubles as the list now — the merge that gave desktop's pane a
+      // search bar and filter chips gave mobile the list it used to keep on
+      // a separate Collections tab. One destination for "what can I do" and
+      // "what do I have", on both layouts, the same way desktop's pane
+      // already worked before this merge.
       await _pumpApp(tester,
           collections: [_collection(name: 'Iceland trip')],
           size: const Size(390, 1300));
 
-      // Home offers a way across rather than duplicating the list.
-      expect(find.text('1 collection'), findsOneWidget);
-      await tester.tap(find.text('1 collection'));
-      await tester.pump();
-
-      expect(AppNavigation.tab.value, 1);
       expect(find.text('Iceland trip'), findsOneWidget);
+      expect(find.textContaining('SEND ANYTHING'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
@@ -452,9 +428,9 @@ void main() {
       await _pumpApp(tester, collections: []);
       expect(find.text('Home'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('navTab3')));
+      await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
-      expect(find.byType(UserScreen), findsOneWidget);
+      expect(find.byType(SettingsScreen), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('navTab0')));
       await tester.pump();
@@ -515,8 +491,9 @@ void main() {
       ]);
 
       expect(find.byType(LiveTransferCard), findsNothing);
-      // The welcome is unconditional; only the live card is not.
-      expect(find.textContaining('SEND ANYTHING'), findsOneWidget);
+      // The welcome is unconditional once there is genuinely nothing owned;
+      // only the live card is conditional on something actually moving.
+      expect(find.textContaining('SEND ANYTHING'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -525,7 +502,6 @@ void main() {
         _collection(id: 'a', name: 'Band demos', state: 'seeding'),
         _collection(id: 'b', name: 'Iceland trip', state: 'downloading'),
       ]);
-      await _openCollections(tester);
 
       expect(find.text('Band demos'), findsOneWidget);
       expect(find.text('Iceland trip'), findsOneWidget);
@@ -545,23 +521,28 @@ void main() {
     testWidgets('a failed backend does not look like an empty one',
         (tester) async {
       // These used to render identically, which is what made real failures so
-      // hard to spot on device. Home always shows the welcome now, so the
-      // distinction is made on Collections — and on Home by a banner.
+      // hard to spot on device. Home shows a dedicated failure state now,
+      // full-page — the same one desktop's pane already used — rather than
+      // falling back to a welcome that has nothing to do with what happened.
       await _pumpApp(tester, collections: [], error: 'PanicException(boom)');
-      await _openCollections(tester);
       expect(find.textContaining('Couldn\'t load your collections'),
           findsOneWidget);
-      expect(find.textContaining('No collections yet'), findsNothing);
+      expect(find.textContaining('SEND ANYTHING'), findsNothing);
 
       Collections.instance.debugSeed([]);
       await tester.pump();
-      expect(find.textContaining('No collections yet'), findsOneWidget);
+      expect(find.textContaining('SEND ANYTHING'), findsOneWidget);
       expect(find.textContaining('Couldn\'t load'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('first run offers the three ways in', (tester) async {
+    testWidgets(
+        'offers New share, Add torrent, and the omnibar for the rest',
+        (tester) async {
       await _pumpApp(tester);
+
+      expect(find.byKey(const Key('addTorrentButton')), findsOneWidget);
+      expect(find.byKey(const Key('omnibarField')), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('shareSomethingButton')));
       await tester.pump();
@@ -588,7 +569,6 @@ void main() {
           downloadMbps: 2,
         ),
       ], size: const Size(390, 1400));
-      await _openCollections(tester);
 
       final bars = tester
           .widgetList<LinearProgressIndicator>(
@@ -622,7 +602,6 @@ void main() {
           media: const [MediaItem(label: 'a.jpg', infoHash: 'aa')],
         ),
       ]);
-      await _openCollections(tester);
 
       expect(find.text('SHARING'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -633,7 +612,6 @@ void main() {
       await _pumpApp(tester, collections: [
         _collection(state: 'seeding', media: const []),
       ]);
-      await _openCollections(tester);
 
       expect(find.text('SHARING'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -675,32 +653,33 @@ void main() {
   });
 
   group('what is in flight', () {
-    testWidgets('is a filter on Collections, not a destination of its own',
+    testWidgets('is a filter on Home, not a destination of its own',
         (tester) async {
-      // This was the Transfers screen's whole job. Collections already knew
-      // how to show a subset, so the subset moved here rather than keeping a
+      // This was the Transfers screen's whole job. The list already knew how
+      // to show a subset, so the subset moved here rather than keeping a
       // second screen to hold it.
       await _pumpApp(tester, collections: [
         _collection(id: 'a', name: 'Settled', state: 'seeding'),
         _collection(
             id: 'b', name: 'In flight', state: 'downloading', downloadMbps: 5),
       ]);
-      await _openCollections(tester);
 
       expect(find.text('Settled'), findsOneWidget);
-      expect(find.text('In flight'), findsOneWidget);
+      // Twice: the live hero card names whatever is moving fastest, on top
+      // of its own row in the list below.
+      expect(find.text('In flight'), findsWidgets);
 
       await tester.tap(find.text('Receiving'));
       await tester.pump();
 
-      expect(find.text('In flight'), findsOneWidget);
+      expect(find.text('In flight'), findsWidgets);
       expect(find.text('Settled'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
 
-  group('you', () {
-    testWidgets('counts distinct collaborators across collections',
+  group('people and settings', () {
+    testWidgets('the Settings profile counts distinct collaborators',
         (tester) async {
       const ana = Collaborator(deviceId: 'dev-ana', name: 'Ana');
       const jonas = Collaborator(deviceId: 'dev-jonas', name: 'Jonas');
@@ -712,7 +691,7 @@ void main() {
         _collection(id: 'a', collaborators: [ana, jonas]),
         _collection(id: 'b', collaborators: [ana, rosa]),
       ]);
-      await tester.tap(find.byKey(const Key('navTab3')));
+      await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
 
       expect(find.text('PEOPLE'), findsOneWidget);
@@ -723,14 +702,14 @@ void main() {
     });
 
     // People has gone missing on a platform twice: first it existed only as
-    // a desktop sidebar pane, then as a row so far down this screen that it
-    // was past the address, the identity notice and File formats. Both times
-    // it was reachable in principle and unfindable in practice. It is now its
-    // own bottom tab on both layouts — direct rather than reachable — and the
-    // count on the You tab is a shortcut onto that same tab, not a second
-    // route to a second copy of it.
+    // a desktop sidebar pane, then as a row so far down the old You screen
+    // that it was past the address, the identity notice and File formats.
+    // Both times it was reachable in principle and unfindable in practice.
+    // It is now its own bottom tab on both layouts — direct rather than
+    // reachable — and the count in Settings' profile section is a shortcut
+    // onto that same tab, not a second route to a second copy of it.
     testWidgets(
-        'People is its own tab, and the You tab count is a shortcut to it',
+        'People is its own tab, and the Settings profile count is a shortcut to it',
         (tester) async {
       const ana = Collaborator(deviceId: 'dev-ana', name: 'Ana');
       await _pumpApp(tester, collections: [
@@ -738,20 +717,20 @@ void main() {
       ]);
 
       // Direct: no intermediate screen to lose it behind.
-      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.tap(find.byKey(const Key('navTab1')));
       await tester.pump();
       expect(find.byType(PeopleScreen), findsOneWidget);
       expect(find.text('Ana'), findsOneWidget);
 
-      // The You tab's count still works, but as a shortcut onto the People
-      // tab rather than a push — tapping it selects the shared tab.
-      await tester.tap(find.byKey(const Key('navTab3')));
+      // The Settings profile's count still works, but as a shortcut onto the
+      // People tab rather than a push — tapping it selects the shared tab.
+      await tester.tap(find.byKey(const Key('navTab2')));
       await tester.pump();
       await tester.tap(find.text('PEOPLE'));
       await tester.pumpAndSettle();
 
       expect(find.byType(PeopleScreen), findsOneWidget);
-      expect(AppNavigation.tab.value, 2);
+      expect(AppNavigation.tab.value, 1);
       expect(tester.takeException(), isNull);
     });
   });
@@ -785,6 +764,9 @@ void main() {
 
       expect(find.text('Listen ports'), findsOneWidget);
       expect(find.text('Disable DHT'), findsOneWidget);
+      // Profile — the old You screen's content — is scoped to Basic; the
+      // engine internals drill-down has nothing to do with identity.
+      expect(find.text('Change name'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

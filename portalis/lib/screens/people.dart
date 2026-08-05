@@ -25,6 +25,18 @@ class PeopleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Home and Settings both read Collections through a ListenableBuilder;
+    // this screen sat under a const [...] tab list in RootShell without one,
+    // so a background poll landing while People wasn't the visible tab could
+    // leave it showing whatever was true the first time it built, right up
+    // until something else forced this position in the tree to rebuild.
+    return ListenableBuilder(
+      listenable: Collections.instance,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final byDevice = <String, ({Collaborator who, List<String> collections})>{};
     for (final c in Collections.instance.collections) {
       for (final p in c.collaborators) {

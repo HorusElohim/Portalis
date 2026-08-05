@@ -6,12 +6,11 @@ import '../services/settings_service.dart';
 import '../theme.dart';
 import '../ui/ui.dart';
 import 'desktop_shell.dart';
-import 'collections_screen.dart';
-import 'home_screen.dart';
-import 'people_screen.dart';
-import 'user_screen.dart';
+import 'home.dart';
+import 'people.dart';
+import 'settings.dart';
 
-/// App root. Three destinations on mobile — Home, Collections, You — and a
+/// App root. Three destinations on mobile — Home, People, Settings — and a
 /// two-pane layout on a wide window.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -85,15 +84,14 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                       for (var i = 0; i < AppBottomNav.items.length; i++)
                         TickerMode(
                           enabled: i == _tab,
-                          // PeopleScreen renders through AppScreen, which
-                          // wraps its own Scaffold and back button unless
-                          // told this parent already supplies both — true
-                          // here, same as every other tab.
+                          // PeopleScreen and SettingsScreen render through
+                          // AppScreen, which wraps its own Scaffold and back
+                          // button unless told this parent already supplies
+                          // both — true here, same as every other tab.
                           child: const [
-                            HomeScreen(),
-                            CollectionsScreen(),
+                            Home(),
                             PeopleScreen(embedded: true),
-                            UserScreen(),
+                            SettingsScreen(embedded: true),
                           ][i],
                         ),
                     ],
@@ -125,25 +123,31 @@ class AppBottomNav extends StatelessWidget {
 
   /// The leftmost destination is Home, and it carries the app's mark rather
   /// than a generic glyph — it is both "where you are" and "how you get
-  /// back". Collections is its own peer beside it: Home answers "what can I
-  /// do", Collections answers "what do I have".
+  /// back". Home now answers both "what can I do" and "what do I have": the
+  /// omnibar, the New-share/Add-torrent actions and the collection list all
+  /// live there together (see `home.dart`), which is what let the old
+  /// Collections destination fold away — it was the same list a second
+  /// place, reached a second way.
   ///
-  /// There is no Transfers destination. Every collection row carries its own
-  /// bar, rate and countdown, Collections filters to what is arriving, and its
-  /// header states the aggregate — so Transfers was the same collections in a
-  /// second place.
+  /// There is no Transfers destination either, for the same reason: every
+  /// collection row carries its own bar, rate and countdown, Home filters to
+  /// what is arriving, and its header states the aggregate.
   ///
   /// People *is* its own destination, back after two rounds of being reached
   /// only indirectly (see the regression note on the "you" test group) —
   /// desktop already gives it a one-tap header button, and a phone-width
-  /// window burying the same directory three taps deep under You is exactly
-  /// the asymmetry that made it easy to lose track of who a collection is
-  /// even shared with.
+  /// window burying the same directory three taps deep under Settings is
+  /// exactly the asymmetry that made it easy to lose track of who a
+  /// collection is even shared with.
+  ///
+  /// Settings is what You became once its profile content folded in as that
+  /// screen's leading section (see `settings.dart`) — identity and engine
+  /// behaviour are both "how this device behaves", not two different
+  /// questions.
   static const items = [
     (icon: null, label: 'Home'),
-    (icon: Icons.dashboard_outlined, label: 'Collections'),
     (icon: Icons.people_outline, label: 'People'),
-    (icon: Icons.person_outline, label: 'You'),
+    (icon: Icons.tune, label: 'Settings'),
   ];
 
   @override

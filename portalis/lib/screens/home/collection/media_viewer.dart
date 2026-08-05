@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
-import '../media/formats.dart';
-import '../models.dart';
-import '../services/collections.dart';
-import '../theme.dart';
-import '../ui/ui.dart';
+import '../../../media/formats.dart';
+import '../../../models.dart';
+import '../../../services/collections.dart';
+import '../../../theme.dart';
+import '../../../ui/ui.dart';
 
 class MediaViewerScreen extends StatefulWidget {
   const MediaViewerScreen({

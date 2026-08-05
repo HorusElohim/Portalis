@@ -4,12 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-import '../media/formats.dart';
-import '../models.dart';
-import '../services/collections.dart';
-import '../theme.dart';
-import '../ui/ui.dart';
-import 'media_viewer_screen.dart';
+import '../../../media/formats.dart';
+import '../../../models.dart';
+import '../../../services/collections.dart';
+import '../../../theme.dart';
+import '../../../ui/ui.dart';
+import 'media_viewer.dart';
+import 'remove.dart';
 
 /// One collection, of either kind. Everything here now comes from the single
 /// unified model in `collections.rs`: a shared collection carries its own
@@ -282,47 +283,13 @@ class _CollectionDetailState extends State<CollectionDetail> {
     });
   }
 
-  Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text('Remove "${_collection.name}"?'),
-        content: Text(
-          'This only removes it from this device. Downloaded files stay on '
-          'disk, and other collaborators keep their own copies.',
-          style: AppText.secondary(color: AppColors.textDim),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    // Not fire-and-forget: deleting genuinely fails (a torrent that isn't in
-    // the session, a store write that can't land), and without this the
-    // dialog would just close with nothing happening and no error shown.
-    setState(() => _busy = true);
-    try {
-      await Collections.instance.delete(_collection.id);
-      // Embedded, the list beside us simply drops it and the selection moves
-      // on; there is no route to leave.
-      // The list simply drops it and the selection moves on.
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      _toast('Couldn\'t remove this collection: $e');
-      if (mounted) setState(() => _busy = false);
-    }
-  }
+  Future<void> _delete() => confirmAndRemoveCollection(
+        context,
+        _collection,
+        setBusy: (busy) {
+          if (mounted) setState(() => _busy = busy);
+        },
+      );
 
   @override
   Widget build(BuildContext context) {

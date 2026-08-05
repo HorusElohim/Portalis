@@ -2,9 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/collections.dart';
-import '../theme.dart';
-import '../ui/ui.dart';
+import '../../../services/collections.dart';
+import '../../../theme.dart';
+import '../../../ui/ui.dart';
 
 /// "Torrent" — the join-a-swarm half of the old combined Add screen,
 /// redesigned per the Portalis Add Flow: magnet input with a live preview

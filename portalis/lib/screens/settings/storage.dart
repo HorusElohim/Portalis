@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../bridge_generated/collections.dart' as bridge;
-import '../services/collections.dart';
-import '../theme.dart';
-import '../ui/ui.dart';
-import 'collection_screen.dart';
+import '../../bridge_generated/collections.dart' as bridge;
+import '../../services/collections.dart';
+import '../../theme.dart';
+import '../../ui/ui.dart';
+import '../home/collection/collection.dart';
 
 /// What's actually on disk under the download directory, joined against the
 /// collections the app knows about — not just the raw filesystem, and not

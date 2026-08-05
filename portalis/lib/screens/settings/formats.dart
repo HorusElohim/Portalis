@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../media/formats.dart';
-import '../theme.dart';
-import '../ui/ui.dart';
+import '../../media/formats.dart';
+import '../../theme.dart';
+import '../../ui/ui.dart';
 
 /// Every file type Portalis knows, and exactly what it does with each.
 ///

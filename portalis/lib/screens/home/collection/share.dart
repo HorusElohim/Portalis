@@ -5,12 +5,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../media/formats.dart';
-import '../services/collections.dart';
-import '../theme.dart';
-import '../ui/ui.dart';
+import '../../../media/formats.dart';
+import '../../../services/collections.dart';
+import '../../../theme.dart';
+import '../../../ui/ui.dart';
 
-typedef _PickedFile = ({String name, Uint8List bytes});
+typedef PickedFile = ({String name, Uint8List bytes});
 
 /// The registry already names every type it knows, so this reads the label
 /// off the format rather than maintaining a second mapping that could drift.
@@ -21,11 +21,17 @@ String _kindLabel(String name) => MediaFormats.resolve(name).label;
 /// Photos/Files/Folder pickers, a file list with per-item remove, and one
 /// Create & share action that seeds the new collection from this device.
 class ShareScreen extends StatefulWidget {
-  const ShareScreen({super.key, this.onClose});
+  const ShareScreen({super.key, this.onClose, this.initialFiles});
 
   /// Called instead of popping a route — set when this is embedded in the
   /// desktop shell's centre pane rather than pushed over it.
   final VoidCallback? onClose;
+
+  /// Pre-populates the file list — set when this is reached by dropping
+  /// files onto Home rather than by picking them here. The name still has to
+  /// be typed either way, so a drop lands here rather than skipping this
+  /// screen entirely.
+  final List<PickedFile>? initialFiles;
 
   @override
   State<ShareScreen> createState() => _ShareScreenState();
@@ -33,9 +39,16 @@ class ShareScreen extends StatefulWidget {
 
 class _ShareScreenState extends State<ShareScreen> {
   final _nameController = TextEditingController();
-  List<_PickedFile> _files = [];
+  List<PickedFile> _files = [];
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialFiles;
+    if (initial != null && initial.isNotEmpty) _files = initial;
+  }
 
   @override
   void dispose() {
@@ -43,7 +56,7 @@ class _ShareScreenState extends State<ShareScreen> {
     super.dispose();
   }
 
-  void _add(Iterable<_PickedFile> picked) {
+  void _add(Iterable<PickedFile> picked) {
     setState(() {
       final existing = _files.map((f) => f.name).toSet();
       _files = [
@@ -86,7 +99,7 @@ class _ShareScreenState extends State<ShareScreen> {
         _toast('That folder has no files at its top level');
         return;
       }
-      final picked = <_PickedFile>[];
+      final picked = <PickedFile>[];
       for (final file in entries) {
         final basename = file.path.split(Platform.pathSeparator).last;
         picked.add((name: basename, bytes: await file.readAsBytes()));
@@ -296,7 +309,7 @@ class _ShareScreenState extends State<ShareScreen> {
     );
   }
 
-  Widget _fileRow(_PickedFile f) {
+  Widget _fileRow(PickedFile f) {
     final dot = f.name.lastIndexOf('.');
     final ext = dot == -1 || dot == f.name.length - 1
         ? 'FILE'
