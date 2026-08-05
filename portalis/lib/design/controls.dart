@@ -4,88 +4,225 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
-/// The big filled call-to-action at the foot of a flow. [ember] switches it
-/// to the torrent accent — the one place a primary action is not mint,
-/// because the thing it starts is a torrent, not a Portalis transfer.
-class PrimaryAction extends StatelessWidget {
-  const PrimaryAction({
+/// The semantic accent applied to an [ActionButton].
+enum ActionButtonTone { signal, ember, neutral }
+
+/// Shared contract for Portalis action buttons.
+///
+/// Concrete subclasses own their geometry and content shape. This keeps
+/// feature code explicit while centralising tone, tooltip, and disabled
+/// behaviour in one reusable design primitive.
+abstract class ActionButton extends StatelessWidget {
+  const ActionButton({
     super.key,
-    required this.label,
     required this.onTap,
-    this.icon,
-    this.trailingChevron = true,
-    this.ember = false,
-    this.expand = true,
+    this.tone = ActionButtonTone.signal,
+    this.tooltip,
   });
 
-  final String label;
+  final ActionButtonTone tone;
+  final String? tooltip;
   final VoidCallback? onTap;
-  final IconData? icon;
-  final bool trailingChevron;
-  final bool ember;
 
-  /// Fills the width it is given, which is what a stacked action wants. Set
-  /// false to size to the label instead — beside a field, rather than under
-  /// one.
-  final bool expand;
+  Color get _accent => switch (tone) {
+        ActionButtonTone.signal => AppColors.signal,
+        ActionButtonTone.ember => AppColors.ember,
+        ActionButtonTone.neutral => AppColors.textDim,
+      };
 
-  @override
-  Widget build(BuildContext context) {
+  Color get _foreground => switch (tone) {
+        ActionButtonTone.signal => AppColors.onSignal,
+        ActionButtonTone.ember => AppColors.onEmber,
+        ActionButtonTone.neutral => AppColors.surfaceDeep,
+      };
+
+  Widget _surface({
+    required BorderRadius radius,
+    required Widget child,
+    required bool filled,
+    Border? border,
+  }) {
     final enabled = onTap != null;
-    final fill = ember ? AppColors.ember : AppColors.signal;
-    final ink = ember ? AppColors.onEmber : AppColors.onSignal;
-    return Opacity(
-      // Disabled reads as dimmed rather than grey: the button keeps its
-      // identity, it just isn't ready yet.
+    final button = Opacity(
       opacity: enabled ? 1 : 0.38,
       child: Material(
-        color: fill,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        color: filled ? _accent : AppColors.surface,
+        borderRadius: radius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.card),
+          borderRadius: radius,
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 20, color: ink),
-                  const SizedBox(width: 10),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: displayText(size: 16.5, color: ink),
-                  ),
-                ),
-                if (trailingChevron) ...[
-                  const SizedBox(width: 10),
-                  Icon(Icons.chevron_right, size: 19, color: ink),
-                ],
-              ],
-            ),
+          child: Container(
+            decoration: border == null
+                ? null
+                : BoxDecoration(borderRadius: radius, border: border),
+            child: child,
           ),
         ),
       ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
+
+  Widget _labelContent({
+    required String label,
+    required IconData? icon,
+    required bool expand,
+    required bool trailingChevron,
+    required Color color,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 10),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: displayText(size: 16.5, color: color),
+            ),
+          ),
+          if (trailingChevron) ...[
+            const SizedBox(width: 10),
+            Icon(Icons.chevron_right, size: 19, color: color),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _iconContent(Color color, IconData icon) => SizedBox(
+        width: 46,
+        height: 46,
+        child: Icon(icon, size: 20, color: color),
+      );
 }
 
-/// The call-to-action that closes a flow — "Create & share", "Join", "Add &
-/// start" — with the one line of consequence under it.
+/// Shared implementation for text actions with optional leading/trailing
+/// content.
+abstract class LabelActionButton extends ActionButton {
+  const LabelActionButton({
+    super.key,
+    required this.label,
+    required super.onTap,
+    super.tone,
+    super.tooltip,
+    this.icon,
+    this.expand = false,
+    this.trailingChevron = false,
+  });
+
+  final String label;
+  final IconData? icon;
+  final bool expand;
+  final bool trailingChevron;
+
+  Widget _buildLabel({required bool filled}) => _surface(
+        radius: BorderRadius.circular(AppRadius.card),
+        filled: filled,
+        border: filled ? null : Border.all(color: AppColors.border),
+        child: _labelContent(
+          label: label,
+          icon: icon,
+          expand: expand,
+          trailingChevron: trailingChevron,
+          color: filled ? _foreground : _accent,
+        ),
+      );
+}
+
+/// Filled text action used for the primary action in a surface.
+class PrimaryActionButton extends LabelActionButton {
+  const PrimaryActionButton({
+    super.key,
+    required super.label,
+    required super.onTap,
+    super.tone,
+    super.tooltip,
+    super.icon,
+    super.expand,
+    super.trailingChevron,
+  });
+
+  @override
+  Widget build(BuildContext context) => _buildLabel(filled: true);
+}
+
+/// Outlined text action used for secondary actions.
+class OutlineActionButton extends LabelActionButton {
+  const OutlineActionButton({
+    super.key,
+    required super.label,
+    required super.onTap,
+    super.tone,
+    super.tooltip,
+    super.icon,
+    super.expand,
+    super.trailingChevron,
+  });
+
+  @override
+  Widget build(BuildContext context) => _buildLabel(filled: false);
+}
+
+/// Shared icon-button implementation for compact toolbar actions.
+abstract class IconActionButton extends ActionButton {
+  const IconActionButton({
+    super.key,
+    required this.icon,
+    required super.onTap,
+    super.tone,
+    super.tooltip,
+  });
+
+  final IconData icon;
+
+  Widget _buildIcon({required bool filled}) => _surface(
+        radius: BorderRadius.circular(AppRadius.control),
+        filled: filled,
+        border: filled ? null : Border.all(color: AppColors.border),
+        child: _iconContent(filled ? _foreground : _accent, icon),
+      );
+}
+
+/// Filled icon action, used for the compact primary add action.
+class FilledIconActionButton extends IconActionButton {
+  const FilledIconActionButton({
+    super.key,
+    required super.icon,
+    required super.onTap,
+    super.tone,
+    super.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) => _buildIcon(filled: true);
+}
+
+/// Outlined icon action, used for compact secondary actions.
+class OutlinedIconActionButton extends IconActionButton {
+  const OutlinedIconActionButton({
+    super.key,
+    required super.icon,
+    required super.onTap,
+    super.tone,
+    super.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) => _buildIcon(filled: false);
+}
+
+/// The call-to-action that closes a flow, with its one-line consequence.
 ///
-/// Goes in [AppScreen.footer], which supplies the rule above it and the
-/// gutter around it. Share, Join and Add torrent each carried their own
-/// copy of this button: the same 52pt filled rectangle, the same 14pt
-/// radius, the same 20pt spinner swapped in while busy, written out three
-/// times.
-///
-/// Distinct from [PrimaryAction], which is the pill that *starts* a flow
-/// from a list or a sidebar. This one ends one, so it is full width and
-/// square-shouldered rather than a pill.
+/// It is deliberately distinct from a toolbar [ActionButton]: this one is
+/// full-width and belongs in [AppScreen.footer].
 class ScreenAction extends StatelessWidget {
   const ScreenAction({
     super.key,

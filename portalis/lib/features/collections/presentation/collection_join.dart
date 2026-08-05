@@ -20,7 +20,7 @@ class JoinCollectionScreen extends StatefulWidget {
   /// desktop shell's centre pane rather than pushed over it.
   final VoidCallback? onClose;
 
-  /// A code the omnibar already recognised. Arriving here still shows the
+  /// A code the command bar already recognised. Arriving here still shows the
   /// preview and still asks — joining announces you to strangers, so it is
   /// never something a paste completes on its own.
   final String? initialCode;
@@ -69,7 +69,7 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
     final split = decoded.indexOf(':');
     if (split == -1) return null;
     final secret = decoded.substring(0, split);
-    // Same pattern the omnibar's PasteKind checks — see
+    // Same pattern the command bar's PasteKind checks — see
     // [inviteSecretPattern] — so a code arriving here already recognised as
     // an invite is never one this preview then fails to parse.
     if (!inviteSecretPattern.hasMatch(secret)) return null;

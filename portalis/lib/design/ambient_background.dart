@@ -1,5 +1,7 @@
 // Cross-feature ambient design primitive.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
@@ -127,14 +129,14 @@ class _Wash extends StatelessWidget {
   Widget build(BuildContext context) {
     // A gentle figure-of-eight rather than a circle, so the two pools never
     // settle into an obvious loop.
-    final phase = t * 2 * 3.14159265;
-    final dx = 0.35 * _sin(phase);
-    final dy = 0.22 * _sin(phase * 2);
+    final phase = t * 2 * math.pi;
+    final dx = 0.35 * math.sin(phase);
+    final dy = 0.22 * math.sin(phase * 2);
 
-    // Even at full intensity this stays a wash: the content has to remain
-    // the brightest thing on screen.
-    final top = (0.10 + 0.10 * intensity).clamp(0.0, 0.22);
-    final bottom = (0.04 + 0.07 * intensity).clamp(0.0, 0.14);
+    // Deliberately below card-level energy: the background should make live
+    // work feel present without turning the whole screen into a glow field.
+    final top = (0.035 + 0.045 * intensity).clamp(0.0, 0.08);
+    final bottom = (0.015 + 0.035 * intensity).clamp(0.0, 0.05);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -167,19 +169,4 @@ class _Wash extends StatelessWidget {
     );
   }
 
-  /// Small-angle-free sine without importing dart:math for one call.
-  static double _sin(double x) {
-    // Normalise into [-pi, pi] for the polynomial approximation below.
-    const twoPi = 6.283185307179586;
-    const pi = 3.141592653589793;
-    var v = x % twoPi;
-    if (v > pi) v -= twoPi;
-    // Bhaskara I's approximation — accurate to ~0.2%, which is far beyond
-    // what a background gradient can show, and avoids a libm call per frame.
-    final abs = v < 0 ? -v : v;
-    final num = 16 * abs * (pi - abs);
-    final den = 5 * pi * pi - 4 * abs * (pi - abs);
-    final result = num / den;
-    return v < 0 ? -result : result;
-  }
 }

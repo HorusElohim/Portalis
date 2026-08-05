@@ -366,9 +366,9 @@ class Glow {
   /// to flat [AppColors.surface] without the caller testing for it.
   Gradient? get gradient {
     if (!isVisible) return null;
-    // Half again as bright at full tilt. Enough to read as "this one is
-    // working" next to a calm sibling, not enough to compete with content.
-    final top = washOpacity * (1 + 0.5 * intensity);
+    // A slight lift at full tilt is enough to distinguish live work without
+    // turning a collection row into a luminous background panel.
+    final top = washOpacity * (1 + 0.25 * intensity);
     return LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -432,31 +432,31 @@ class Glow {
             level: level,
             color: color,
             intensity: intensity,
-            borderOpacity: 0.26,
-            blur: 14,
-            spread: -4,
-            shadowOpacity: 0.10,
-            washOpacity: 0.11,
+            borderOpacity: 0.18,
+            blur: 8,
+            spread: -5,
+            shadowOpacity: 0.04,
+            washOpacity: 0.045,
           ),
         GlowLevel.active => Glow(
             level: level,
             color: color,
             intensity: intensity,
-            borderOpacity: 0.40,
-            blur: 22,
-            spread: -2,
-            shadowOpacity: 0.18,
-            washOpacity: 0.13,
+            borderOpacity: 0.26,
+            blur: 12,
+            spread: -4,
+            shadowOpacity: 0.08,
+            washOpacity: 0.06,
           ),
         GlowLevel.vivid => Glow(
             level: level,
             color: color,
             intensity: intensity,
-            borderOpacity: 0.58,
-            blur: 30,
-            spread: 0,
-            shadowOpacity: 0.26,
-            washOpacity: 0.16,
+            borderOpacity: 0.34,
+            blur: 16,
+            spread: -3,
+            shadowOpacity: 0.12,
+            washOpacity: 0.08,
           ),
       };
 }

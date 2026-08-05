@@ -124,7 +124,7 @@ class AppBottomNav extends StatelessWidget {
   /// The leftmost destination is Home, and it carries the app's mark rather
   /// than a generic glyph — it is both "where you are" and "how you get
   /// back". Home now answers both "what can I do" and "what do I have": the
-  /// omnibar, the New-share/Add-torrent actions and the collection list all
+  /// command bar, the New-share/Add-torrent actions and the collection list all
   /// live there together (see `home.dart`), which is what let the old
   /// Collections destination fold away — it was the same list a second
   /// place, reached a second way.

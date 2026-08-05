@@ -11,7 +11,7 @@
 /// directly.
 ///
 /// [home] carries what [collections] used to plus Home's own welcome and
-/// omnibar, unlike mobile — both used to be answers to questions this layout
+/// command bar, unlike mobile — both used to be answers to questions this layout
 /// left open on its own terms: Transfers showed the same collections a
 /// second time (every row already carries its own bar, rate and countdown,
 /// and the list is permanently on screen), and Home was the welcome — what
@@ -27,6 +27,6 @@
 /// [share] and [join] exist for the same reason as the rest: whatever the
 /// centre pane shows, the sidebar and list stay put. They differ from
 /// [people]/[settings] only in how they're reached — a one-shot action in the
-/// sidebar (or the omnibar, or a drop) rather than a persistent header
+/// sidebar (or the command bar, or a drop) rather than a persistent header
 /// button — nothing that selects a pane otherwise distinguishes them.
 enum DesktopPane { home, people, settings, share, join }

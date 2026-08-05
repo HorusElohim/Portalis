@@ -72,7 +72,7 @@ class DesktopSidebar extends StatelessWidget {
               // Pure navigation from here down. The sidebar used to carry a
               // New share button, a Join action, a magnet field, a Paste
               // button, an Add button and a .torrent picker — six controls,
-              // where the omnibar above the list now takes any of them as one
+              // where the command bar above the list now takes any of them as one
               // paste, and New share sits beside it as the single primary
               // action. What is left is who you are and where you can go.
               const Spacer(),

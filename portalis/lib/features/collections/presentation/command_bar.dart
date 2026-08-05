@@ -21,8 +21,8 @@ import '../domain/paste.dart';
 /// Search is the fallback rather than the purpose, which is why the same
 /// field can do both without a mode switch — a magnet link and an invite code
 /// are unmistakable, so anything that is neither was meant as a filter.
-class Omnibar extends StatefulWidget {
-  const Omnibar({
+class PortalisCommandBar extends StatefulWidget {
+  const PortalisCommandBar({
     super.key,
     required this.onSearch,
     required this.onInvite,
@@ -41,10 +41,10 @@ class Omnibar extends StatefulWidget {
   final bool autofocus;
 
   @override
-  State<Omnibar> createState() => _OmnibarState();
+  State<PortalisCommandBar> createState() => _CommandBarState();
 }
 
-class _OmnibarState extends State<Omnibar> {
+class _CommandBarState extends State<PortalisCommandBar> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
   bool _busy = false;
@@ -168,7 +168,7 @@ class _OmnibarState extends State<Omnibar> {
               const SizedBox(width: 11),
               Expanded(
                 child: TextField(
-                  key: const Key('omnibarField'),
+                  key: const Key('commandBarField'),
                   controller: _controller,
                   focusNode: _focus,
                   autofocus: widget.autofocus,
@@ -201,7 +201,7 @@ class _OmnibarState extends State<Omnibar> {
               // thing a paste cannot express.
               const SizedBox(width: 4),
               _IconAction(
-                key: const Key('omnibarTorrentFile'),
+                key: const Key('commandBarTorrentFile'),
                 icon: Icons.attach_file,
                 tooltip: 'Add a .torrent file',
                 onTap: _busy ? null : _pickTorrentFile,
@@ -256,7 +256,7 @@ class _Hint extends StatelessWidget {
       color: AppColors.signal,
       borderRadius: BorderRadius.circular(AppRadius.tight),
       child: InkWell(
-        key: const Key('omnibarSubmit'),
+        key: const Key('commandBarSubmit'),
         borderRadius: BorderRadius.circular(AppRadius.tight),
         onTap: onSubmit,
         child: Padding(

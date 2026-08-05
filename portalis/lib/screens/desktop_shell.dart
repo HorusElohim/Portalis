@@ -87,7 +87,7 @@ class _DesktopShellState extends State<DesktopShell> {
     if (tab != null) AppNavigation.tab.value = tab;
   }
 
-  /// A code the omnibar recognised, on its way to the join pane. Held here
+  /// A code the command bar recognised, on its way to the join pane. Held here
   /// rather than passed through the pane, so the pane stays stateless about
   /// what is on screen beside it.
   String? _pendingInvite;
