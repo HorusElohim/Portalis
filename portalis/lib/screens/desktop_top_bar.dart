@@ -32,7 +32,24 @@ class DesktopTopBar extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
                 child: Row(
                   children: [
-                    PortalisLogo(size: 34, energized: active),
+                    Tooltip(
+                      message: 'Home',
+                      child: Material(
+                        color: pane == DesktopPane.home
+                            ? AppColors.surfaceRaised
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppRadius.inner),
+                        child: InkWell(
+                          key: const Key('headerHomeButton'),
+                          borderRadius: BorderRadius.circular(AppRadius.inner),
+                          onTap: () => onPane(DesktopPane.home),
+                          child: Padding(
+                            padding: const EdgeInsets.all(5),
+                            child: PortalisLogo(size: 34, energized: active),
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(width: 12),
                     DesktopIdentityChip(
                       selected: pane == DesktopPane.user,

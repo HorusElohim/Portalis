@@ -46,6 +46,7 @@
   path with a broader cross-platform codec backend.
 - Expanded the media viewer preview to use most of the available viewport while
   keeping transfer facts and details accessible below it.
+- Made the Portalis logo a persistent Home button in the desktop header.
 - Aligned the Flutter-Rust Bridge toolchain and generated bindings to 2.12.0.
 
 ## Portalis 1.0.3 / backend 0.1.2 — 2026-08-05
