@@ -12,6 +12,8 @@
   and explicit forget actions in People and collection details.
 - Added persistent transfer history so collection download graphs and
   completion dates survive application restarts.
+- Added first-frame video thumbnails and unified cross-platform video playback
+  in the media viewer.
 - Added a dedicated User destination for device identity and a local efficiency
   benchmark that refreshes whenever Settings is entered.
 
@@ -36,6 +38,14 @@
 - Moved transient notifications to the energized top event rail.
 - Separated User and Settings across mobile and desktop navigation so identity
   stays distinct from engine configuration.
+- Unified named collaborators and anonymous torrent peers into one collection
+  view peer section, retaining last-seen details and forget actions.
+- Enabled inline preview attempts for MKV and AVI movies, with external-player
+  fallback when the platform codec is unavailable.
+- Made media details visible by default and replaced the Windows-only playback
+  path with a broader cross-platform codec backend.
+- Expanded the media viewer preview to use most of the available viewport while
+  keeping transfer facts and details accessible below it.
 - Aligned the Flutter-Rust Bridge toolchain and generated bindings to 2.12.0.
 
 ## Portalis 1.0.3 / backend 0.1.2 — 2026-08-05

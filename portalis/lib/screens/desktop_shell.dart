@@ -7,7 +7,6 @@ import '../theme.dart';
 import 'desktop_pane.dart';
 import 'desktop_top_bar.dart';
 import 'home.dart';
-import '../features/collections/presentation/collection_detail.dart';
 import '../features/collections/presentation/collection_join.dart';
 import '../features/collections/presentation/collection_share.dart';
 import 'people.dart';

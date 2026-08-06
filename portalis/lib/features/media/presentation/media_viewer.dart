@@ -15,24 +15,20 @@ class CollectionMediaViewer extends StatelessWidget {
     super.key,
     required this.collection,
     required this.media,
-    required this.showDetails,
     required this.isPlayableVideo,
     required this.videoFailed,
     required this.videoController,
     required this.onClose,
     required this.onOpenExternally,
-    required this.onToggleDetails,
   });
 
   final Collection collection;
   final MediaItem media;
-  final bool showDetails;
   final bool isPlayableVideo;
   final bool videoFailed;
   final VideoPlayerController? videoController;
   final VoidCallback onClose;
   final VoidCallback onOpenExternally;
-  final VoidCallback onToggleDetails;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -55,67 +51,65 @@ class CollectionMediaViewer extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                         ],
-                        PillButton(
-                          label: showDetails ? 'Less' : 'Details',
-                          onTap: onToggleDetails,
-                        ),
                       ],
                     ),
                   ],
                 ),
               ),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Center(
-                          child: MediaPreview(
-                            media: media,
-                            isPlayableVideo: isPlayableVideo,
-                            videoFailed: videoFailed,
-                            videoController: videoController,
-                          ),
+                child: LayoutBuilder(
+                  builder: (context, viewport) {
+                    final previewHeight =
+                        (viewport.maxHeight * 0.72).clamp(300.0, 760.0).toDouble();
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: previewHeight,
+                              child: MediaPreview(
+                                media: media,
+                                isPlayableVideo: isPlayableVideo,
+                                videoFailed: videoFailed,
+                                videoController: videoController,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(media.label, style: AppText.cardTitle()),
+                            const SizedBox(height: 3),
+                            Text(
+                              media.isReady
+                                  ? collection.name
+                                  : '${collection.name} \u00b7 downloading',
+                              style: AppText.caption(color: AppColors.textDim),
+                            ),
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TransferFacts(
+                                progress: media.progress,
+                                downloadedBytes: media.downloadedBytes,
+                                totalBytes: media.sizeBytes,
+                                downloadMbps: collection.downloadMbps,
+                                uploadMbps: collection.uploadMbps,
+                                livePeers: collection.livePeers,
+                                etaLabel: collection.etaLabel,
+                                color: collection.hue,
+                                pendingLabel: media.fetched
+                                    ? null
+                                    : 'Not fetched \u2014 size unknown until it starts',
+                              ),
+                            ),
+                            _MediaDetails(collection: collection, media: media),
+                            const SizedBox(height: 14),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      Text(media.label, style: AppText.cardTitle()),
-                      const SizedBox(height: 3),
-                      Text(
-                        media.isReady
-                            ? collection.name
-                            : '${collection.name} \u00b7 downloading',
-                        style: AppText.caption(color: AppColors.textDim),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TransferFacts(
-                          progress: media.progress,
-                          downloadedBytes: media.downloadedBytes,
-                          totalBytes: media.sizeBytes,
-                          downloadMbps: collection.downloadMbps,
-                          uploadMbps: collection.uploadMbps,
-                          livePeers: collection.livePeers,
-                          etaLabel: collection.etaLabel,
-                          color: collection.hue,
-                          pendingLabel: media.fetched
-                              ? null
-                              : 'Not fetched \u2014 size unknown until it starts',
-                        ),
-                      ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: showDetails
-                            ? _MediaDetails(collection: collection, media: media)
-                            : const SizedBox(width: double.infinity),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
             ],

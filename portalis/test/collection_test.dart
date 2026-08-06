@@ -133,10 +133,8 @@ group('collection', () {
       expect(find.textContaining('400 B of 1 KB'), findsOneWidget);
       expect(find.textContaining('3 peers'), findsOneWidget);
 
-      // The rest is a disclosure, not a destination â€” no route is pushed.
-      expect(find.text('Info hash'), findsNothing);
-      await tester.tap(find.text('Details'));
-      await tester.pump(const Duration(milliseconds: 300));
+      // Details are part of the viewer itself; no second tap or route is
+      // needed to inspect the media metadata.
       expect(find.text('Info hash'), findsOneWidget);
       expect(find.byType(MediaViewerScreen), findsOneWidget);
 
@@ -201,7 +199,7 @@ group('collection', () {
       await tester.pump();
 
       expect(find.text('203.0.113.5:6881'), findsOneWidget);
-      expect(find.text('TORRENT PEERS - 1'), findsOneWidget);
+      expect(find.text('PEERS - 1'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

@@ -159,14 +159,12 @@ void main() {
   });
 
   group('the viewer obeys the registry', () {
-    test('inline playback is a capability, not a kind', () {
-      // Both are video-kind, but only one claims inline playback — the
-      // viewer keys off that, so an MKV opens externally instead of showing
-      // a black frame.
+    test('common video containers request inline playback', () {
       expect(MediaFormats.resolve('a.mp4').preview, PreviewSupport.player);
       expect(kindOf('a.mkv'), MediaKind.video);
       expect(MediaFormats.resolve('a.mkv').preview,
-          PreviewSupport.externalOnly);
+          PreviewSupport.player);
+      expect(MediaFormats.resolve('a.avi').preview, PreviewSupport.player);
     });
 
     test('inline image decoding is a capability, not a kind', () {

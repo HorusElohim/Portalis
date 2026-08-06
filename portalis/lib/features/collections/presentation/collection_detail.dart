@@ -398,9 +398,9 @@ class _ResizableMediaPreview extends StatefulWidget {
 }
 
 class _ResizableMediaPreviewState extends State<_ResizableMediaPreview> {
-  static const double _minHeight = 160;
-  static const double _maxHeight = 640;
-  static const double _defaultHeight = 280;
+  static const double _minHeight = 100;
+  static const double _maxHeight = 360;
+  static const double _defaultHeight = 120;
 
   double _height = _defaultHeight;
 

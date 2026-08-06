@@ -3,16 +3,16 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../theme.dart';
 import '../application/media_formats.dart';
 import '../domain/media_item.dart';
 
 /// Placeholder tile standing in for real thumbnails/covers/media — shown
-/// for anything not downloaded yet, and for any file type real thumbnails
-/// don't apply to (video frames aren't extracted, audio/subtitles/other
-/// files have no visual content at all). The icon communicates the file
-/// type at a glance instead of every non-image tile looking identical.
+/// for anything not downloaded yet, and for file types without an in-app
+/// frame renderer. The icon communicates the file type at a glance instead
+/// of every non-image tile looking identical.
 class PlaceholderTile extends StatelessWidget {
   const PlaceholderTile({
     super.key,
@@ -60,8 +60,8 @@ class PlaceholderTile extends StatelessWidget {
 
 /// A [MediaItem]'s thumbnail: the real downloaded image when one's ready,
 /// falling back to [PlaceholderTile] otherwise (not downloaded yet, or not
-/// an image — video/audio/subtitle/other files get a type icon instead,
-/// since none of those have a real frame/cover to render here). Used
+/// previewable). Video files render their first frame without starting
+/// playback. Used
 /// everywhere a media tile is shown — collection cards, grids, the media
 /// viewer — so a tile looks the same wherever it appears.
 class MediaThumbnail extends StatelessWidget {
@@ -110,6 +110,9 @@ class MediaThumbnail extends StatelessWidget {
         ),
       );
     }
+    if (media.isReady && format.preview == PreviewSupport.player) {
+      return _VideoThumbnail(media: media, borderRadius: borderRadius);
+    }
     return PlaceholderTile(
       label: _typeLabel(media.label),
       borderRadius: borderRadius,
@@ -128,6 +131,105 @@ class MediaThumbnail extends StatelessWidget {
   static String? _typeLabel(String name) {
     final ext = extensionOf(name);
     return ext.isEmpty ? null : ext.toUpperCase();
+  }
+}
+
+class _VideoThumbnail extends StatefulWidget {
+  const _VideoThumbnail({required this.media, required this.borderRadius});
+
+  final MediaItem media;
+  final double borderRadius;
+
+  @override
+  State<_VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<_VideoThumbnail> {
+  VideoPlayerController? _controller;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    final path = widget.media.localPath;
+    if (path == null) return;
+    final controller = VideoPlayerController.file(File(path));
+    _controller = controller;
+    try {
+      await controller.initialize();
+      if (!controller.value.isInitialized) {
+        throw StateError(
+          controller.value.errorDescription ?? 'Video failed to initialize',
+        );
+      }
+      try {
+        await controller.setVolume(0);
+      } catch (_) {
+        // Muting a thumbnail is optional; a volume failure must not hide a
+        // valid video frame.
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+      await controller.dispose();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.media.localPath == widget.media.localPath) return;
+    _controller?.dispose();
+    _controller = null;
+    _failed = false;
+    _initialize();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (_failed || controller == null || !controller.value.isInitialized) {
+      return PlaceholderTile(
+        label: MediaThumbnail._typeLabel(widget.media.label),
+        borderRadius: widget.borderRadius,
+        kind: kindOf(widget.media.label),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(widget.borderRadius),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final aspect = controller.value.aspectRatio <= 0
+              ? 16 / 9
+              : controller.value.aspectRatio;
+          final tileAspect = constraints.maxWidth / constraints.maxHeight;
+          final width = aspect > tileAspect
+              ? constraints.maxHeight * aspect
+              : constraints.maxWidth;
+          final height = width / aspect;
+          return FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: VideoPlayer(controller),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

@@ -299,19 +299,15 @@ final List<MediaFormat> _builtIns = [
     extensions: ['mkv'],
     label: 'Matroska video',
     kind: MediaKind.video,
-    // Honest: the platform players behind video_player support MKV
-    // inconsistently, so we don't claim inline playback for it.
-    preview: PreviewSupport.externalOnly,
-    previewNote: 'Container support varies by platform, so this opens in '
-        'your system player rather than risking a black frame here.',
+    // Try the native player first. Unsupported codecs are handled by the
+    // viewer's existing failure fallback and can still open externally.
+    preview: PreviewSupport.player,
   ),
   const MediaFormat(
     extensions: ['avi'],
     label: 'AVI video',
     kind: MediaKind.video,
-    preview: PreviewSupport.externalOnly,
-    previewNote: 'Not supported by the platform video players, so it opens '
-        'in your system player.',
+    preview: PreviewSupport.player,
   ),
 
   // --- Audio --------------------------------------------------------------

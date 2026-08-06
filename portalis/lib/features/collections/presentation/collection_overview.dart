@@ -6,6 +6,7 @@ import '../domain/collection.dart';
 import '../domain/peer_observation.dart';
 import '../domain/transfer_history.dart';
 import 'collection_commands.dart';
+import 'collection_peers.dart';
 import 'collection_presentation.dart';
 
 /// Live collection facts and actions, independent of navigation and commands.
@@ -43,7 +44,6 @@ class CollectionOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shown = collection.collaborators.take(6).toList();
     final transferHistory = [
       for (final sample in history?.samples ?? const <TransferSample>[])
         TransferPoint(
@@ -108,16 +108,11 @@ class CollectionOverview extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        // Info hash and who's connected are the deepest layer of detail —
-        // present, but worth an extra tap, not shown the moment a row grows
-        // at all.
         if (level == CollectionDetailLevel.full) ...[
           _CollectionIdentifiers(collection: collection),
           const SizedBox(height: 14),
-          _Collaborators(
+          CollectionPeers(
             collection: collection,
-            shown: shown,
-            remaining: collection.collaborators.length - shown.length,
             peerHistory: peerHistory,
             onForgetPeer: onForgetPeer,
           ),
@@ -235,189 +230,4 @@ class _CollectionIdentifiers extends StatelessWidget {
           ],
         ),
       );
-}
-
-class _Collaborators extends StatelessWidget {
-  const _Collaborators({
-    required this.collection,
-    required this.shown,
-    required this.remaining,
-    required this.peerHistory,
-    required this.onForgetPeer,
-  });
-
-  final Collection collection;
-  final List<Collaborator> shown;
-  final int remaining;
-  final List<PeerObservation> peerHistory;
-  final ValueChanged<String>? onForgetPeer;
-
-  @override
-  Widget build(BuildContext context) {
-    if (shown.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionLabel('PEERS - ${collection.livePeers}'),
-          const SizedBox(height: 7),
-          Text(
-            collection.livePeers == 0
-                ? 'No peers connected right now'
-                : '${collection.peersLabel} connected - not identified by name',
-            style: monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
-          ),
-          const SizedBox(height: 14),
-          _TorrentPeers(
-            collection: collection,
-            history: peerHistory,
-            onForgetPeer: onForgetPeer,
-          ),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionLabel('COLLABORATORS - ${collection.collaborators.length}'),
-        const SizedBox(height: 7),
-        SizedBox(
-          height: 27,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 27.0 + (shown.length - 1) * 19,
-                child: Stack(
-                  children: [
-                    for (var index = 0; index < shown.length; index++)
-                      Positioned(
-                        left: index * 19.0,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.surfaceDeep,
-                              width: 2,
-                            ),
-                          ),
-                          child: Avatar(initials: shown[index].initials, size: 27),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  remaining > 0 ? '+$remaining more' : shown.map((item) => item.name).join(', '),
-                  overflow: TextOverflow.ellipsis,
-                  style: monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _TorrentPeers(
-          collection: collection,
-          history: peerHistory,
-          onForgetPeer: onForgetPeer,
-        ),
-      ],
-    );
-  }
-}
-
-class _TorrentPeers extends StatelessWidget {
-  const _TorrentPeers({
-    required this.collection,
-    required this.history,
-    required this.onForgetPeer,
-  });
-
-  final Collection collection;
-  final List<PeerObservation> history;
-  final ValueChanged<String>? onForgetPeer;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionLabel('TORRENT PEERS - ${_peers.length}'),
-          const SizedBox(height: 7),
-          if (history.isEmpty && collection.torrentPeers.isEmpty)
-            Text(
-              collection.livePeers == 0
-                  ? 'No torrent peers connected right now'
-                  : '${collection.peersLabel} connected - addresses unavailable',
-              style: monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                for (final peer in _peers)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.emberWash,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.ember.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            peer.address,
-                            overflow: TextOverflow.ellipsis,
-                            style: monoLabel(
-                              size: 10.5,
-                              color: AppColors.ember,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          formatLastSeen(peer.lastSeen),
-                          style: monoLabel(
-                            size: 9,
-                            color: AppColors.textDim,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        if (onForgetPeer != null)
-                          IconButton(
-                            tooltip: 'Forget peer',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: const Icon(Icons.close, size: 14),
-                            color: AppColors.textDim,
-                            onPressed: () => onForgetPeer!(peer.address),
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-        ],
-      );
-
-  List<PeerObservation> get _peers {
-    if (history.isNotEmpty) return history;
-    final now = DateTime.now();
-    return [
-      for (final address in collection.torrentPeers)
-        PeerObservation(
-          collectionId: collection.id,
-          collectionName: collection.name,
-          address: address,
-          lastSeen: now,
-        ),
-    ];
-  }
 }

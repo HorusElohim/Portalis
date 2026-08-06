@@ -26,7 +26,8 @@ class MediaItem {
   /// The signed name of the collection entry that introduced this file.
   String get entryLabel => _entryLabel ?? label;
 
-  /// The backend exposes a path only after it has verified completion, so
-  /// callers never attempt to open a partial file.
-  bool get isReady => localPath != null && progress >= 1.0;
+  /// The backend exposes a path only after it has verified completion, so the
+  /// path is the readiness signal. This avoids a stale progress value hiding
+  /// a valid local file.
+  bool get isReady => localPath != null;
 }

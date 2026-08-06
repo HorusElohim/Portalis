@@ -53,6 +53,14 @@ dependencies:
 
   # In-app video playback in the media viewer.
   video_player: ^2.13.0
+  # Media-kit backend keeps the video_player API while adding broad,
+  # cross-platform codec support for Windows and mobile.
+  video_player_media_kit: ^2.0.0
+  media_kit_libs_android_video: ^1.3.8
+  media_kit_libs_ios_video: ^1.1.4
+  media_kit_libs_macos_video: ^1.1.4
+  media_kit_libs_windows_video: ^1.0.11
+  media_kit_libs_linux: ^1.2.1
 
   # Flutter's built-in image codecs can't decode HEIC/HEIF (the iPhone
   # camera's default photo format) at all — pickers hand back unrenderable

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:video_player_media_kit/video_player_media_kit.dart';
 
 import '../bridge_generated/bridge.dart';
 import '../bridge_generated/frb_generated.dart';
@@ -7,7 +8,15 @@ import 'portalis_app.dart';
 
 /// Starts the native backend before Flutter renders any screen.
 Future<void> runPortalisApp() async {
+  WidgetsFlutterBinding.ensureInitialized();
   try {
+    VideoPlayerMediaKit.ensureInitialized(
+      android: true,
+      iOS: true,
+      macOS: true,
+      windows: true,
+      linux: true,
+    );
     await RustLib.init();
     final backendVersion = getVersion();
     if (backendVersion != expectedBackendVersion) {

@@ -32,7 +32,6 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   VideoPlayerController? _videoController;
   String? _playingPath;
   bool _videoFailed = false;
-  bool _showDetails = false;
 
   Collection get _collection =>
       AppControllers.collections.byId(widget.collection.id) ?? widget.collection;
@@ -77,16 +76,17 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   void _initializeVideo(String path) {
     final controller = VideoPlayerController.file(File(path));
     _videoController = controller;
-    controller.initialize().then(
-      (_) {
-        if (!mounted || _videoController != controller) return;
-        setState(() {});
-      },
-      onError: (_) {
-        if (!mounted || _videoController != controller) return;
+    controller.initialize().then((_) {
+      if (!mounted || _videoController != controller) return;
+      if (!controller.value.isInitialized) {
         setState(() => _videoFailed = true);
-      },
-    );
+        return;
+      }
+      setState(() {});
+    }).catchError((_) {
+      if (!mounted || _videoController != controller) return;
+      setState(() => _videoFailed = true);
+    });
   }
 
   void _disposeVideo() {
@@ -117,13 +117,11 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
       builder: (context, _) => CollectionMediaViewer(
         collection: _collection,
         media: _media,
-        showDetails: _showDetails,
         isPlayableVideo: _isPlayableVideo,
         videoFailed: _videoFailed,
         videoController: _videoController,
         onClose: () => Navigator.of(context).pop(),
         onOpenExternally: _openExternally,
-        onToggleDetails: () => setState(() => _showDetails = !_showDetails),
       ),
     );
   }
