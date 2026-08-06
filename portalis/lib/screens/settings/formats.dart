@@ -18,13 +18,13 @@ import '../../theme.dart';
 class FormatsScreen extends StatefulWidget {
   const FormatsScreen({super.key, this.embedded = false, this.onBack});
 
-  /// Set when this replaces the You pane in place on desktop rather than
+  /// Set when this replaces the User pane in place on desktop rather than
   /// being pushed over it — see [AppScreen].
   final bool embedded;
 
   /// Called instead of popping a route. Only meaningful when [embedded]:
   /// there is no route to pop there, so the caller supplies its own
-  /// "collapse back to You" callback.
+  /// "collapse back to User" callback.
   final VoidCallback? onBack;
 
   @override

@@ -5,10 +5,9 @@
 /// its own buttons is lit — and a type two files share belongs to neither of
 /// them, or the pair would have to import each other.
 ///
-/// [you] no longer exists as its own pane — that content folded into
-/// [settings] (see `settings.dart`'s absorption of the old
-/// `user_screen.dart`), so tapping the identity chip now opens Settings
-/// directly.
+/// [user] owns the local identity and collaborator-facing profile, while
+/// [settings] owns engine configuration. The identity chip opens User
+/// directly, and the tuning action opens Settings.
 ///
 /// [home] carries what [collections] used to plus Home's own welcome and
 /// command bar, unlike mobile — both used to be answers to questions this layout
@@ -29,4 +28,4 @@
 /// [people]/[settings] only in how they're reached — a one-shot action in the
 /// sidebar (or the command bar, or a drop) rather than a persistent header
 /// button — nothing that selects a pane otherwise distinguishes them.
-enum DesktopPane { home, people, settings, share, join }
+enum DesktopPane { home, user, people, settings, share, join }

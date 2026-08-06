@@ -35,8 +35,8 @@ class DesktopTopBar extends StatelessWidget {
                     PortalisLogo(size: 34, energized: active),
                     const SizedBox(width: 12),
                     DesktopIdentityChip(
-                      selected: pane == DesktopPane.settings,
-                      onTap: () => onPane(DesktopPane.settings),
+                      selected: pane == DesktopPane.user,
+                      onTap: () => onPane(DesktopPane.user),
                     ),
                     const SizedBox(width: 18),
                     const Expanded(child: DesktopEventRail()),

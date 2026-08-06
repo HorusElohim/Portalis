@@ -8,6 +8,10 @@
   and deleting local files with confirmation.
 - Added a shared live transfer panel with prominent progress, rates, peers,
   ETA, and download/upload activity graph.
+- Added persistent anonymous torrent-peer history with last-seen timestamps
+  and explicit forget actions in People and collection details.
+- Added a dedicated User destination for device identity and a local efficiency
+  benchmark that refreshes whenever Settings is entered.
 
 ### Changed
 
@@ -26,6 +30,8 @@
   redundant information toggle, and replaced the desktop sidebar with a top
   identity and event rail.
 - Moved transient notifications to the energized top event rail.
+- Separated User and Settings across mobile and desktop navigation so identity
+  stays distinct from engine configuration.
 - Aligned the Flutter-Rust Bridge toolchain and generated bindings to 2.12.0.
 
 ## Portalis 1.0.3 / backend 0.1.2 — 2026-08-05

@@ -4,7 +4,7 @@ void main() {
   tearDown(resetTestState);
 
 group('shell', () {
-    testWidgets('has three destinations and switches between them',
+    testWidgets('has four destinations and switches between them',
         (tester) async {
       await pumpApp(tester, collections: []);
 
@@ -16,13 +16,17 @@ group('shell', () {
       // the list lives on Home itself.
       expect(find.text('Transfers'), findsNothing);
       expect(find.text('Collections'), findsNothing);
-      expect(AppBottomNav.items.length, 3);
+      expect(AppBottomNav.items.length, 4);
 
       await tester.tap(find.byKey(const Key('navTab1')));
       await tester.pump();
-      expect(find.byType(PeopleScreen), findsOneWidget);
+      expect(find.byType(UserScreen), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.pump();
+      expect(find.byType(PeopleScreen), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
       expect(find.byType(SettingsScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -121,16 +125,16 @@ group('shell', () {
       expect(find.byKey(const Key('headerPeopleButton')), findsOneWidget);
       expect(find.byKey(const Key('headerSettingsButton')), findsOneWidget);
 
-      // Renaming this device was impossible on desktop before it had any way
-      // in at all; the identity chip is that way in, and now opens Settings
-      // directly rather than a separate You pane.
+      // The identity chip is the direct way into User; engine settings keep
+      // their own header action.
       await tester.tap(find.byKey(const Key('identityChip')));
       await tester.pump();
-      expect(find.byType(SettingsScreen), findsOneWidget);
+      expect(find.byType(UserScreen), findsOneWidget);
       expect(find.text('Change name'), findsOneWidget);
 
       // Tapping the header button for the pane that is already open closes
-      // it back to Home â€” the same toggle every pane button gets.
+      // The settings action still toggles back to Home — the same behaviour
+      // every pane button gets.
       await tester.tap(find.byKey(const Key('headerSettingsButton')));
       await tester.pump();
       expect(find.byType(SettingsScreen), findsNothing);
@@ -209,14 +213,14 @@ group('shell', () {
       await pumpApp(tester, collections: []);
       expect(find.text('Home'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.tap(find.byKey(const Key('navTab3')));
       await tester.pump();
       expect(find.byType(SettingsScreen), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('navTab0')));
       await tester.pump();
 
-      expect(AppNavigation.tab.value, 0);
+      expect(AppNavigation.tab.value, AppNavigation.homeTab);
       expect(tester.takeException(), isNull);
     });
 

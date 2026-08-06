@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/collections_repository.dart';
+import '../data/peer_history_store.dart';
 import '../domain/collection.dart';
+import '../domain/peer_observation.dart';
 import '../domain/transfer_history.dart';
 import '../platform/media_gallery_importer.dart';
 
@@ -10,21 +12,29 @@ import '../platform/media_gallery_importer.dart';
 /// and change notification. Native calls live in [CollectionsRepository] and
 /// mobile gallery writes live in [MediaGalleryImporter].
 class CollectionsController extends ChangeNotifier {
+  static const _peerWriteSpacing = Duration(seconds: 5);
   CollectionsController({
     required CollectionsRepository repository,
     required MediaGalleryImporter galleryImporter,
+    required PeerHistoryStore peerHistoryStore,
   })  : _repository = repository,
-        _galleryImporter = galleryImporter;
+        _galleryImporter = galleryImporter,
+        _peerHistoryStore = peerHistoryStore;
 
   factory CollectionsController.production() => CollectionsController(
         repository: const FrbCollectionsRepository(),
         galleryImporter: mediaGalleryImporterForCurrentPlatform(),
+        peerHistoryStore: const SharedPreferencesPeerHistoryStore(),
       );
 
   final CollectionsRepository _repository;
   final MediaGalleryImporter _galleryImporter;
+  final PeerHistoryStore _peerHistoryStore;
 
   List<Collection> _collections = const [];
+  List<PeerObservation> _peerHistory = const [];
+  final Set<String> _hiddenPeerAddresses = {};
+  bool _peerHistoryLoaded = false;
   final Map<String, TransferHistory> _transferHistories = {};
   List<Collection> get collections => List.unmodifiable(_collections);
   List<Collection> get shared =>
@@ -49,8 +59,18 @@ class CollectionsController extends ChangeNotifier {
   void start() {
     if (_timer != null) return;
     unawaited(Future.microtask(_repository.startEngine).catchError((_) {}));
-    unawaited(refresh());
+    unawaited(_loadPeerHistoryThenRefresh());
     _schedule(_paused ? _backgroundInterval : _interval);
+  }
+
+  Future<void> _loadPeerHistoryThenRefresh() async {
+    try {
+      _peerHistory = await _peerHistoryStore.load();
+    } catch (_) {
+      _peerHistory = const [];
+    }
+    _peerHistoryLoaded = true;
+    await refresh();
   }
 
   void setPaused(bool paused) {
@@ -72,9 +92,11 @@ class CollectionsController extends ChangeNotifier {
 
   Future<void> refresh() async {
     var historyChanged = false;
+    var peerHistoryChanged = false;
     try {
       _collections = await _repository.list();
       historyChanged = _recordTransferHistory(_collections);
+      peerHistoryChanged = await _recordPeerHistory(_collections);
       engineReady = await _repository.isEngineReady();
       lastError = null;
       unawaited(_galleryImporter.importReadyMedia(_collections));
@@ -82,7 +104,7 @@ class CollectionsController extends ChangeNotifier {
       lastError = '$error';
     }
     _retuneInterval();
-    if (_changed() || historyChanged) notifyListeners();
+    if (_changed() || historyChanged || peerHistoryChanged) notifyListeners();
   }
 
   double get liveRate => _collections.fold<double>(
@@ -100,6 +122,18 @@ class CollectionsController extends ChangeNotifier {
 
   TransferHistory? historyFor(String collectionId) =>
       _transferHistories[collectionId];
+
+  List<PeerObservation> peerHistoryFor(String collectionId) =>
+      _visiblePeerHistory().where((peer) => peer.collectionId == collectionId).toList();
+
+  List<PeerObservation> get peerHistory => _visiblePeerHistory();
+
+  Future<void> forgetPeer(String address) async {
+    _hiddenPeerAddresses.add(address);
+    _peerHistory = _peerHistory.where((peer) => peer.address != address).toList();
+    await _savePeerHistory();
+    notifyListeners();
+  }
 
   Future<Collection> create(String name) => _refreshAfter(
         () => _repository.create(name),
@@ -159,6 +193,81 @@ class CollectionsController extends ChangeNotifier {
     _lastSeen = null;
     notifyListeners();
   }
+
+  List<PeerObservation> _visiblePeerHistory() {
+    final byKey = <String, PeerObservation>{
+      for (final peer in _peerHistory) _peerKey(peer): peer,
+    };
+    final now = DateTime.now();
+    for (final collection in _collections) {
+      for (final address in collection.torrentPeers) {
+        if (_hiddenPeerAddresses.contains(address)) continue;
+        final peer = PeerObservation(
+          collectionId: collection.id,
+          collectionName: collection.name,
+          address: address,
+          lastSeen: now,
+        );
+        byKey[_peerKey(peer)] = peer;
+      }
+    }
+    return byKey.values.toList()
+      ..sort((a, b) => b.lastSeen.compareTo(a.lastSeen));
+  }
+
+  Future<bool> _recordPeerHistory(List<Collection> collections) async {
+    if (!_peerHistoryLoaded) return false;
+    final now = DateTime.now();
+    final ids = collections.map((collection) => collection.id).toSet();
+    final next = _peerHistory.where((peer) => ids.contains(peer.collectionId)).toList();
+    final byKey = <String, PeerObservation>{
+      for (final peer in next) _peerKey(peer): peer,
+    };
+    final liveAddresses = <String>{};
+    var changed = next.length != _peerHistory.length;
+
+    for (final collection in collections) {
+      for (final address in collection.torrentPeers) {
+        liveAddresses.add(address);
+        if (_hiddenPeerAddresses.contains(address)) continue;
+        final peer = PeerObservation(
+          collectionId: collection.id,
+          collectionName: collection.name,
+          address: address,
+          lastSeen: now,
+        );
+        final previous = byKey[_peerKey(peer)];
+        final age = previous == null
+            ? _peerWriteSpacing
+            : (now.isAfter(previous.lastSeen)
+                ? now.difference(previous.lastSeen)
+                : previous.lastSeen.difference(now));
+        if (previous == null ||
+            age >= _peerWriteSpacing ||
+            previous.collectionName != peer.collectionName) {
+          byKey[_peerKey(peer)] = peer;
+          changed = true;
+        }
+      }
+    }
+    _hiddenPeerAddresses.removeWhere((address) => !liveAddresses.contains(address));
+    if (!changed) return false;
+    _peerHistory = byKey.values.toList();
+    await _savePeerHistory();
+    return true;
+  }
+
+  Future<void> _savePeerHistory() async {
+    try {
+      await _peerHistoryStore.save(_peerHistory);
+    } catch (_) {
+      // Peer history is auxiliary UI state; a storage failure must not stop
+      // transfers or make the collection list fail.
+    }
+  }
+
+  String _peerKey(PeerObservation peer) =>
+      '${peer.collectionId}\u0000${peer.address}';
 
   bool _recordTransferHistory(List<Collection> collections) {
     final now = DateTime.now();

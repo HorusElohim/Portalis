@@ -186,6 +186,25 @@ group('collection', () {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('shows anonymous torrent peer addresses in the collection',
+        (tester) async {
+      final collection = buildCollection(
+        kind: CollectionKind.torrent,
+        torrentPeers: const ['203.0.113.5:6881'],
+        livePeers: 1,
+      );
+      await tester.binding.setSurfaceSize(phoneSize);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(home: CollectionScreen(collection: collection)),
+      );
+      await tester.pump();
+
+      expect(find.text('203.0.113.5:6881'), findsOneWidget);
+      expect(find.text('TORRENT PEERS - 1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('contents are grouped by the batch they arrived in',
         (tester) async {
       // A collection grows one signed manifest entry at a time; the grid used

@@ -130,6 +130,11 @@ class TorrentInfo {
   /// closest real equivalent to the mockup's "N copies alive" indicator.
   final int livePeers;
 
+  /// `"ip:port"` of each currently-connected peer. BitTorrent peers carry
+  /// no identity beyond their network address — there is no name, no
+  /// signed device id, nothing to correlate them with a collaborator.
+  final List<String> livePeerAddrs;
+
   const TorrentInfo({
     required this.id,
     required this.infoHash,
@@ -144,6 +149,7 @@ class TorrentInfo {
     this.error,
     required this.files,
     required this.livePeers,
+    required this.livePeerAddrs,
   });
 
   @override
@@ -160,7 +166,8 @@ class TorrentInfo {
       finished.hashCode ^
       error.hashCode ^
       files.hashCode ^
-      livePeers.hashCode;
+      livePeers.hashCode ^
+      livePeerAddrs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -179,5 +186,6 @@ class TorrentInfo {
           finished == other.finished &&
           error == other.error &&
           files == other.files &&
-          livePeers == other.livePeers;
+          livePeers == other.livePeers &&
+          livePeerAddrs == other.livePeerAddrs;
 }

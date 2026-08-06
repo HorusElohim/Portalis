@@ -113,6 +113,13 @@ cargo install flutter_rust_bridge_codegen   # once
 ./tool/frb_build.sh <macos|ios|android|linux|windows|web>
 ```
 
+On Windows, regenerate the bindings without building or launching the app:
+
+```powershell
+cd portalis
+.\tool\frb_generate.ps1
+```
+
 Then rebuild the Rust library for your platform. Never invoke the codegen with `--rust-input crate`: its module scan ignores Rust visibility, so the bare wildcard pulls in internal-only modules such as `domain` and fails to compile. `tool/frb_build.sh` passes the correct explicit module list.
 
 ## Testing

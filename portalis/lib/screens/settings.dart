@@ -5,28 +5,16 @@ import 'package:flutter/material.dart';
 
 import '../app/app_controllers.dart';
 import '../design/design.dart';
-import '../features/identity/domain/device_profile.dart';
 import '../features/settings/domain/engine_settings.dart';
 import '../features/settings/domain/listen_port_range.dart';
-import '../features/settings/presentation/device_profile_section.dart';
+import '../features/settings/application/efficiency_benchmark.dart';
+import '../features/settings/presentation/efficiency_benchmark_card.dart';
 import '../features/settings/presentation/settings_sections.dart';
 import '../services/navigation.dart';
 import '../theme.dart';
-import 'settings/formats.dart';
 import 'settings/storage.dart';
 
-/// Your identity and this device's engine, in one place.
-///
-/// Absorbs what used to be the separate You/profile destination
-/// (`user_screen.dart`) as a leading profile section: avatar, nickname,
-/// session stats, sync address, and the "identity lives on this device"
-/// note. Below that, every setting the BitTorrent engine honours, and
-/// nothing else — each control maps to a real librqbit `SessionOptions`
-/// field via `rust/backend/src/settings.rs`, no app-invented preferences
-/// that persist a value nothing reads. Engine sections are ordered by how
-/// likely they are to matter, with the two live-adjustable rate limits
-/// first; everything below them is read once at session construction, which
-/// the UI states rather than implying an immediate effect.
+/// Settings for the transfer engine and its storage.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
@@ -50,8 +38,11 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _settings = AppControllers.settings;
+  static const _benchmark = EfficiencyBenchmark();
   Timer? _storagePoll;
   bool _restartPending = false;
+  bool _benchmarkRunning = false;
+  EfficiencyBenchmarkResult? _benchmarkResult;
 
   /// Which sections show. Starts from [SettingsScreen.advanced] but, when
   /// embedded, toggles in place rather than through a second pushed
@@ -62,14 +53,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// pushing it over the shell's sidebar and list — see [_openStorage].
   bool _showStorage = false;
 
-  /// Embedded only: shows [FormatsScreen] in place of Settings instead of
-  /// pushing it over the shell's sidebar and list — see [_openFormats].
-  bool _showFormats = false;
-
-  String? _syncAddress;
-
-  DeviceProfile? get _identity => AppControllers.identity.info;
-
   @override
   void initState() {
     super.initState();
@@ -79,41 +62,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const Duration(seconds: 2),
       (_) => _settings.refreshStorageUsage(),
     );
-    AppControllers.identity.load();
-    _loadSyncAddress();
+    AppNavigation.tab.addListener(_onDestinationChanged);
+    if (!widget.embedded ||
+        AppNavigation.tab.value == AppNavigation.settingsTab) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _runBenchmark());
+    }
   }
 
   @override
   void dispose() {
+    AppNavigation.tab.removeListener(_onDestinationChanged);
     _storagePoll?.cancel();
     super.dispose();
   }
 
-  Future<void> _loadSyncAddress() async {
-    // Separate from identity: fetching the sync address is what starts the
-    // listener, making this device reachable for as long as the app runs.
-    try {
-      final addr = await AppControllers.collections.syncAddress();
-      if (mounted) setState(() => _syncAddress = addr);
-    } catch (_) {
-      // Backend unavailable — the row stays hidden rather than showing a
-      // made-up address.
+  void _onDestinationChanged() {
+    if (AppNavigation.tab.value == AppNavigation.settingsTab) {
+      _runBenchmark();
     }
   }
 
-  Future<void> _rename() async {
-    final result = await promptForText(
-      context,
-      title: 'Your name',
-      initialValue: _identity?.nickname,
-      helper: 'This is how you appear to collaborators.',
-    );
-    if (result == null || result.isEmpty || !mounted) return;
-    try {
-      await AppControllers.identity.rename(result);
-    } catch (e) {
-      if (mounted) showToast(context, 'Couldn\'t rename: $e');
-    }
+  Future<void> _runBenchmark() async {
+    if (!mounted || _benchmarkRunning) return;
+    setState(() {
+      _benchmarkRunning = true;
+      _benchmarkResult = null;
+    });
+    final result = await _benchmark.run();
+    if (!mounted) return;
+    setState(() {
+      _benchmarkRunning = false;
+      _benchmarkResult = result;
+    });
   }
 
   /// "Network & engine" used to always push a second [SettingsScreen] with
@@ -134,13 +114,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         embedded: widget.embedded,
         showInPlace: () => setState(() => _showStorage = true),
         push: (_) => StorageScreen(embedded: widget.embedded),
-      );
-
-  void _openFormats() => openNestedScreen(
-        context,
-        embedded: widget.embedded,
-        showInPlace: () => setState(() => _showFormats = true),
-        push: (_) => const FormatsScreen(),
       );
 
   /// Collapses Advanced back to Basic in place when embedded — there is no
@@ -279,12 +252,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onBack: () => setState(() => _showStorage = false),
       );
     }
-    if (_showFormats) {
-      return FormatsScreen(
-        embedded: widget.embedded,
-        onBack: () => setState(() => _showFormats = false),
-      );
-    }
     return AppScreen(
       // Advanced is a screen in its own right, so it says so rather than
       // sitting under the title of the one it was reached from.
@@ -297,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       wideMaxWidth: 1100,
       body: ListenableBuilder(
         listenable: Listenable.merge(
-          [_settings, AppControllers.collections, AppControllers.identity],
+          [_settings, AppControllers.collections],
         ),
         builder: (context, _) {
           final s = _settings.settings;
@@ -306,14 +273,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (!_advanced)
-                  DeviceProfileSection(
-                    profile: _identity,
-                    identityError: AppControllers.identity.lastError,
-                    collections: AppControllers.collections.collections,
-                    syncAddress: _syncAddress,
-                    onRename: _identity == null ? null : _rename,
-                    onOpenPeople: () => AppNavigation.tab.value = 1,
-                    onOpenFormats: _openFormats,
+                  EfficiencyBenchmarkCard(
+                    running: _benchmarkRunning,
+                    result: _benchmarkResult,
                   ),
                 if (_settings.lastError != null)
                   InfoBanner(

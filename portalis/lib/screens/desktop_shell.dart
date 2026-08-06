@@ -12,6 +12,7 @@ import '../features/collections/presentation/collection_join.dart';
 import '../features/collections/presentation/collection_share.dart';
 import 'people.dart';
 import 'settings.dart';
+import 'user.dart';
 
 /// The wide-window layout: sidebar, list, and whatever is being looked at.
 ///
@@ -41,15 +42,17 @@ class _DesktopShellState extends State<DesktopShell> {
   /// was listening.
   static DesktopPane? _paneForTab(int tab) => switch (tab) {
         0 => DesktopPane.home,
-        1 => DesktopPane.people,
-        2 => DesktopPane.settings,
+        1 => DesktopPane.user,
+        2 => DesktopPane.people,
+        3 => DesktopPane.settings,
         _ => null,
       };
 
   static int? _tabForPane(DesktopPane pane) => switch (pane) {
         DesktopPane.home => 0,
-        DesktopPane.people => 1,
-        DesktopPane.settings => 2,
+        DesktopPane.user => 1,
+        DesktopPane.people => 2,
+        DesktopPane.settings => 3,
         // No mobile peer: Share/Join are their own pushed screens on mobile
         // rather than a pane of anything.
         DesktopPane.share || DesktopPane.join => null,
@@ -171,6 +174,8 @@ class _DesktopShellState extends State<DesktopShell> {
       // any one screen has to remember on its own.
       case DesktopPane.people:
         return const PeopleScreen(embedded: true);
+      case DesktopPane.user:
+        return const UserScreen(embedded: true);
       case DesktopPane.settings:
         return const SettingsScreen(embedded: true);
       // Share and Join have their own Scaffold/SafeArea regardless of

@@ -23,6 +23,7 @@ abstract final class CollectionMapper {
         downloadMbps: info.downloadMbps,
         uploadMbps: info.uploadMbps,
         livePeers: info.livePeers,
+        torrentPeers: info.torrentPeers,
         pendingMedia: info.pendingMedia,
         etaSecs: info.etaSecs?.toInt(),
         state: info.state,

@@ -24,6 +24,7 @@ export 'package:portalis/main.dart';
 export 'package:portalis/screens/people.dart';
 export 'package:portalis/screens/root_shell.dart';
 export 'package:portalis/screens/settings.dart';
+export 'package:portalis/screens/user.dart';
 export 'package:portalis/services/navigation.dart';
 export 'package:portalis/theme.dart';
 
@@ -38,6 +39,7 @@ Collection buildCollection({
   double uploadMbps = 0,
   String state = 'seeding',
   int livePeers = 0,
+  List<String> torrentPeers = const [],
   int pendingMedia = 0,
   List<Collaborator> collaborators = const [],
   List<MediaItem> media = const [],
@@ -57,6 +59,7 @@ Collection buildCollection({
       downloadMbps: downloadMbps,
       uploadMbps: uploadMbps,
       livePeers: livePeers,
+      torrentPeers: torrentPeers,
       pendingMedia: pendingMedia,
       etaSecs: etaSecs,
       state: state,
@@ -101,6 +104,6 @@ String inviteCode(String name) {
 
 void resetTestState() {
   AppControllers.collections.debugSeed([]);
-  AppNavigation.tab.value = 0;
+  AppNavigation.tab.value = AppNavigation.homeTab;
   AppNavigation.depth.value = 0;
 }

@@ -29,6 +29,10 @@ pub struct TorrentInfo {
     /// Currently-connected peers (not the historical total ever seen) — the
     /// closest real equivalent to the mockup's "N copies alive" indicator.
     pub live_peers: u32,
+    /// `"ip:port"` of each currently-connected peer. BitTorrent peers carry
+    /// no identity beyond their network address — there is no name, no
+    /// signed device id, nothing to correlate them with a collaborator.
+    pub live_peer_addrs: Vec<String>,
 }
 
 /// One file inside a torrent, with its real on-disk location — resolved via
@@ -471,6 +475,23 @@ mod native {
             })
             .unwrap_or((0.0, 0.0, 0));
         let files = files_for(api, id, &stats, initializing);
+        // `PeerStatsFilter`/`PeerStatsSnapshot` are private-in-public on
+        // `Api::api_peer_stats` (librqbit 8.1.1) — reachable through type
+        // inference and field access without ever naming them, same as
+        // librqbit's own HTTP API layer consumes it.
+        let live_peer_addrs: Vec<String> = match api
+            .api_peer_stats(TorrentIdOrHash::Id(id), Default::default())
+        {
+            Ok(snapshot) => snapshot.peers.into_keys().collect(),
+            Err(error) => {
+                crate::log::clog!(
+                    "torrent",
+                    "peer_stats unavailable for {}: {error:#}",
+                    handle.info_hash().as_string()
+                );
+                Vec::new()
+            }
+        };
 
         TorrentInfo {
             id,
@@ -486,6 +507,7 @@ mod native {
             error: stats.error.clone(),
             files,
             live_peers,
+            live_peer_addrs,
         }
     }
 

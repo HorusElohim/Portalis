@@ -101,7 +101,7 @@ Future<void> restartCollection({required String collectionId}) =>
     RustLib.instance.api
         .crateCollectionsRestartCollection(collectionId: collectionId);
 
-/// Stops a collection while retaining its downloaded files on disk.
+/// Stops transfer activity while retaining the collection and torrent.
 Future<void> stopCollection({required String collectionId}) =>
     RustLib.instance.api
         .crateCollectionsStopCollection(collectionId: collectionId);
@@ -176,6 +176,16 @@ class CollectionInfo {
   /// Currently-connected peers, summed across this collection's torrents.
   final int livePeers;
 
+  /// `"ip:port"` of this collection's live swarm peers — `Torrent` kind
+  /// only. A `Shared` collection already lists who it's with as
+  /// [`collaborators`](Self::collaborators); its manifest entries also have
+  /// BitTorrent swarm connections underneath, but there's no way to
+  /// correlate a bare peer address back to a signed collaborator identity,
+  /// so surfacing both would just show the same person twice under two
+  /// unrelated labels. A plain torrent has no collaborators at all, so its
+  /// swarm is the only "who's here" it can offer.
+  final List<String> torrentPeers;
+
   /// Manifest entries with no local torrent yet — "known but not fetched".
   final int pendingMedia;
 
@@ -207,6 +217,7 @@ class CollectionInfo {
     required this.downloadMbps,
     required this.uploadMbps,
     required this.livePeers,
+    required this.torrentPeers,
     required this.pendingMedia,
     this.etaSecs,
     required this.state,
@@ -227,6 +238,7 @@ class CollectionInfo {
       downloadMbps.hashCode ^
       uploadMbps.hashCode ^
       livePeers.hashCode ^
+      torrentPeers.hashCode ^
       pendingMedia.hashCode ^
       etaSecs.hashCode ^
       state.hashCode;
@@ -249,6 +261,7 @@ class CollectionInfo {
           downloadMbps == other.downloadMbps &&
           uploadMbps == other.uploadMbps &&
           livePeers == other.livePeers &&
+          torrentPeers == other.torrentPeers &&
           pendingMedia == other.pendingMedia &&
           etaSecs == other.etaSecs &&
           state == other.state;

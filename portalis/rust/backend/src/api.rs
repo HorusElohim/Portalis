@@ -1185,6 +1185,7 @@ impl SseDecode for crate::collections::CollectionInfo {
         let mut var_downloadMbps = <f64>::sse_decode(deserializer);
         let mut var_uploadMbps = <f64>::sse_decode(deserializer);
         let mut var_livePeers = <u32>::sse_decode(deserializer);
+        let mut var_torrentPeers = <Vec<String>>::sse_decode(deserializer);
         let mut var_pendingMedia = <u32>::sse_decode(deserializer);
         let mut var_etaSecs = <Option<u64>>::sse_decode(deserializer);
         let mut var_state = <String>::sse_decode(deserializer);
@@ -1202,6 +1203,7 @@ impl SseDecode for crate::collections::CollectionInfo {
             download_mbps: var_downloadMbps,
             upload_mbps: var_uploadMbps,
             live_peers: var_livePeers,
+            torrent_peers: var_torrentPeers,
             pending_media: var_pendingMedia,
             eta_secs: var_etaSecs,
             state: var_state,
@@ -1524,6 +1526,7 @@ impl SseDecode for crate::torrent::TorrentInfo {
         let mut var_error = <Option<String>>::sse_decode(deserializer);
         let mut var_files = <Vec<crate::torrent::TorrentFile>>::sse_decode(deserializer);
         let mut var_livePeers = <u32>::sse_decode(deserializer);
+        let mut var_livePeerAddrs = <Vec<String>>::sse_decode(deserializer);
         return crate::torrent::TorrentInfo {
             id: var_id,
             info_hash: var_infoHash,
@@ -1538,6 +1541,7 @@ impl SseDecode for crate::torrent::TorrentInfo {
             error: var_error,
             files: var_files,
             live_peers: var_livePeers,
+            live_peer_addrs: var_livePeerAddrs,
         };
     }
 }
@@ -1702,6 +1706,7 @@ impl flutter_rust_bridge::IntoDart for crate::collections::CollectionInfo {
             self.download_mbps.into_into_dart().into_dart(),
             self.upload_mbps.into_into_dart().into_dart(),
             self.live_peers.into_into_dart().into_dart(),
+            self.torrent_peers.into_into_dart().into_dart(),
             self.pending_media.into_into_dart().into_dart(),
             self.eta_secs.into_into_dart().into_dart(),
             self.state.into_into_dart().into_dart(),
@@ -1907,6 +1912,7 @@ impl flutter_rust_bridge::IntoDart for crate::torrent::TorrentInfo {
             self.error.into_into_dart().into_dart(),
             self.files.into_into_dart().into_dart(),
             self.live_peers.into_into_dart().into_dart(),
+            self.live_peer_addrs.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1966,6 +1972,7 @@ impl SseEncode for crate::collections::CollectionInfo {
         <f64>::sse_encode(self.download_mbps, serializer);
         <f64>::sse_encode(self.upload_mbps, serializer);
         <u32>::sse_encode(self.live_peers, serializer);
+        <Vec<String>>::sse_encode(self.torrent_peers, serializer);
         <u32>::sse_encode(self.pending_media, serializer);
         <Option<u64>>::sse_encode(self.eta_secs, serializer);
         <String>::sse_encode(self.state, serializer);
@@ -2214,6 +2221,7 @@ impl SseEncode for crate::torrent::TorrentInfo {
         <Option<String>>::sse_encode(self.error, serializer);
         <Vec<crate::torrent::TorrentFile>>::sse_encode(self.files, serializer);
         <u32>::sse_encode(self.live_peers, serializer);
+        <Vec<String>>::sse_encode(self.live_peer_addrs, serializer);
     }
 }
 

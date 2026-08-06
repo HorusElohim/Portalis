@@ -9,10 +9,15 @@ import 'package:flutter/widgets.dart';
 class AppNavigation {
   AppNavigation._();
 
+  static const homeTab = 0;
+  static const userTab = 1;
+  static const peopleTab = 2;
+  static const settingsTab = 3;
+
   /// The shell's selected destination. Owned here rather than in `RootShell`'s
   /// State so anything can send the user home — including a control rendered
   /// outside the shell entirely.
-  static final tab = ValueNotifier<int>(0);
+  static final tab = ValueNotifier<int>(homeTab);
 
   /// How many routes are stacked above the root. Zero means the shell itself
   /// is on screen.
@@ -30,14 +35,15 @@ class AppNavigation {
 
   /// True when the user is anywhere other than the Collections tab of the
   /// shell — i.e. when "go home" would actually do something.
-  static bool get isAwayFromHome => depth.value > 0 || tab.value != 0;
+  static bool get isAwayFromHome =>
+      depth.value > 0 || tab.value != homeTab;
 
   /// Pops back to the shell and selects Collections.
   static void goHome() {
     if (depth.value > 0) {
       navigatorKey.currentState?.popUntil((route) => route.isFirst);
     }
-    tab.value = 0;
+    tab.value = homeTab;
   }
 }
 

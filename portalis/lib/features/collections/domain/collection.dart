@@ -40,6 +40,7 @@ class Collection {
     this.downloadMbps = 0.0,
     this.uploadMbps = 0.0,
     this.livePeers = 0,
+    this.torrentPeers = const [],
     this.pendingMedia = 0,
     this.etaSecs,
     this.state = '',
@@ -58,6 +59,10 @@ class Collection {
   final double downloadMbps;
   final double uploadMbps;
   final int livePeers;
+  /// `"ip:port"` of this collection's live swarm peers — `torrent` kind
+  /// only. Anonymous: BitTorrent carries no identity beyond a network
+  /// address, so there is no name to show, only that someone is there.
+  final List<String> torrentPeers;
   final int pendingMedia;
   final int? etaSecs;
 
@@ -113,6 +118,7 @@ class Collection {
         Object.hashAll(
           collaborators.map((c) => Object.hash(c.deviceId, c.name, c.isAdmin)),
         ),
+        Object.hashAll(torrentPeers),
         Object.hashAll(
           media.map(
             (m) => Object.hash(

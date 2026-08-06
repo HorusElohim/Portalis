@@ -8,8 +8,9 @@ import 'desktop_shell.dart';
 import 'home.dart';
 import 'people.dart';
 import 'settings.dart';
+import 'user.dart';
 
-/// App root. Three destinations on mobile — Home, People, Settings — and a
+/// App root. Four destinations on mobile — Home, User, People, Settings — and a
 /// two-pane layout on a wide window.
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -86,12 +87,13 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
                       for (var i = 0; i < AppBottomNav.items.length; i++)
                         TickerMode(
                           enabled: i == _tab,
-                          // PeopleScreen and SettingsScreen render through
-                          // AppScreen, which wraps its own Scaffold and back
-                          // button unless told this parent already supplies
-                          // both — true here, same as every other tab.
+                          // UserScreen, PeopleScreen and SettingsScreen render
+                          // through AppScreen, which wraps its own Scaffold and
+                          // back button unless told this parent already
+                          // supplies both — true here, same as every tab.
                           child: const [
                             Home(),
+                            UserScreen(embedded: true),
                             PeopleScreen(embedded: true),
                             SettingsScreen(embedded: true),
                           ][i],
@@ -112,7 +114,7 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
   }
 }
 
-/// The three-destination bottom bar.
+/// The four-destination bottom bar.
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({
     super.key,
@@ -135,19 +137,11 @@ class AppBottomNav extends StatelessWidget {
   /// collection row carries its own bar, rate and countdown, Home filters to
   /// what is arriving, and its header states the aggregate.
   ///
-  /// People *is* its own destination, back after two rounds of being reached
-  /// only indirectly (see the regression note on the "you" test group) —
-  /// desktop already gives it a one-tap header button, and a phone-width
-  /// window burying the same directory three taps deep under Settings is
-  /// exactly the asymmetry that made it easy to lose track of who a
-  /// collection is even shared with.
-  ///
-  /// Settings is what You became once its profile content folded in as that
-  /// screen's leading section (see `settings.dart`) — identity and engine
-  /// behaviour are both "how this device behaves", not two different
-  /// questions.
+  /// User owns identity and Settings owns engine behaviour. People remains a
+  /// separate directory because it describes collaborators, not this device.
   static const items = [
     (icon: null, label: 'Home'),
+    (icon: Icons.person_outline, label: 'User'),
     (icon: Icons.people_outline, label: 'People'),
     (icon: Icons.tune, label: 'Settings'),
   ];

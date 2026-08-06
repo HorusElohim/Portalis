@@ -972,8 +972,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CollectionInfo dco_decode_collection_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
     return CollectionInfo(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -988,9 +988,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       downloadMbps: dco_decode_f_64(arr[10]),
       uploadMbps: dco_decode_f_64(arr[11]),
       livePeers: dco_decode_u_32(arr[12]),
-      pendingMedia: dco_decode_u_32(arr[13]),
-      etaSecs: dco_decode_opt_box_autoadd_u_64(arr[14]),
-      state: dco_decode_String(arr[15]),
+      torrentPeers: dco_decode_list_String(arr[13]),
+      pendingMedia: dco_decode_u_32(arr[14]),
+      etaSecs: dco_decode_opt_box_autoadd_u_64(arr[15]),
+      state: dco_decode_String(arr[16]),
     );
   }
 
@@ -1194,8 +1195,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TorrentInfo dco_decode_torrent_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return TorrentInfo(
       id: dco_decode_usize(arr[0]),
       infoHash: dco_decode_String(arr[1]),
@@ -1210,6 +1211,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       error: dco_decode_opt_String(arr[10]),
       files: dco_decode_list_torrent_file(arr[11]),
       livePeers: dco_decode_u_32(arr[12]),
+      livePeerAddrs: dco_decode_list_String(arr[13]),
     );
   }
 
@@ -1316,6 +1318,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_downloadMbps = sse_decode_f_64(deserializer);
     var var_uploadMbps = sse_decode_f_64(deserializer);
     var var_livePeers = sse_decode_u_32(deserializer);
+    var var_torrentPeers = sse_decode_list_String(deserializer);
     var var_pendingMedia = sse_decode_u_32(deserializer);
     var var_etaSecs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_state = sse_decode_String(deserializer);
@@ -1333,6 +1336,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         downloadMbps: var_downloadMbps,
         uploadMbps: var_uploadMbps,
         livePeers: var_livePeers,
+        torrentPeers: var_torrentPeers,
         pendingMedia: var_pendingMedia,
         etaSecs: var_etaSecs,
         state: var_state);
@@ -1635,6 +1639,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_error = sse_decode_opt_String(deserializer);
     var var_files = sse_decode_list_torrent_file(deserializer);
     var var_livePeers = sse_decode_u_32(deserializer);
+    var var_livePeerAddrs = sse_decode_list_String(deserializer);
     return TorrentInfo(
         id: var_id,
         infoHash: var_infoHash,
@@ -1648,7 +1653,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         finished: var_finished,
         error: var_error,
         files: var_files,
-        livePeers: var_livePeers);
+        livePeers: var_livePeers,
+        livePeerAddrs: var_livePeerAddrs);
   }
 
   @protected
@@ -1750,6 +1756,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.downloadMbps, serializer);
     sse_encode_f_64(self.uploadMbps, serializer);
     sse_encode_u_32(self.livePeers, serializer);
+    sse_encode_list_String(self.torrentPeers, serializer);
     sse_encode_u_32(self.pendingMedia, serializer);
     sse_encode_opt_box_autoadd_u_64(self.etaSecs, serializer);
     sse_encode_String(self.state, serializer);
@@ -1987,6 +1994,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.error, serializer);
     sse_encode_list_torrent_file(self.files, serializer);
     sse_encode_u_32(self.livePeers, serializer);
+    sse_encode_list_String(self.livePeerAddrs, serializer);
   }
 
   @protected

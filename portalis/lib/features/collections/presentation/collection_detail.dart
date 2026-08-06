@@ -302,6 +302,9 @@ class _CollectionDetailState extends State<CollectionDetail> {
           busy: _busy,
           onCommand: _command,
           history: AppControllers.collections.historyFor(collection.id),
+          peerHistory: AppControllers.collections.peerHistoryFor(collection.id),
+          onForgetPeer: (address) =>
+              AppControllers.collections.forgetPeer(address),
           showCommands: widget.showCommands,
           onInvite: _showInvite,
           onAddMedia: _addMedia,

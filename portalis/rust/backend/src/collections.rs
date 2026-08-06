@@ -72,6 +72,15 @@ pub struct CollectionInfo {
     pub upload_mbps: f64,
     /// Currently-connected peers, summed across this collection's torrents.
     pub live_peers: u32,
+    /// `"ip:port"` of this collection's live swarm peers — `Torrent` kind
+    /// only. A `Shared` collection already lists who it's with as
+    /// [`collaborators`](Self::collaborators); its manifest entries also have
+    /// BitTorrent swarm connections underneath, but there's no way to
+    /// correlate a bare peer address back to a signed collaborator identity,
+    /// so surfacing both would just show the same person twice under two
+    /// unrelated labels. A plain torrent has no collaborators at all, so its
+    /// swarm is the only "who's here" it can offer.
+    pub torrent_peers: Vec<String>,
     /// Manifest entries with no local torrent yet — "known but not fetched".
     pub pending_media: u32,
     /// Seconds until the download finishes at the current rate, or `None`
@@ -276,7 +285,7 @@ pub async fn storage_breakdown() -> anyhow::Result<Vec<StorageEntry>> {
 }
 
 mod native {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeSet, HashMap, HashSet};
 
     use crate::collab_store::{read_store, with_store};
     use crate::domain::collaborator::{Collaborator, Role};
@@ -576,6 +585,7 @@ mod native {
                 let mut totals = Totals::new();
                 let mut media = Vec::new();
                 let mut pending_media = 0u32;
+                let mut torrent_peers = BTreeSet::new();
 
                 let mut connecting = false;
 
@@ -585,6 +595,7 @@ mod native {
                     match by_hash.get(&hash) {
                         Some(torrent) => {
                             totals.add(torrent);
+                            torrent_peers.extend(torrent.live_peer_addrs.iter().cloned());
                             media.extend(media_from_torrent(
                                 torrent,
                                 Some(entry.added_by.to_hex()),
@@ -625,6 +636,7 @@ mod native {
                     download_mbps: totals.download_mbps,
                     upload_mbps: totals.upload_mbps,
                     live_peers: totals.live_peers,
+                    torrent_peers: torrent_peers.into_iter().collect(),
                     state: state_for(&totals, pending_media, media.len(), connecting),
                     pending_media,
                     eta_secs: totals.eta_secs(),
@@ -657,6 +669,7 @@ mod native {
                 download_mbps: totals.download_mbps,
                 upload_mbps: totals.upload_mbps,
                 live_peers: totals.live_peers,
+                torrent_peers: torrent.live_peer_addrs.clone(),
                 state: state_for(&totals, 0, media.len(), false),
                 pending_media: 0,
                 eta_secs: totals.eta_secs(),
@@ -1486,6 +1499,7 @@ mod native {
                 finished: done >= total,
                 error: None,
                 live_peers: 2,
+                live_peer_addrs: vec!["203.0.113.5:6881".into(), "203.0.113.9:51413".into()],
                 files: files
                     .into_iter()
                     .map(|(name, len, downloaded)| crate::torrent::TorrentFile {
