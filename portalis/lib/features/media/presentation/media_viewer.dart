@@ -65,8 +65,12 @@ class CollectionMediaViewer extends StatelessWidget {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, viewport) {
-                    final previewHeight =
-                        (viewport.maxHeight * 0.72).clamp(300.0, 760.0).toDouble();
+                    // Keep the metadata below the fold so the media preview
+                    // gets the largest useful surface. The details remain in
+                    // the scroll view for compact windows and phones.
+                    final previewHeight = (viewport.maxHeight * 0.86)
+                        .clamp(360.0, 980.0)
+                        .toDouble();
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: SingleChildScrollView(
@@ -182,7 +186,7 @@ class MediaPreview extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  '${(media.progress * 100).toStringAsFixed(0)}%',
+                  formatProgressPercent(media.progress),
                   style: AppText.body(
                     color: AppColors.signalSoft,
                     weight: FontWeight.w500,
@@ -228,6 +232,14 @@ class _MediaDetails extends StatelessWidget {
               InfoRow(
                 label: 'Info hash',
                 value: media.infoHash,
+                monospace: true,
+                copyable: true,
+                dense: true,
+              ),
+            if (media.localPath != null)
+              InfoRow(
+                label: 'File path',
+                value: media.localPath!,
                 monospace: true,
                 copyable: true,
                 dense: true,

@@ -132,6 +132,7 @@ group('collection', () {
         label: 'clip.mp4',
         entryLabel: 'Beach day',
         infoHash: 'aa',
+        localPath: 'C:/Media/clip.mp4',
         sizeBytes: 1000,
         downloadedBytes: 400,
         progress: 0.4,
@@ -159,6 +160,7 @@ group('collection', () {
       // Details are part of the viewer itself; no second tap or route is
       // needed to inspect the media metadata.
       expect(find.text('Info hash'), findsOneWidget);
+      expect(find.text('File path'), findsOneWidget);
       expect(find.byType(MediaViewerScreen), findsOneWidget);
 
       // And it follows the cache rather than the arguments it was built with.
