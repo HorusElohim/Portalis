@@ -20,7 +20,7 @@ class CollectionsList extends StatelessWidget {
   final List<Collection> collections;
   final String? openId;
   final ValueChanged<Collection> onOpen;
-  final Widget? Function(Collection collection) detailFor;
+  final Widget Function(Collection collection, CollectionDetailLevel level) detailFor;
   final ValueChanged<(Collection, CollectionCommand)> onCommand;
 
   @override
@@ -35,7 +35,7 @@ class CollectionsList extends StatelessWidget {
             collection: collection,
             selected: isOpen,
             onTap: () => onOpen(collection),
-            detail: isOpen ? detailFor(collection) : null,
+            detail: (level) => detailFor(collection, level),
             onCommand: (command) => onCommand((collection, command)),
           );
         },

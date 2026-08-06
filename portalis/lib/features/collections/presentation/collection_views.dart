@@ -15,7 +15,7 @@ import '../../../design/primitives.dart';
 ///
 /// Colour is meaningful here: mint only while bytes are actually moving,
 /// ember for torrent-sourced content, neutral for everything settled.
-class CollectionRow extends StatelessWidget {
+class CollectionRow extends StatefulWidget {
   const CollectionRow({
     super.key,
     required this.collection,
@@ -29,19 +29,61 @@ class CollectionRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool selected;
 
-  /// Shown inside this card, under the row. Where a window is wide enough,
-  /// opening a collection means this card growing to hold it — not a second
-  /// panel beside the list describing the same thing twice.
-  final Widget? detail;
+  /// Built for whichever [CollectionDetailLevel] this row has cycled to, and
+  /// shown under the row from [CollectionDetailLevel.mid] on. Where a window
+  /// is wide enough, opening a collection means this card growing to hold
+  /// it — not a second panel beside the list describing the same thing
+  /// twice. `null` where there is nowhere to grow into (the compact list,
+  /// which pushes a separate screen instead) — the row then keeps its older,
+  /// simpler behaviour: a plain tap, and the command bar always showing.
+  final Widget Function(CollectionDetailLevel level)? detail;
   final ValueChanged<CollectionCommand>? onCommand;
 
   @override
+  State<CollectionRow> createState() => _CollectionRowState();
+}
+
+class _CollectionRowState extends State<CollectionRow> {
+  CollectionDetailLevel _level = CollectionDetailLevel.collapsed;
+
+  @override
+  void didUpdateWidget(CollectionRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The list keeps at most one collection open at a time; when this row
+    // is no longer the open one (another was tapped, or this one was), its
+    // own notion of how far it had grown is stale.
+    if (!widget.selected) _level = CollectionDetailLevel.collapsed;
+  }
+
+  void _handleTap() {
+    if (widget.detail == null) {
+      widget.onTap();
+      return;
+    }
+    // Collapsed -> mid and full -> collapsed cross the accordion's own
+    // open/closed boundary, so the parent needs to hear about those; the
+    // middle step (mid -> full) is purely how much of an already-open row
+    // is showing, which this row can decide entirely on its own.
+    switch (_level) {
+      case CollectionDetailLevel.collapsed:
+        setState(() => _level = CollectionDetailLevel.mid);
+        widget.onTap();
+      case CollectionDetailLevel.mid:
+        setState(() => _level = CollectionDetailLevel.full);
+      case CollectionDetailLevel.full:
+        widget.onTap();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final collection = widget.collection;
     final torrent = !collection.isShared;
     final accent = torrent ? AppColors.ember : AppColors.signal;
+    final showsExtras = widget.detail == null || _level != CollectionDetailLevel.collapsed;
 
     return SurfaceCard(
-      onTap: onTap,
+      onTap: _handleTap,
       // Energy by what it is genuinely doing: transferring glows brightest,
       // shared-and-standing-by glows calmly, everything else not at all. The
       // wash that separates a live row from the settled ones comes with it —
@@ -49,23 +91,23 @@ class CollectionRow extends StatelessWidget {
       glow: collection.glow,
       glowColor: accent,
       glowIntensity: collection.liveIntensity,
-      borderColor: selected && collection.glow == GlowLevel.none
+      borderColor: widget.selected && collection.glow == GlowLevel.none
           ? AppColors.borderStrong
           : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _row(),
-          if (onCommand != null) ...[
+          if (widget.onCommand != null && showsExtras) ...[
             const SizedBox(height: 12),
             CollectionCommandBar(
-              onCommand: onCommand!,
+              onCommand: widget.onCommand!,
               busy: false,
             ),
           ],
-          if (detail != null) ...[
+          if (widget.detail != null && _level != CollectionDetailLevel.collapsed) ...[
             const Divider(height: 26, color: AppColors.border),
-            detail!,
+            widget.detail!(_level),
           ],
         ],
       ),
@@ -73,6 +115,7 @@ class CollectionRow extends StatelessWidget {
   }
 
   Widget _row() {
+    final collection = widget.collection;
     final torrent = !collection.isShared;
     final accent = torrent ? AppColors.ember : AppColors.signal;
     final live = collection.downloadMbps > 0 || collection.uploadMbps > 0;

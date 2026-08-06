@@ -113,10 +113,11 @@ class CollectionLibrary extends StatelessWidget {
         openId: openId,
         onOpen: onOpen,
         onCommand: onCommand,
-        detailFor: (collection) => CollectionDetail(
+        detailFor: (collection, level) => CollectionDetail(
           key: ValueKey(collection.id),
           collection: collection,
           showCommands: false,
+          level: level,
         ),
       );
     }

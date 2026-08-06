@@ -70,6 +70,11 @@ group('shell', () {
       // route over the sidebar, the list and all. Then it was a second panel
       // beside the list â€” a thinner account of the same collection, plus a
       // button to get from one to the other. The card is the view.
+      //
+      // It now grows in three taps rather than snapping fully open: mid
+      // (graph and actions) for a routine glance, full (peers and files too)
+      // for whoever wants everything, and a third tap all the way back
+      // closed â€” three light touches instead of one all-or-nothing click.
       await pumpApp(tester, size: desktopSize, collections: [
         buildCollection(id: 'a', name: 'Iceland'),
         buildCollection(id: 'b', name: 'Studio'),
@@ -81,13 +86,20 @@ group('shell', () {
       await tester.tap(find.text('Studio').first);
       await tester.pump();
 
-      // Open in place: the whole list is still there around it.
+      // Mid: open in place, whole list still around it, but not everything
+      // is showing yet â€” peers and files are one tap deeper.
       expect(find.byType(CollectionDetail), findsOneWidget);
       expect(find.text('Invite'), findsOneWidget);
       expect(find.text('Iceland'), findsWidgets);
 
-      // And clicking it again closes it â€” the card is the only view, so a
-      // second click has nothing else to mean.
+      await tester.tap(find.text('Studio').first);
+      await tester.pump();
+
+      // Full: still the same card, now with everything.
+      expect(find.byType(CollectionDetail), findsOneWidget);
+
+      // A third click has nothing left to mean but closing it â€” the card is
+      // the only view.
       await tester.tap(find.text('Studio').first);
       await tester.pump();
       expect(find.byType(CollectionDetail), findsNothing);

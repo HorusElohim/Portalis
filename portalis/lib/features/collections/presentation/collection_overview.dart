@@ -17,6 +17,7 @@ class CollectionOverview extends StatelessWidget {
     required this.onCommand,
     this.history,
     this.showCommands = true,
+    this.level = CollectionDetailLevel.full,
     required this.onInvite,
     required this.onAddMedia,
     required this.onSync,
@@ -30,6 +31,7 @@ class CollectionOverview extends StatelessWidget {
   final ValueChanged<CollectionCommand> onCommand;
   final TransferHistory? history;
   final bool showCommands;
+  final CollectionDetailLevel level;
   final VoidCallback onInvite;
   final VoidCallback onAddMedia;
   final VoidCallback onSync;
@@ -102,16 +104,21 @@ class CollectionOverview extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        _CollectionIdentifiers(collection: collection),
-        const SizedBox(height: 14),
-        _Collaborators(
-          collection: collection,
-          shown: shown,
-          remaining: collection.collaborators.length - shown.length,
-          peerHistory: peerHistory,
-          onForgetPeer: onForgetPeer,
-        ),
-        const SizedBox(height: 14),
+        // Info hash and who's connected are the deepest layer of detail —
+        // present, but worth an extra tap, not shown the moment a row grows
+        // at all.
+        if (level == CollectionDetailLevel.full) ...[
+          _CollectionIdentifiers(collection: collection),
+          const SizedBox(height: 14),
+          _Collaborators(
+            collection: collection,
+            shown: shown,
+            remaining: collection.collaborators.length - shown.length,
+            peerHistory: peerHistory,
+            onForgetPeer: onForgetPeer,
+          ),
+          const SizedBox(height: 14),
+        ],
         _CollectionActions(
           collection: collection,
           busy: busy,

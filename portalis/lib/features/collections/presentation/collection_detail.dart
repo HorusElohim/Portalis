@@ -25,10 +25,18 @@ class CollectionDetail extends StatefulWidget {
     super.key,
     required this.collection,
     this.showCommands = true,
+    this.level = CollectionDetailLevel.full,
   });
 
   final Collection collection;
   final bool showCommands;
+
+  /// How much to show. Defaults to [CollectionDetailLevel.full] because most
+  /// callers (a standalone [CollectionScreen], the desktop pane) are already
+  /// a dedicated space for one collection — collapsing has nothing to save
+  /// there. Only an inline row in a list, which grows to hold this, has a
+  /// reason to ask for less.
+  final CollectionDetailLevel level;
 
   @override
   State<CollectionDetail> createState() => _CollectionDetailState();
@@ -306,6 +314,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
           onForgetPeer: (address) =>
               AppControllers.collections.forgetPeer(address),
           showCommands: widget.showCommands,
+          level: widget.level,
           onInvite: _showInvite,
           onAddMedia: _addMedia,
           onSync: _sync,
@@ -316,24 +325,28 @@ class _CollectionDetailState extends State<CollectionDetail> {
             padding: EdgeInsets.only(top: 10),
             child: LinearProgressIndicator(minHeight: 2),
           ),
-        const SizedBox(height: 14),
-        if (collection.media.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 22),
-            child: Center(
-              child: Text(
-                'Nothing in this collection yet.',
-                style: AppText.secondary(color: AppColors.textDim),
+        // Files are the deepest layer — worth the extra tap they cost a
+        // merely-mid row, the same trade the peers section makes.
+        if (widget.level == CollectionDetailLevel.full) ...[
+          const SizedBox(height: 14),
+          if (collection.media.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 22),
+              child: Center(
+                child: Text(
+                  'Nothing in this collection yet.',
+                  style: AppText.secondary(color: AppColors.textDim),
+                ),
+              ),
+            )
+          else
+            _ResizableMediaPreview(
+              child: CollectionContents(
+                collection: collection,
+                onOpenMedia: (media) => _openMedia(collection, media),
               ),
             ),
-          )
-        else
-          _ResizableMediaPreview(
-            child: CollectionContents(
-              collection: collection,
-              onOpenMedia: (media) => _openMedia(collection, media),
-            ),
-          ),
+        ],
       ],
     );
   }

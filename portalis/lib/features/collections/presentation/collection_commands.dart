@@ -5,6 +5,22 @@ import '../../../design/design.dart';
 /// Lifecycle and destructive actions reserved for a collection command API.
 enum CollectionCommand { restart, pause, forget, delete, deleteFiles }
 
+/// How much of a collection's detail a row shows inline. Repeated taps step
+/// through all three: [collapsed] (one summary line) to [mid] (transfer
+/// graph and actions) to [full] (peers and files too), then back around —
+/// growing a row into its own detail instead of pushing a second screen.
+enum CollectionDetailLevel {
+  collapsed,
+  mid,
+  full;
+
+  CollectionDetailLevel get next => switch (this) {
+        CollectionDetailLevel.collapsed => CollectionDetailLevel.mid,
+        CollectionDetailLevel.mid => CollectionDetailLevel.full,
+        CollectionDetailLevel.full => CollectionDetailLevel.collapsed,
+      };
+}
+
 extension CollectionCommandPresentation on CollectionCommand {
   String get label => switch (this) {
         CollectionCommand.restart => 'Restart',
