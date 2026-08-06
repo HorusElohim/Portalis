@@ -26,6 +26,7 @@ class CollectionDetail extends StatefulWidget {
     required this.collection,
     this.showCommands = true,
     this.level = CollectionDetailLevel.full,
+    this.showTitle = true,
   });
 
   final Collection collection;
@@ -37,6 +38,7 @@ class CollectionDetail extends StatefulWidget {
   /// there. Only an inline row in a list, which grows to hold this, has a
   /// reason to ask for less.
   final CollectionDetailLevel level;
+  final bool showTitle;
 
   @override
   State<CollectionDetail> createState() => _CollectionDetailState();
@@ -315,6 +317,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
               AppControllers.collections.forgetPeer(address),
           showCommands: widget.showCommands,
           level: widget.level,
+          showTitle: widget.showTitle,
           onInvite: _showInvite,
           onAddMedia: _addMedia,
           onSync: _sync,

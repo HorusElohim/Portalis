@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/collections_repository.dart';
 import '../data/peer_history_store.dart';
+import '../data/transfer_history_store.dart';
 import '../domain/collection.dart';
 import '../domain/peer_observation.dart';
 import '../domain/transfer_history.dart';
@@ -17,19 +18,23 @@ class CollectionsController extends ChangeNotifier {
     required CollectionsRepository repository,
     required MediaGalleryImporter galleryImporter,
     required PeerHistoryStore peerHistoryStore,
+    required TransferHistoryStore transferHistoryStore,
   })  : _repository = repository,
         _galleryImporter = galleryImporter,
-        _peerHistoryStore = peerHistoryStore;
+        _peerHistoryStore = peerHistoryStore,
+        _transferHistoryStore = transferHistoryStore;
 
   factory CollectionsController.production() => CollectionsController(
         repository: const FrbCollectionsRepository(),
         galleryImporter: mediaGalleryImporterForCurrentPlatform(),
         peerHistoryStore: const SharedPreferencesPeerHistoryStore(),
+        transferHistoryStore: const SharedPreferencesTransferHistoryStore(),
       );
 
   final CollectionsRepository _repository;
   final MediaGalleryImporter _galleryImporter;
   final PeerHistoryStore _peerHistoryStore;
+  final TransferHistoryStore _transferHistoryStore;
 
   List<Collection> _collections = const [];
   List<PeerObservation> _peerHistory = const [];
@@ -69,8 +74,14 @@ class CollectionsController extends ChangeNotifier {
     } catch (_) {
       _peerHistory = const [];
     }
+    try {
+      _transferHistories.addAll(await _transferHistoryStore.load());
+    } catch (_) {
+      // A corrupt history file must not hide peer history or block startup.
+    }
     _peerHistoryLoaded = true;
     await refresh();
+    notifyListeners();
   }
 
   void setPaused(bool paused) {
@@ -96,6 +107,7 @@ class CollectionsController extends ChangeNotifier {
     try {
       _collections = await _repository.list();
       historyChanged = _recordTransferHistory(_collections);
+      if (historyChanged) await _saveTransferHistories();
       peerHistoryChanged = await _recordPeerHistory(_collections);
       engineReady = await _repository.isEngineReady();
       lastError = null;
@@ -158,8 +170,12 @@ class CollectionsController extends ChangeNotifier {
   Future<Collection> sync(String collectionId, String peerAddress) =>
       _refreshAfter(() => _repository.sync(collectionId, peerAddress));
 
-  Future<void> delete(String collectionId) =>
-      _refreshAfter(() => _repository.delete(collectionId));
+  Future<void> delete(String collectionId) async {
+    await _repository.delete(collectionId);
+    _transferHistories.remove(collectionId);
+    await _saveTransferHistories();
+    await refresh();
+  }
 
   Future<void> pause(String collectionId) =>
       _refreshAfter(() => _repository.pause(collectionId));
@@ -266,15 +282,21 @@ class CollectionsController extends ChangeNotifier {
     }
   }
 
+  Future<void> _saveTransferHistories() async {
+    try {
+      await _transferHistoryStore.save(_transferHistories);
+    } catch (_) {
+      // Transfer history is auxiliary UI state; transfer operation continues
+      // even if the preferences store is temporarily unavailable.
+    }
+  }
+
   String _peerKey(PeerObservation peer) =>
       '${peer.collectionId}\u0000${peer.address}';
 
   bool _recordTransferHistory(List<Collection> collections) {
     final now = DateTime.now();
     var changed = false;
-    final ids = collections.map((collection) => collection.id).toSet();
-    _transferHistories.removeWhere((id, _) => !ids.contains(id));
-
     for (final collection in collections) {
       final history = _transferHistories[collection.id];
       if (history?.completedAt != null) continue;

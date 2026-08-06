@@ -68,29 +68,33 @@ abstract class ActionButton extends StatelessWidget {
     required IconData? icon,
     required bool expand,
     required bool trailingChevron,
+    required bool compact,
     required Color color,
   }) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      constraints: BoxConstraints(minHeight: compact ? 34 : 52),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 20,
+        vertical: compact ? 7 : 14,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 20, color: color),
-            const SizedBox(width: 10),
+            Icon(icon, size: compact ? 15 : 20, color: color),
+            SizedBox(width: compact ? 5 : 10),
           ],
           Flexible(
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
-              style: displayText(size: 16.5, color: color),
+              style: displayText(size: compact ? 11.5 : 16.5, color: color),
             ),
           ),
           if (trailingChevron) ...[
-            const SizedBox(width: 10),
-            Icon(Icons.chevron_right, size: 19, color: color),
+            SizedBox(width: compact ? 5 : 10),
+            Icon(Icons.chevron_right, size: compact ? 15 : 19, color: color),
           ],
         ],
       ),
@@ -116,12 +120,14 @@ abstract class LabelActionButton extends ActionButton {
     this.icon,
     this.expand = false,
     this.trailingChevron = false,
+    this.compact = false,
   });
 
   final String label;
   final IconData? icon;
   final bool expand;
   final bool trailingChevron;
+  final bool compact;
 
   Widget _buildLabel({required bool filled}) => _surface(
         radius: BorderRadius.circular(AppRadius.card),
@@ -132,6 +138,7 @@ abstract class LabelActionButton extends ActionButton {
           icon: icon,
           expand: expand,
           trailingChevron: trailingChevron,
+          compact: compact,
           color: filled ? _foreground : _accent,
         ),
       );
@@ -148,6 +155,7 @@ class PrimaryActionButton extends LabelActionButton {
     super.icon,
     super.expand,
     super.trailingChevron,
+    super.compact,
   });
 
   @override
@@ -165,6 +173,7 @@ class OutlineActionButton extends LabelActionButton {
     super.icon,
     super.expand,
     super.trailingChevron,
+    super.compact,
   });
 
   @override

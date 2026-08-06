@@ -10,6 +10,8 @@
   ETA, and download/upload activity graph.
 - Added persistent anonymous torrent-peer history with last-seen timestamps
   and explicit forget actions in People and collection details.
+- Added persistent transfer history so collection download graphs and
+  completion dates survive application restarts.
 - Added a dedicated User destination for device identity and a local efficiency
   benchmark that refreshes whenever Settings is entered.
 
@@ -20,6 +22,8 @@
 - Exposed the complete collection command strip directly on every collection
   card; desktop expansion now focuses on the detailed preview without repeating
   those controls.
+- Removed duplicate titles from expanded collection cards, compacted their
+  command buttons, and increased spacing around filters and collection rows.
 - Reworked transfer previews around polling-backed download/upload history from
   transfer start to current or completion, with date-time labels and a lighter
   energy treatment.

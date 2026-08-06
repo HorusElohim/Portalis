@@ -25,9 +25,14 @@ class CollectionsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView.separated(
-        padding: const EdgeInsets.fromLTRB(kScreenGutter, 0, kScreenGutter, 28),
+        padding: const EdgeInsets.fromLTRB(
+          kScreenGutter + 8,
+          0,
+          kScreenGutter + 8,
+          28,
+        ),
         itemCount: collections.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (_, __) => const SizedBox(height: 14),
         itemBuilder: (context, index) {
           final collection = collections[index];
           final isOpen = collection.id == openId;

@@ -91,7 +91,7 @@ class CollectionLibrary extends StatelessWidget {
                 kScreenGutter,
                 0,
                 kScreenGutter,
-                4,
+                16,
               ),
               child: FilterChips(
                 labels: const ['All', 'Sharing', 'Receiving'],
@@ -118,6 +118,7 @@ class CollectionLibrary extends StatelessWidget {
           collection: collection,
           showCommands: false,
           level: level,
+          showTitle: false,
         ),
       );
     }
@@ -176,10 +177,10 @@ class CollectionLibrary extends StatelessWidget {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+                padding: const EdgeInsets.fromLTRB(28, 26, 28, 0),
                 sliver: SliverList.separated(
                   itemCount: shown.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
                   itemBuilder: (context, index) => CollectionRow(
                     collection: shown[index],
                     onTap: () => onOpen(shown[index]),

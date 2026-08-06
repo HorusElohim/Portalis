@@ -3,6 +3,21 @@
 class TransferHistory {
   TransferHistory({required this.startedAt});
 
+  factory TransferHistory.restore({
+    required DateTime startedAt,
+    required List<TransferSample> samples,
+    DateTime? completedAt,
+  }) {
+    final history = TransferHistory(startedAt: startedAt)
+      ..completedAt = completedAt;
+    history._samples.addAll(
+      samples.length <= _maxSamples
+          ? samples
+          : samples.sublist(samples.length - _maxSamples),
+    );
+    return history;
+  }
+
   static const _sampleSpacing = Duration(seconds: 1);
   static const _maxSamples = 1800;
 

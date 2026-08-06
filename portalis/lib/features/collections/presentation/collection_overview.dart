@@ -18,6 +18,7 @@ class CollectionOverview extends StatelessWidget {
     this.history,
     this.showCommands = true,
     this.level = CollectionDetailLevel.full,
+    this.showTitle = true,
     required this.onInvite,
     required this.onAddMedia,
     required this.onSync,
@@ -32,6 +33,7 @@ class CollectionOverview extends StatelessWidget {
   final TransferHistory? history;
   final bool showCommands;
   final CollectionDetailLevel level;
+  final bool showTitle;
   final VoidCallback onInvite;
   final VoidCallback onAddMedia;
   final VoidCallback onSync;
@@ -56,11 +58,13 @@ class CollectionOverview extends StatelessWidget {
         _CollectionControls(
           collection: collection,
         ),
-        Text(
-          collection.name,
-          style: displayText(size: 23, weight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
+        if (showTitle) ...[
+          Text(
+            collection.name,
+            style: displayText(size: 23, weight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+        ],
         Text(
           collection.isShared
               ? 'Shared collection - ${collection.subtitle}'

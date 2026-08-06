@@ -65,8 +65,8 @@ class CollectionCommandBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-        spacing: 8,
-        runSpacing: 8,
+        spacing: 10,
+        runSpacing: 10,
         children: [
           for (final command in CollectionCommand.values)
             OutlineActionButton(
@@ -78,6 +78,7 @@ class CollectionCommandBar extends StatelessWidget {
                   ? ActionButtonTone.ember
                   : ActionButtonTone.neutral,
               tooltip: command.tooltip,
+              compact: true,
               onTap: busy ? null : () => onCommand(command),
             ),
         ],
