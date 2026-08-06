@@ -12,6 +12,7 @@ import '../../media/domain/media_item.dart';
 import '../../media/presentation/media_viewer_screen.dart';
 import '../domain/collection.dart';
 import '../domain/picked_file.dart';
+import '../platform/source_access.dart';
 import 'collection_contents.dart';
 import 'collection_commands.dart';
 import 'collection_overview.dart';
@@ -164,6 +165,10 @@ class _CollectionDetailState extends State<CollectionDetail> {
   }
 
   Future<void> _addMedia() async {
+    if (!supportsDirectPathSources) {
+      _toast(directPathSourcesUnavailableMessage);
+      return;
+    }
     final source = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.surface,

@@ -7,32 +7,26 @@ import '../data/transfer_history_store.dart';
 import '../domain/collection.dart';
 import '../domain/peer_observation.dart';
 import '../domain/transfer_history.dart';
-import '../platform/media_gallery_importer.dart';
 
 /// Owns collection application state: lifecycle, polling cadence, commands,
-/// and change notification. Native calls live in [CollectionsRepository] and
-/// mobile gallery writes live in [MediaGalleryImporter].
+/// and change notification. Native calls live in [CollectionsRepository].
 class CollectionsController extends ChangeNotifier {
   static const _peerWriteSpacing = Duration(seconds: 5);
   CollectionsController({
     required CollectionsRepository repository,
-    required MediaGalleryImporter galleryImporter,
     required PeerHistoryStore peerHistoryStore,
     required TransferHistoryStore transferHistoryStore,
   })  : _repository = repository,
-        _galleryImporter = galleryImporter,
         _peerHistoryStore = peerHistoryStore,
         _transferHistoryStore = transferHistoryStore;
 
   factory CollectionsController.production() => CollectionsController(
         repository: const FrbCollectionsRepository(),
-        galleryImporter: mediaGalleryImporterForCurrentPlatform(),
         peerHistoryStore: const SharedPreferencesPeerHistoryStore(),
         transferHistoryStore: const SharedPreferencesTransferHistoryStore(),
       );
 
   final CollectionsRepository _repository;
-  final MediaGalleryImporter _galleryImporter;
   final PeerHistoryStore _peerHistoryStore;
   final TransferHistoryStore _transferHistoryStore;
 
@@ -111,7 +105,6 @@ class CollectionsController extends ChangeNotifier {
       peerHistoryChanged = await _recordPeerHistory(_collections);
       engineReady = await _repository.isEngineReady();
       lastError = null;
-      unawaited(_galleryImporter.importReadyMedia(_collections));
     } catch (error) {
       lastError = '$error';
     }

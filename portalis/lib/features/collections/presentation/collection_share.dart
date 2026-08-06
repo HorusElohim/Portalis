@@ -11,6 +11,7 @@ import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../../media/application/media_formats.dart';
 import '../domain/picked_file.dart';
+import '../platform/source_access.dart';
 
 /// The registry already names every type it knows, so this reads the label
 /// off the format rather than maintaining a second mapping that could drift.
@@ -68,6 +69,10 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 
   Future<void> _pickPhotos() async {
+    if (!supportsDirectPathSources) {
+      _toast(directPathSourcesUnavailableMessage);
+      return;
+    }
     try {
       final xfiles = await ImagePicker().pickMultipleMedia();
       if (xfiles.isEmpty) return;
@@ -82,6 +87,10 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 
   Future<void> _pickFiles() async {
+    if (!supportsDirectPathSources) {
+      _toast(directPathSourcesUnavailableMessage);
+      return;
+    }
     final result = await FilePicker.pickFiles(
       withData: false,
       allowMultiple: true,
@@ -99,6 +108,10 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 
   Future<void> _pickFolder() async {
+    if (!supportsDirectPathSources) {
+      _toast(directPathSourcesUnavailableMessage);
+      return;
+    }
     try {
       final dir = await FilePicker.getDirectoryPath();
       if (dir == null) return;
@@ -138,6 +151,10 @@ class _ShareScreenState extends State<ShareScreen> {
       widget.onClose != null ? widget.onClose!() : Navigator.of(context).pop();
 
   Future<void> _createShare() async {
+    if (!supportsDirectPathSources) {
+      setState(() => _error = directPathSourcesUnavailableMessage);
+      return;
+    }
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       setState(() => _error = 'Name the collection before creating it');
@@ -186,8 +203,12 @@ class _ShareScreenState extends State<ShareScreen> {
 
     return AppScreen(
       title: 'New share',
-      subtitle: const Text('Files stay on this device — collaborators pull '
-          'them from you.'),
+      subtitle: Text(
+        supportsDirectPathSources
+            ? 'Files stay on this device — collaborators pull them from you.'
+            : 'Gallery sharing will use the native asset directly. Portalis '
+                'will never create a temporary copy.',
+      ),
       onBack: _close,
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(kScreenGutter, 0, kScreenGutter, 12),

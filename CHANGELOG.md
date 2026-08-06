@@ -6,14 +6,9 @@
 
 <!-- New user-visible features go here before the next release. -->
 
-- Added pooled collaborator transfer summaries to People cards, including
-  current rate, shared collection count, and total shared bytes.
-
 ### Changed
 
-- Removed the redundant empty-search action and centered Share files button;
-  the Portalis logo is now the single share affordance and remains below the
-  collection content.
+<!-- Behaviour and UX changes go here before the next release. -->
 
 ### Fixed
 
@@ -22,6 +17,42 @@
 ### Engineering
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+## Portalis 1.0.6 / backend 0.1.5 — 2026-08-06
+
+### Added
+
+- Added pooled collaborator transfer summaries to People cards, including
+  current rate, shared collection count, and total shared bytes.
+
+### Changed
+
+- Removed the redundant empty-search action and centered Share files button;
+  the Portalis logo is now the single share affordance and remains below the
+  collection content.
+- Made filesystem publication one-copy: a single file seeds from its original
+  path, while multi-file layouts use hard links and refuse a hidden copy when
+  linking is unavailable.
+- Stopped automatic mobile gallery imports because Photos/MediaStore imports
+  create a duplicate while the original must remain available for seeding.
+- Temporarily refuse mobile path-picker sharing and add-media flows: picker
+  cache paths cannot satisfy Portalis' no-copy contract before the native URI
+  storage adapter exists.
+
+### Fixed
+
+- Prevented a hidden fallback copy when a desktop multi-file share cannot use
+  hard links, keeping the one-copy storage guarantee intact.
+
+### Engineering
+
+- Documented canonical media storage, including the Android MediaStore adapter
+  boundary and the one-copy iOS Files-library policy.
+- Introduced Rust's canonical content-location boundary, which rejects an
+  unsupported `content://` URI instead of converting it into a copied cache
+  file.
+- Added the Android application-context bootstrap required for Rust-owned
+  MediaStore storage; it transfers no media bytes through Flutter.
 
 ## Portalis 1.0.5 / backend 0.1.4 — 2026-08-06
 

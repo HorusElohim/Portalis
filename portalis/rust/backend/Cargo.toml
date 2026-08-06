@@ -1,6 +1,6 @@
 [package]
 name = "backend"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 
 [lib]
@@ -55,6 +55,11 @@ network-interface = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Rust opens MediaStore/SAF descriptors itself; this is the narrow JNI bridge,
+# not a Dart byte channel or a cache-file adapter.
+jni = "0.22"
 
 # The domain layer's randomness (device keygen, invite secrets, collection
 # ids) has no OS RNG to call into on wasm32 — route it through the browser's

@@ -49,9 +49,10 @@ pub struct TorrentFile {
 
 /// One native file Rust will publish as torrent content.
 ///
-/// Only the path crosses the Flutter boundary. Rust owns reading, copying,
-/// hashing, torrent construction, and seeding, so file size is never limited
-/// by Dart memory or the bridge's signed 32-bit byte-vector encoding.
+/// Only the path crosses the Flutter boundary. Rust owns reading, hashing,
+/// torrent construction, and seeding, so file size is never limited by Dart
+/// memory or the bridge's signed 32-bit byte-vector encoding. Publication
+/// links this source into its torrent layout; it never copies its bytes.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SourceFile {
     pub name: String,
@@ -69,8 +70,8 @@ pub(crate) fn validate_source_files(files: &[SourceFile]) -> anyhow::Result<u64>
             "duplicate source filename {:?}",
             file.name
         );
-        let metadata = std::fs::metadata(&file.path)
-            .map_err(|error| anyhow::anyhow!("cannot read source {:?}: {error}", file.path))?;
+        let location = crate::content_location::ContentLocation::from_source_path(&file.path)?;
+        let metadata = location.metadata()?;
         anyhow::ensure!(metadata.is_file(), "source {:?} is not a file", file.path);
         total_bytes = total_bytes
             .checked_add(metadata.len())
@@ -176,8 +177,8 @@ mod validation_tests {
     }
 }
 
-/// Create a new collection by seeding local files: write them to disk,
-/// build a `.torrent` from them, and add it back to the session pointed at
+/// Create a new collection by linking local files into a torrent layout,
+/// building a `.torrent` from that layout and adding it back to the session at
 /// the same location — since the files are already there and match the
 /// piece hashes just computed from them, librqbit verifies them as already
 /// complete and starts seeding immediately, no download needed. This is
@@ -330,7 +331,6 @@ pub(crate) async fn delete_torrent_files(info_hash_hex: &str) -> anyhow::Result<
 }
 
 mod native {
-    use std::io::{Read, Write};
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -344,6 +344,17 @@ mod native {
     use super::{PublishProgress, RawStorageEntry, SourceFile, TorrentFile, TorrentInfo};
 
     static SESSION: OnceCell<Arc<Session>> = OnceCell::const_new();
+
+    /// The precise place librqbit hashes and seeds. A single selected file is
+    /// already a valid torrent root; several independent files need a shared
+    /// directory, represented by hard links rather than copied content.
+    struct SeedLayout {
+        hash_path: PathBuf,
+        output_folder: PathBuf,
+        link_directory: Option<PathBuf>,
+        linked_paths: Vec<PathBuf>,
+        torrent_name: Option<String>,
+    }
 
     async fn session() -> anyhow::Result<Arc<Session>> {
         SESSION
@@ -531,64 +542,83 @@ mod native {
     ) -> anyhow::Result<TorrentInfo> {
         let session = session().await?;
         let collection_name = sanitize_component(&name);
-        let dir = output_dir().join(&collection_name);
-        std::fs::create_dir_all(&dir)
-            .with_context(|| format!("creating collection dir {dir:?}"))?;
-        progress.set_stage("copying");
-        let copy_dir = dir.clone();
-        let copy_files = files.clone();
-        let copy_progress = progress.clone();
-        let materialized = match tokio::task::spawn_blocking(move || {
-            materialize_sources(&copy_dir, &copy_files, &copy_progress)
-        })
-        .await
-        .context("source copy task failed")
-        {
-            Ok(result) => result,
-            Err(error) => {
-                discard_staging_dir(&dir);
-                return Err(error);
+        let layout = if let [file] = files.as_slice() {
+            let hash_path = crate::content_location::ContentLocation::from_source_path(&file.path)?
+                .filesystem_path()
+                .to_path_buf();
+            let output_folder = hash_path
+                .parent()
+                .context("a source file must have a parent directory")?
+                .to_path_buf();
+            SeedLayout {
+                hash_path,
+                output_folder,
+                link_directory: None,
+                linked_paths: Vec::new(),
+                // A single-file torrent's root name must remain its filename
+                // so librqbit finds the selected file in its original folder.
+                torrent_name: None,
+            }
+        } else {
+            let dir = output_dir().join(&collection_name);
+            std::fs::create_dir_all(&dir)
+                .with_context(|| format!("creating collection dir {dir:?}"))?;
+            progress.set_stage("linking");
+            let layout_dir = dir.clone();
+            let layout_files = files.clone();
+            let layout_progress = progress.clone();
+            let linked_paths = match tokio::task::spawn_blocking(move || {
+                link_sources(&layout_dir, &layout_files, &layout_progress)
+            })
+            .await
+            .context("source linking task failed")
+            {
+                Ok(result) => result,
+                Err(error) => return Err(error),
+            }?;
+            SeedLayout {
+                hash_path: dir.clone(),
+                output_folder: dir.clone(),
+                link_directory: Some(dir),
+                linked_paths,
+                torrent_name: Some(collection_name),
             }
         };
-        if let Err(error) = materialized {
-            discard_staging_dir(&dir);
-            return Err(error);
-        }
 
         if let Err(error) = progress.ensure_active() {
-            discard_staging_dir(&dir);
+            discard_seed_layout(&layout);
             return Err(error);
         }
         progress.set_stage("hashing");
         let created = match librqbit::create_torrent(
-            &dir,
+            &layout.hash_path,
             CreateTorrentOptions {
-                name: Some(&collection_name),
+                name: layout.torrent_name.as_deref(),
                 ..Default::default()
             },
         )
         .await
-        .with_context(|| format!("building .torrent metadata from {dir:?}"))
+        .with_context(|| format!("building .torrent metadata from {:?}", layout.hash_path))
         {
             Ok(created) => created,
             Err(error) => {
-                discard_staging_dir(&dir);
+                discard_seed_layout(&layout);
                 return Err(error);
             }
         };
 
         if let Err(error) = progress.ensure_active() {
-            discard_staging_dir(&dir);
+            discard_seed_layout(&layout);
             return Err(error);
         }
         progress.set_stage("seeding");
         let opts = AddTorrentOptions {
             overwrite: true,
             // Explicit, not the session default + auto subfolder — the
-            // files are already sitting exactly at `dir`, so this must
+            // files are already sitting at the canonical output folder, so this must
             // match precisely or librqbit will look for them in the wrong
             // place and try to re-download what we just wrote.
-            output_folder: Some(dir.to_string_lossy().into_owned()),
+            output_folder: Some(layout.output_folder.to_string_lossy().into_owned()),
             ..Default::default()
         };
         let torrent_bytes = match created
@@ -597,71 +627,90 @@ mod native {
         {
             Ok(bytes) => bytes,
             Err(error) => {
-                discard_staging_dir(&dir);
+                discard_seed_layout(&layout);
                 return Err(error);
             }
         };
         let response = match session
             .add_torrent(AddTorrent::from_bytes(torrent_bytes), Some(opts))
             .await
-            .with_context(|| format!("adding created torrent, output_folder={dir:?}"))
+            .with_context(|| format!("adding created torrent, output_folder={:?}", layout.output_folder))
         {
             Ok(response) => response,
             Err(error) => {
-                discard_staging_dir(&dir);
+                discard_seed_layout(&layout);
                 return Err(error);
             }
         };
         response_to_info(&api(session), response)
     }
 
-    fn discard_staging_dir(dir: &std::path::Path) {
-        if let Err(error) = std::fs::remove_dir_all(dir) {
-            crate::log::clog!(
-                "torrent",
-                "could not remove staging dir {dir:?}: {error}"
-            );
+    /// Only paths created by this publication may be removed on failure. The
+    /// old recursive cleanup could erase a pre-existing collection directory.
+    fn discard_seed_layout(layout: &SeedLayout) {
+        if let Some(dir) = &layout.link_directory {
+            discard_linked_sources(dir, &layout.linked_paths);
         }
     }
 
-    fn materialize_sources(
+    fn discard_linked_sources(dir: &std::path::Path, created: &[PathBuf]) {
+        for path in created.iter().rev() {
+            if let Err(error) = std::fs::remove_file(path) {
+                crate::log::clog!("torrent", "could not remove linked source {path:?}: {error}");
+            }
+        }
+        let _ = std::fs::remove_dir(dir);
+    }
+
+    /// Builds the collection directory using hard links only. This creates a
+    /// second name for the same filesystem bytes, never a second file. A
+    /// hard-link failure is deliberately surfaced instead of falling back to
+    /// a copy: callers can choose a source on the same filesystem or a
+    /// canonical Portalis destination, but Portalis must not silently violate
+    /// its one-copy contract.
+    fn link_sources(
         dir: &std::path::Path,
         files: &[SourceFile],
         progress: &PublishProgress,
-    ) -> anyhow::Result<()> {
-        let mut buffer = vec![0u8; 1024 * 1024];
+    ) -> anyhow::Result<Vec<PathBuf>> {
+        let mut created = Vec::with_capacity(files.len());
         for file in files {
             progress.ensure_active()?;
-            let source = std::path::Path::new(&file.path);
+            let source = crate::content_location::ContentLocation::from_source_path(&file.path)?
+                .filesystem_path()
+                .to_path_buf();
             let destination = dir.join(sanitize_component(&file.name));
+            let length = std::fs::metadata(&source)
+                .with_context(|| format!("reading source metadata {source:?}"))?
+                .len();
 
-            // Portalis owns its seeded snapshot. A hard link would save the
-            // copy, but later edits to the user's original would mutate the
-            // torrent data and make verified pieces corrupt. Bounded copies
-            // keep memory constant regardless of file size and preserve the
-            // exact content that was announced to the swarm.
-            let mut input = std::fs::File::open(source)
-                .with_context(|| format!("opening source {source:?}"))?;
-            let mut output = std::fs::File::create(&destination)
-                .with_context(|| format!("creating destination {destination:?}"))?;
-            loop {
-                progress.ensure_active()?;
-                let read = input
-                    .read(&mut buffer)
-                    .with_context(|| format!("reading source {source:?}"))?;
-                if read == 0 {
-                    break;
+            if source != destination {
+                if let Err(error) = std::fs::hard_link(&source, &destination) {
+                    if !is_resumable_link(&destination, length) {
+                        discard_linked_sources(dir, &created);
+                        return Err(error).with_context(|| {
+                            format!(
+                                "linking {source:?} into {destination:?}; Portalis will not copy source bytes"
+                            )
+                        });
+                    }
+                } else {
+                    created.push(destination);
                 }
-                output
-                    .write_all(&buffer[..read])
-                    .with_context(|| format!("writing destination {destination:?}"))?;
-                progress.advance(read as u64);
             }
-            output
-                .sync_all()
-                .with_context(|| format!("syncing destination {destination:?}"))?;
+            progress.advance(length);
         }
-        Ok(())
+        Ok(created)
+    }
+
+    /// Import batches use a UUID in their layout directory name. If a process
+    /// was interrupted after making a link, the matching regular file and
+    /// length identify that durable batch layout without rereading gigabytes.
+    /// Torrent hashing remains the single content-verification pass.
+    fn is_resumable_link(path: &std::path::Path, length: u64) -> bool {
+        std::fs::metadata(path)
+            .map(|metadata| metadata.is_file() && metadata.len() == length)
+            .unwrap_or(false)
     }
 
     /// Real per-file paths, resolved via `Api::api_torrent_details` rather
@@ -1027,5 +1076,35 @@ mod native {
             .await
             .with_context(|| format!("adding torrent {info_hash_hex} with peer hints"))?;
         response_to_info(&api(session), response)
+    }
+
+    #[cfg(test)]
+    mod link_tests {
+        use super::{link_sources, PublishProgress, SourceFile};
+
+        #[test]
+        fn source_layout_is_a_link_not_a_second_file() {
+            let root = std::env::temp_dir().join(format!("portalis-links-{}", uuid::Uuid::new_v4()));
+            let source_dir = root.join("source");
+            let layout_dir = root.join("layout");
+            std::fs::create_dir_all(&source_dir).unwrap();
+            std::fs::create_dir_all(&layout_dir).unwrap();
+            let source = source_dir.join("clip.mp4");
+            std::fs::write(&source, b"first").unwrap();
+
+            let files = [SourceFile {
+                name: "clip.mp4".into(),
+                path: source.to_string_lossy().into_owned(),
+            }];
+            let created = link_sources(&layout_dir, &files, &PublishProgress::new(5)).unwrap();
+            assert_eq!(created, vec![layout_dir.join("clip.mp4")]);
+
+            // A write through the original name is visible through the
+            // collection name: this proves the layout does not contain a
+            // copied byte sequence.
+            std::fs::write(&source, b"again").unwrap();
+            assert_eq!(std::fs::read(layout_dir.join("clip.mp4")).unwrap(), b"again");
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 }

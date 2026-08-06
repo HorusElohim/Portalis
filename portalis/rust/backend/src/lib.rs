@@ -15,6 +15,11 @@ mod collab_store;
 mod import_store;
 // Real sockets — native targets only, like librqbit.
 mod collab_sync;
+/// Canonical storage locations; never cache-path fallbacks.
+mod content_location;
+/// Android-only bridge used by Rust-owned MediaStore storage.
+#[cfg(target_os = "android")]
+mod android_content;
 /// Reconciles collection state with known peers while the app is active.
 #[path = "converge.rs"]
 mod reconciliation;
