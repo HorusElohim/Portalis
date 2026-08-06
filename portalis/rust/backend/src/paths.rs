@@ -1,8 +1,8 @@
 //! Where Portalis keeps the state it must not lose.
 //!
-//! Four files — `identity.json`, `collections.json`, `settings.json`,
-//! `sync_peers.json` — each rebuilt this path from `dirs::config_dir()` for
-//! itself. Naming it once is what lets a test point all of them somewhere
+//! Persistent files such as `identity.json`, `collections.json`,
+//! `settings.json`, `sync_peers.json`, and `imports.json` once rebuilt this
+//! path independently. Naming it once lets a test point all of them somewhere
 //! disposable, and until it was named there was no way to test any writer
 //! against a real file: the one test of the atomic write *mirrored* `save`'s
 //! strategy against a temp path rather than calling `save`, so a regression to

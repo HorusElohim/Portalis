@@ -6,9 +6,9 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_info_hash_with_peers`, `bt_listen_port_cached`, `bt_listen_port`, `delete_torrent_files`, `forget_torrent`, `pause_torrent`, `restart_torrent`, `session_started`, `set_rate_limits`, `storage_breakdown`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RawStorageEntry`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `add_info_hash_with_peers`, `add_torrent_from_file_bytes`, `advance`, `bt_listen_port_cached`, `bt_listen_port`, `cancel`, `delete_torrent_files`, `ensure_active`, `fail`, `forget_torrent`, `inspect_source_files`, `new`, `pause_torrent`, `publish`, `restart_torrent`, `session_started`, `set_rate_limits`, `set_stage`, `snapshot`, `storage_breakdown`, `validate_source_files`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PublishProgressState`, `PublishProgress`, `RawStorageEntry`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Create a new collection by seeding local files: write them to disk,
 /// build a `.torrent` from them, and add it back to the session pointed at
@@ -20,7 +20,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// shape either way (see the backend README on why: it's the same
 /// protocol regardless of which side of the swarm you started on).
 Future<TorrentInfo> createCollection(
-        {required String name, required List<NewFile> files}) =>
+        {required String name, required List<SourceFile> files}) =>
     RustLib.instance.api.crateTorrentCreateCollection(name: name, files: files);
 
 /// Add a torrent from a magnet link (or bare 40-char info-hash, which
@@ -29,10 +29,9 @@ Future<TorrentInfo> addTorrentFromMagnet({required String magnetOrHash}) =>
     RustLib.instance.api
         .crateTorrentAddTorrentFromMagnet(magnetOrHash: magnetOrHash);
 
-/// Add a torrent from the raw bytes of a `.torrent` file (as picked by
-/// Flutter's file picker and passed across the FFI boundary).
-Future<TorrentInfo> addTorrentFromFileBytes({required List<int> bytes}) =>
-    RustLib.instance.api.crateTorrentAddTorrentFromFileBytes(bytes: bytes);
+/// Add a `.torrent` file without loading its metadata into Dart first.
+Future<TorrentInfo> addTorrentFromFilePath({required String path}) =>
+    RustLib.instance.api.crateTorrentAddTorrentFromFilePath(path: path);
 
 /// Snapshot of every torrent currently managed by the debug session. The
 /// Flutter side polls this on a timer — this is a smoke test, not the
@@ -52,29 +51,30 @@ Future<String> outputDir() => RustLib.instance.api.crateTorrentOutputDir();
 Future<BigInt> storageUsageBytes() =>
     RustLib.instance.api.crateTorrentStorageUsageBytes();
 
-/// One file to seed, as picked by Flutter (camera roll, file picker, etc.)
-/// and passed across the FFI boundary as raw bytes — the only form that's
-/// meaningfully the same file on every platform (mobile file pickers often
-/// hand back a cache copy path, not a stable one worth trusting).
-class NewFile {
+/// One native file Rust will publish as torrent content.
+///
+/// Only the path crosses the Flutter boundary. Rust owns reading, copying,
+/// hashing, torrent construction, and seeding, so file size is never limited
+/// by Dart memory or the bridge's signed 32-bit byte-vector encoding.
+class SourceFile {
   final String name;
-  final Uint8List bytes;
+  final String path;
 
-  const NewFile({
+  const SourceFile({
     required this.name,
-    required this.bytes,
+    required this.path,
   });
 
   @override
-  int get hashCode => name.hashCode ^ bytes.hashCode;
+  int get hashCode => name.hashCode ^ path.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is NewFile &&
+      other is SourceFile &&
           runtimeType == other.runtimeType &&
           name == other.name &&
-          bytes == other.bytes;
+          path == other.path;
 }
 
 /// One file inside a torrent, with its real on-disk location — resolved via

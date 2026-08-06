@@ -1,11 +1,10 @@
 //! One JSON document of state, read whole or written whole.
 //!
-//! Four modules each had their own copy of this — path, create the directory,
-//! serialise, write, and (three of the four) rename a sibling into place. The
-//! fourth was `identity.json`, written with a plain `fs::write`: the one file
-//! in the app whose loss cannot be recovered, carrying the key every signature
-//! was ever made under, and the only one without the protection the other
-//! three had. That is what four copies of a thing costs.
+//! Several modules once had their own copy of this — path, create the
+//! directory, serialise, write, and rename a sibling into place. Identity was
+//! the exception, written with a plain `fs::write`: the one file whose loss
+//! cannot be recovered was the one without atomic replacement. That is what
+//! duplicated persistence code costs.
 
 use std::path::PathBuf;
 
@@ -19,7 +18,9 @@ pub(crate) struct Vault {
 impl Vault {
     /// A file by name inside the state directory — see [`crate::paths`].
     pub(crate) fn named(file: &str) -> Self {
-        Self { path: crate::paths::state_dir().join(file) }
+        Self {
+            path: crate::paths::state_dir().join(file),
+        }
     }
 
     /// `None` when the file isn't there yet, which is a normal first run and
@@ -47,8 +48,42 @@ impl Vault {
         let staged = self.path.with_extension("tmp");
         std::fs::write(&staged, serde_json::to_vec_pretty(value)?)
             .with_context(|| format!("writing {staged:?}"))?;
-        std::fs::rename(&staged, &self.path)
+        replace_file(&staged, &self.path)
             .with_context(|| format!("replacing {:?}", self.path))
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_file(
+    staged: &std::path::Path,
+    target: &std::path::Path,
+) -> std::io::Result<()> {
+    std::fs::rename(staged, target)
+}
+
+#[cfg(windows)]
+fn replace_file(
+    staged: &std::path::Path,
+    target: &std::path::Path,
+) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let staged: Vec<u16> = staged.as_os_str().encode_wide().chain(Some(0)).collect();
+    let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+    let succeeded = unsafe {
+        MoveFileExW(
+            staged.as_ptr(),
+            target.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if succeeded == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
     }
 }
 
@@ -57,6 +92,17 @@ impl Vault {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_document_atomically_replaces_the_previous_one() {
+        let _temp = crate::paths::redirect_to_temp();
+        let vault = Vault::named("replace.json");
+
+        vault.write(&1u32).unwrap();
+        vault.write(&2u32).unwrap();
+
+        assert_eq!(vault.read::<u32>().unwrap(), Some(2));
+    }
 
     #[cfg(unix)]
     #[test]

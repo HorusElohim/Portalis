@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/app/app_controllers.dart';
 import 'package:portalis/features/collections/domain/collection.dart';
+import 'package:portalis/features/collections/domain/collection_import.dart';
 import 'package:portalis/features/media/domain/media_item.dart';
 import 'package:portalis/features/settings/domain/engine_settings.dart';
 import 'package:portalis/main.dart';
@@ -12,6 +13,7 @@ export 'package:flutter_test/flutter_test.dart';
 export 'package:portalis/app/app_controllers.dart';
 export 'package:portalis/design/design.dart';
 export 'package:portalis/features/collections/domain/collection.dart';
+export 'package:portalis/features/collections/domain/collection_import.dart';
 export 'package:portalis/features/collections/domain/paste.dart';
 export 'package:portalis/features/collections/presentation/collection_detail.dart';
 export 'package:portalis/features/collections/presentation/collection_join.dart';
@@ -46,6 +48,7 @@ Collection buildCollection({
   int totalBytes = 0,
   int downloadedBytes = 0,
   int? etaSecs,
+  CollectionImport? ingestion,
 }) =>
     Collection(
       id: id,
@@ -63,6 +66,7 @@ Collection buildCollection({
       pendingMedia: pendingMedia,
       etaSecs: etaSecs,
       state: state,
+      ingestion: ingestion,
     );
 
 EngineSettings buildEngineSettings() => const EngineSettings(

@@ -47,63 +47,132 @@ pub struct TorrentFile {
     pub downloaded_bytes: u64,
 }
 
-/// One file to seed, as picked by Flutter (camera roll, file picker, etc.)
-/// and passed across the FFI boundary as raw bytes — the only form that's
-/// meaningfully the same file on every platform (mobile file pickers often
-/// hand back a cache copy path, not a stable one worth trusting).
-#[derive(Debug, Clone)]
-pub struct NewFile {
+/// One native file Rust will publish as torrent content.
+///
+/// Only the path crosses the Flutter boundary. Rust owns reading, copying,
+/// hashing, torrent construction, and seeding, so file size is never limited
+/// by Dart memory or the bridge's signed 32-bit byte-vector encoding.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SourceFile {
     pub name: String,
-    pub bytes: Vec<u8>,
+    pub path: String,
 }
 
-/// The generated Sse bridge encodes byte-vector lengths as signed 32-bit
-/// integers. Keep this invariant at the native boundary too: malformed or
-/// oversized input must be an ordinary FFI error, never an allocator panic.
-const MAX_NEW_FILES: usize = 10_000;
-const MAX_NEW_FILE_BYTES: usize = 2_000_000_000;
-
-fn validate_new_files(files: &[NewFile]) -> anyhow::Result<()> {
+pub(crate) fn validate_source_files(files: &[SourceFile]) -> anyhow::Result<u64> {
     anyhow::ensure!(!files.is_empty(), "a collection needs at least one file");
-    anyhow::ensure!(
-        files.len() <= MAX_NEW_FILES,
-        "a collection can contain at most {MAX_NEW_FILES} files"
-    );
-
-    let mut total_bytes = 0usize;
+    let mut names = std::collections::HashSet::new();
+    let mut total_bytes = 0u64;
     for file in files {
+        let name = native::sanitize_component(&file.name);
         anyhow::ensure!(
-            file.bytes.len() <= MAX_NEW_FILE_BYTES,
-            "file {:?} is too large to share in one operation",
+            names.insert(name.to_lowercase()),
+            "duplicate source filename {:?}",
             file.name
         );
+        let metadata = std::fs::metadata(&file.path)
+            .map_err(|error| anyhow::anyhow!("cannot read source {:?}: {error}", file.path))?;
+        anyhow::ensure!(metadata.is_file(), "source {:?} is not a file", file.path);
         total_bytes = total_bytes
-            .checked_add(file.bytes.len())
-            .ok_or_else(|| anyhow::anyhow!("share payload size overflow"))?;
+            .checked_add(metadata.len())
+            .ok_or_else(|| anyhow::anyhow!("source size overflow"))?;
     }
-    anyhow::ensure!(
-        total_bytes <= MAX_NEW_FILE_BYTES,
-        "selected files are too large to share in one operation"
-    );
-    Ok(())
+    Ok(total_bytes)
+}
+
+pub(crate) async fn inspect_source_files(files: &[SourceFile]) -> anyhow::Result<u64> {
+    let files = files.to_vec();
+    tokio::task::spawn_blocking(move || validate_source_files(&files))
+        .await
+        .map_err(|error| anyhow::anyhow!("source inspection task failed: {error}"))?
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PublishProgress {
+    inner: std::sync::Arc<std::sync::Mutex<PublishProgressState>>,
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PublishProgressState {
+    pub(crate) stage: String,
+    pub(crate) processed_bytes: u64,
+    pub(crate) total_bytes: u64,
+    pub(crate) error: Option<String>,
+}
+
+impl PublishProgress {
+    pub(crate) fn new(total_bytes: u64) -> Self {
+        Self {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(PublishProgressState {
+                stage: "preparing".into(),
+                processed_bytes: 0,
+                total_bytes,
+                error: None,
+            })),
+            cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    pub(crate) fn snapshot(&self) -> PublishProgressState {
+        self.inner.lock().unwrap().clone()
+    }
+
+    pub(crate) fn set_stage(&self, stage: &str) {
+        self.inner.lock().unwrap().stage = stage.into();
+    }
+
+    fn advance(&self, bytes: u64) {
+        let mut state = self.inner.lock().unwrap();
+        state.processed_bytes = state.processed_bytes.saturating_add(bytes).min(state.total_bytes);
+    }
+
+    pub(crate) fn fail(&self, error: String) {
+        let mut state = self.inner.lock().unwrap();
+        state.stage = "failed".into();
+        state.error = Some(error);
+    }
+
+    pub(crate) fn cancel(&self) {
+        self.cancelled
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn ensure_active(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.cancelled.load(std::sync::atomic::Ordering::Relaxed),
+            "publication cancelled"
+        );
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod validation_tests {
-    use super::{validate_new_files, NewFile};
+    use super::{native::sanitize_component, validate_source_files, SourceFile};
+    use std::io::Write;
 
     #[test]
-    fn accepts_a_normal_share() {
-        assert!(validate_new_files(&[NewFile {
+    fn accepts_a_path_source_without_a_size_cap() {
+        let path = std::env::temp_dir().join(format!("portalis-source-{}", uuid::Uuid::new_v4()));
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(&[0; 1024]).unwrap();
+        assert_eq!(validate_source_files(&[SourceFile {
             name: "photo.jpg".into(),
-            bytes: vec![0; 1024],
-        }])
-        .is_ok());
+            path: path.to_string_lossy().into_owned(),
+        }]).unwrap(), 1024);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
     fn rejects_an_empty_share() {
-        assert!(validate_new_files(&[]).is_err());
+        assert!(validate_source_files(&[]).is_err());
+    }
+
+    #[test]
+    fn source_names_are_safe_and_portable() {
+        assert_eq!(sanitize_component("../bad:name?.jpg"), "_bad_name_.jpg");
+        assert_eq!(sanitize_component("CON.txt"), "_CON.txt");
+        assert_eq!(sanitize_component("..."), "untitled");
     }
 }
 
@@ -116,9 +185,17 @@ mod validation_tests {
 /// the "join a swarm" side — both produce the exact same `TorrentInfo`
 /// shape either way (see the backend README on why: it's the same
 /// protocol regardless of which side of the swarm you started on).
-pub async fn create_collection(name: String, files: Vec<NewFile>) -> anyhow::Result<TorrentInfo> {
-    validate_new_files(&files)?;
-    native::create_collection(name, files).await
+pub async fn create_collection(name: String, files: Vec<SourceFile>) -> anyhow::Result<TorrentInfo> {
+    let total = inspect_source_files(&files).await?;
+    native::create_collection(name, files, PublishProgress::new(total)).await
+}
+
+pub(crate) async fn publish(
+    name: String,
+    files: Vec<SourceFile>,
+    progress: PublishProgress,
+) -> anyhow::Result<TorrentInfo> {
+    native::create_collection(name, files, progress).await
 }
 
 /// Add a torrent from a magnet link (or bare 40-char info-hash, which
@@ -127,10 +204,9 @@ pub async fn add_torrent_from_magnet(magnet_or_hash: String) -> anyhow::Result<T
     native::add_torrent_from_magnet(magnet_or_hash).await
 }
 
-/// Add a torrent from the raw bytes of a `.torrent` file (as picked by
-/// Flutter's file picker and passed across the FFI boundary).
-pub async fn add_torrent_from_file_bytes(bytes: Vec<u8>) -> anyhow::Result<TorrentInfo> {
-    native::add_torrent_from_file_bytes(bytes).await
+/// Add a `.torrent` file without loading its metadata into Dart first.
+pub async fn add_torrent_from_file_path(path: String) -> anyhow::Result<TorrentInfo> {
+    native::add_torrent_from_file_path(path).await
 }
 
 /// Snapshot of every torrent currently managed by the debug session. The
@@ -254,6 +330,7 @@ pub(crate) async fn delete_torrent_files(info_hash_hex: &str) -> anyhow::Result<
 }
 
 mod native {
+    use std::io::{Read, Write};
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -264,7 +341,7 @@ mod native {
     };
     use tokio::sync::OnceCell;
 
-    use super::{NewFile, RawStorageEntry, TorrentFile, TorrentInfo};
+    use super::{PublishProgress, RawStorageEntry, SourceFile, TorrentFile, TorrentInfo};
 
     static SESSION: OnceCell<Arc<Session>> = OnceCell::const_new();
 
@@ -401,17 +478,47 @@ mod native {
 
     /// Strip path separators and other characters that would let a
     /// malicious/odd filename escape the collection's own directory.
-    fn sanitize_component(name: &str) -> String {
+    pub(super) fn sanitize_component(name: &str) -> String {
         let cleaned: String = name
             .chars()
             .map(|c| match c {
-                '/' | '\\' | '\0' => '_',
+                '/' | '\\' | '\0' | '<' | '>' | ':' | '"' | '|' | '?' | '*' => '_',
+                c if c.is_control() => '_',
                 c => c,
             })
             .collect();
-        let trimmed = cleaned.trim();
+        let trimmed = cleaned.trim().trim_matches(['.', ' ']);
         if trimmed.is_empty() {
-            "untitled".to_string()
+            return "untitled".to_string();
+        }
+        let stem = trimmed.split('.').next().unwrap_or_default().to_uppercase();
+        let reserved = matches!(
+            stem.as_str(),
+            "CON"
+                | "PRN"
+                | "AUX"
+                | "NUL"
+                | "COM1"
+                | "COM2"
+                | "COM3"
+                | "COM4"
+                | "COM5"
+                | "COM6"
+                | "COM7"
+                | "COM8"
+                | "COM9"
+                | "LPT1"
+                | "LPT2"
+                | "LPT3"
+                | "LPT4"
+                | "LPT5"
+                | "LPT6"
+                | "LPT7"
+                | "LPT8"
+                | "LPT9"
+        );
+        if reserved {
+            format!("_{trimmed}")
         } else {
             trimmed.to_string()
         }
@@ -419,22 +526,41 @@ mod native {
 
     pub(super) async fn create_collection(
         name: String,
-        files: Vec<NewFile>,
+        files: Vec<SourceFile>,
+        progress: PublishProgress,
     ) -> anyhow::Result<TorrentInfo> {
-        super::validate_new_files(&files)?;
-
         let session = session().await?;
         let collection_name = sanitize_component(&name);
         let dir = output_dir().join(&collection_name);
         std::fs::create_dir_all(&dir)
             .with_context(|| format!("creating collection dir {dir:?}"))?;
-        for file in &files {
-            let path = dir.join(sanitize_component(&file.name));
-            std::fs::write(&path, &file.bytes)
-                .with_context(|| format!("writing {path:?} ({} bytes)", file.bytes.len()))?;
+        progress.set_stage("copying");
+        let copy_dir = dir.clone();
+        let copy_files = files.clone();
+        let copy_progress = progress.clone();
+        let materialized = match tokio::task::spawn_blocking(move || {
+            materialize_sources(&copy_dir, &copy_files, &copy_progress)
+        })
+        .await
+        .context("source copy task failed")
+        {
+            Ok(result) => result,
+            Err(error) => {
+                discard_staging_dir(&dir);
+                return Err(error);
+            }
+        };
+        if let Err(error) = materialized {
+            discard_staging_dir(&dir);
+            return Err(error);
         }
 
-        let created = librqbit::create_torrent(
+        if let Err(error) = progress.ensure_active() {
+            discard_staging_dir(&dir);
+            return Err(error);
+        }
+        progress.set_stage("hashing");
+        let created = match librqbit::create_torrent(
             &dir,
             CreateTorrentOptions {
                 name: Some(&collection_name),
@@ -442,8 +568,20 @@ mod native {
             },
         )
         .await
-        .with_context(|| format!("building .torrent metadata from {dir:?}"))?;
+        .with_context(|| format!("building .torrent metadata from {dir:?}"))
+        {
+            Ok(created) => created,
+            Err(error) => {
+                discard_staging_dir(&dir);
+                return Err(error);
+            }
+        };
 
+        if let Err(error) = progress.ensure_active() {
+            discard_staging_dir(&dir);
+            return Err(error);
+        }
+        progress.set_stage("seeding");
         let opts = AddTorrentOptions {
             overwrite: true,
             // Explicit, not the session default + auto subfolder — the
@@ -453,11 +591,77 @@ mod native {
             output_folder: Some(dir.to_string_lossy().into_owned()),
             ..Default::default()
         };
-        let response = session
-            .add_torrent(AddTorrent::from_bytes(created.as_bytes()?), Some(opts))
+        let torrent_bytes = match created
+            .as_bytes()
+            .context("encoding created torrent metadata")
+        {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                discard_staging_dir(&dir);
+                return Err(error);
+            }
+        };
+        let response = match session
+            .add_torrent(AddTorrent::from_bytes(torrent_bytes), Some(opts))
             .await
-            .with_context(|| format!("adding created torrent, output_folder={dir:?}"))?;
+            .with_context(|| format!("adding created torrent, output_folder={dir:?}"))
+        {
+            Ok(response) => response,
+            Err(error) => {
+                discard_staging_dir(&dir);
+                return Err(error);
+            }
+        };
         response_to_info(&api(session), response)
+    }
+
+    fn discard_staging_dir(dir: &std::path::Path) {
+        if let Err(error) = std::fs::remove_dir_all(dir) {
+            crate::log::clog!(
+                "torrent",
+                "could not remove staging dir {dir:?}: {error}"
+            );
+        }
+    }
+
+    fn materialize_sources(
+        dir: &std::path::Path,
+        files: &[SourceFile],
+        progress: &PublishProgress,
+    ) -> anyhow::Result<()> {
+        let mut buffer = vec![0u8; 1024 * 1024];
+        for file in files {
+            progress.ensure_active()?;
+            let source = std::path::Path::new(&file.path);
+            let destination = dir.join(sanitize_component(&file.name));
+
+            // Portalis owns its seeded snapshot. A hard link would save the
+            // copy, but later edits to the user's original would mutate the
+            // torrent data and make verified pieces corrupt. Bounded copies
+            // keep memory constant regardless of file size and preserve the
+            // exact content that was announced to the swarm.
+            let mut input = std::fs::File::open(source)
+                .with_context(|| format!("opening source {source:?}"))?;
+            let mut output = std::fs::File::create(&destination)
+                .with_context(|| format!("creating destination {destination:?}"))?;
+            loop {
+                progress.ensure_active()?;
+                let read = input
+                    .read(&mut buffer)
+                    .with_context(|| format!("reading source {source:?}"))?;
+                if read == 0 {
+                    break;
+                }
+                output
+                    .write_all(&buffer[..read])
+                    .with_context(|| format!("writing destination {destination:?}"))?;
+                progress.advance(read as u64);
+            }
+            output
+                .sync_all()
+                .with_context(|| format!("syncing destination {destination:?}"))?;
+        }
+        Ok(())
     }
 
     /// Real per-file paths, resolved via `Api::api_torrent_details` rather
@@ -597,6 +801,17 @@ mod native {
             .await
             .context("adding torrent from .torrent file bytes")?;
         response_to_info(&api(session), response)
+    }
+
+    pub(super) async fn add_torrent_from_file_path(
+        path: String,
+    ) -> anyhow::Result<TorrentInfo> {
+        let read_path = path.clone();
+        let bytes = tokio::task::spawn_blocking(move || std::fs::read(&read_path))
+            .await
+            .context("torrent metadata read task failed")?
+            .with_context(|| format!("reading .torrent metadata from {path:?}"))?;
+        add_torrent_from_file_bytes(bytes).await
     }
 
     pub(super) async fn list_torrents() -> anyhow::Result<Vec<TorrentInfo>> {

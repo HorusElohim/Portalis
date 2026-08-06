@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +7,7 @@ import '../app/app_controllers.dart';
 import '../design/design.dart';
 import '../features/collections/domain/collection.dart';
 import '../features/collections/domain/collection_filter.dart';
+import '../features/collections/domain/picked_file.dart';
 import '../features/collections/presentation/collection_detail.dart';
 import '../features/collections/presentation/collection_commands.dart';
 import '../features/collections/presentation/collection_join.dart';
@@ -134,10 +134,9 @@ class _HomeState extends State<Home> {
 
     if (files.length == 1 &&
         files.single.name.toLowerCase().endsWith('.torrent')) {
-      final bytes = await files.single.readAsBytes();
       setState(() => _dropBusy = true);
       try {
-        await AppControllers.collections.addFromFileBytes(bytes);
+        await AppControllers.collections.addFromFilePath(files.single.path);
         if (mounted) {
           showToast(
             context,
@@ -159,10 +158,10 @@ class _HomeState extends State<Home> {
       return;
     }
 
-    final picked = await Future.wait(files.map((file) async {
-      final Uint8List bytes = await file.readAsBytes();
-      return (name: file.name, bytes: bytes);
-    }));
+    final picked = await Future.wait(files.map((file) => pickedFileFrom(
+          name: file.name,
+          nativePath: file.path,
+        )));
     if (mounted) _openShare(picked);
   }
 

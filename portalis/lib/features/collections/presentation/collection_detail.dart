@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:image_picker/image_picker.dart' hide PickedFile;
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../app/app_controllers.dart';
 import '../../../design/design.dart';
-import '../../media/application/media_formats.dart';
 import '../../media/domain/media_item.dart';
 import '../../media/presentation/media_viewer_screen.dart';
 import '../domain/collection.dart';
+import '../domain/picked_file.dart';
 import 'collection_contents.dart';
 import 'collection_commands.dart';
 import 'collection_overview.dart';
@@ -187,23 +187,28 @@ class _CollectionDetailState extends State<CollectionDetail> {
     );
     if (source == null || !mounted) return;
 
-    List<({String name, Uint8List bytes})> picked = [];
+    List<PickedFile> picked = [];
     try {
       if (source == 'photos') {
         final files = await ImagePicker().pickMultipleMedia();
         picked = await Future.wait(
-          files.map((file) async => (name: file.name, bytes: await file.readAsBytes())),
+          files.map((file) => pickedFileFrom(
+                name: file.name,
+                nativePath: file.path,
+              )),
         );
       } else {
         final result = await FilePicker.pickFiles(
-          withData: true,
+          withData: false,
           allowMultiple: true,
           type: FileType.any,
         );
-        picked = (result?.files ?? [])
-            .where((file) => file.bytes != null)
-            .map((file) => (name: file.name, bytes: file.bytes!))
-            .toList();
+        picked = await Future.wait(
+          (result?.files ?? []).map((file) => pickedFileFrom(
+                name: file.name,
+                nativePath: file.path,
+              )),
+        );
       }
     } catch (error) {
       _toast('Couldn\'t read those files: $error');
@@ -212,12 +217,9 @@ class _CollectionDetailState extends State<CollectionDetail> {
     if (picked.isEmpty || !mounted) return;
 
     await _run(() async {
-      final normalized = await Future.wait(
-        picked.map((file) => normalizeForSharing(name: file.name, bytes: file.bytes)),
-      );
       final label = 'Added ${DateTime.now().toIso8601String().split('T').first}';
-      await AppControllers.collections.addMedia(_collection.id, label, normalized);
-      _toast('Added ${normalized.length} item${normalized.length == 1 ? '' : 's'}');
+      await AppControllers.collections.addMedia(_collection.id, label, picked);
+      _toast('Preparing ${picked.length} item${picked.length == 1 ? '' : 's'}');
     });
   }
 

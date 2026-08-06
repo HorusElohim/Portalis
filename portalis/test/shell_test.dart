@@ -1,4 +1,5 @@
 import 'test_support.dart';
+import 'package:portalis/screens/mobile_shell_layout.dart';
 
 void main() {
   tearDown(resetTestState);
@@ -119,7 +120,7 @@ group('shell', () {
       await tester.pumpWidget(const MyApp());
       await tester.pump();
 
-      expect(find.byType(SettingsScreen), findsOneWidget);
+      expect(find.byType(UserScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -144,12 +145,15 @@ group('shell', () {
       expect(find.byType(UserScreen), findsOneWidget);
       expect(find.text('Change name'), findsOneWidget);
 
-      // Tapping the header button for the pane that is already open closes
-      // The settings action still toggles back to Home — the same behaviour
-      // every pane button gets.
+      // Settings is a separate destination from User and opens its own pane.
       await tester.tap(find.byKey(const Key('headerSettingsButton')));
       await tester.pump();
-      expect(find.byType(SettingsScreen), findsNothing);
+      expect(find.byType(SettingsScreen), findsOneWidget);
+
+      // Home owns collection commands. Returning through the persistent logo
+      // must restore that single command surface.
+      await tester.tap(find.byKey(const Key('headerHomeButton')));
+      await tester.pump();
 
       // One primary action beside one field, plus the one thing a paste
       // cannot express. The sidebar's own New share, Join, magnet field,

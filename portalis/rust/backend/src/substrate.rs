@@ -10,12 +10,17 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::torrent::{NewFile, TorrentInfo};
+use crate::torrent::{PublishProgress, SourceFile, TorrentInfo};
 
 #[async_trait]
 pub(crate) trait Substrate: Send + Sync {
     /// Make these files available, and answer with the handle others fetch by.
-    async fn publish(&self, name: String, files: Vec<NewFile>) -> anyhow::Result<TorrentInfo>;
+    async fn publish(
+        &self,
+        name: String,
+        files: Vec<SourceFile>,
+        progress: PublishProgress,
+    ) -> anyhow::Result<TorrentInfo>;
 
     /// Start acquiring this handle, with any addresses known to hold it.
     async fn acquire(&self, handle: &str, peers: Vec<SocketAddr>) -> anyhow::Result<TorrentInfo>;
@@ -34,8 +39,13 @@ pub(crate) struct Torrents;
 
 #[async_trait]
 impl Substrate for Torrents {
-    async fn publish(&self, name: String, files: Vec<NewFile>) -> anyhow::Result<TorrentInfo> {
-        crate::torrent::create_collection(name, files).await
+    async fn publish(
+        &self,
+        name: String,
+        files: Vec<SourceFile>,
+        progress: PublishProgress,
+    ) -> anyhow::Result<TorrentInfo> {
+        crate::torrent::publish(name, files, progress).await
     }
 
     async fn acquire(&self, handle: &str, peers: Vec<SocketAddr>) -> anyhow::Result<TorrentInfo> {
@@ -96,7 +106,12 @@ pub(crate) struct Recorded {
 #[cfg(test)]
 #[async_trait]
 impl Substrate for Recorded {
-    async fn publish(&self, name: String, _files: Vec<NewFile>) -> anyhow::Result<TorrentInfo> {
+    async fn publish(
+        &self,
+        name: String,
+        _files: Vec<SourceFile>,
+        _progress: PublishProgress,
+    ) -> anyhow::Result<TorrentInfo> {
         anyhow::bail!("publish is not part of what this double is for ({name})")
     }
 

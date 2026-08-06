@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../app/app_controllers.dart';
 import '../design/design.dart';
+import '../features/collections/domain/picked_file.dart';
 import '../services/navigation.dart';
 import 'desktop_pane.dart';
-import 'home.dart';
 import '../features/collections/presentation/collection_detail.dart';
 import '../features/collections/presentation/collection_join.dart';
 import '../features/collections/presentation/collection_share.dart';

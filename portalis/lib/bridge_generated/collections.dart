@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'torrent.dart';
 
 // These functions are ignored because they are not marked as `pub`: `pursue_fetches`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Every collection this device knows about, from both sources, joined.
 Future<List<CollectionInfo>> listCollections() =>
@@ -33,7 +33,7 @@ Future<CollectionInfo> createCollection({required String name}) =>
 /// manifest entry — the "share something" flow, which previously produced a
 /// bare torrent with no invite code and therefore nothing to share.
 Future<CollectionInfo> createCollectionWithMedia(
-        {required String name, required List<NewFile> files}) =>
+        {required String name, required List<SourceFile> files}) =>
     RustLib.instance.api
         .crateCollectionsCreateCollectionWithMedia(name: name, files: files);
 
@@ -50,7 +50,7 @@ Future<CollectionInfo> joinCollection(
 Future<CollectionInfo> addMediaToCollection(
         {required String collectionId,
         required String label,
-        required List<NewFile> files}) =>
+        required List<SourceFile> files}) =>
     RustLib.instance.api.crateCollectionsAddMediaToCollection(
         collectionId: collectionId, label: label, files: files);
 
@@ -198,10 +198,14 @@ class CollectionInfo {
   /// upload "ETA" would be a fabricated number.
   final BigInt? etaSecs;
 
-  /// Coarse status for display: `seeding` / `downloading` / `pending` /
-  /// `empty`. Derived here rather than in the UI so both kinds of
-  /// collection describe themselves the same way.
+  /// Coarse status for display, including `importing` and `import_failed`
+  /// while Rust owns a local publication job. Derived here rather than in
+  /// the UI so both kinds of collection describe themselves the same way.
   final String state;
+
+  /// Native-owned local publication work, while selected files are copied,
+  /// hashed into torrent pieces, and attached to the collection.
+  final ImportInfo? ingestion;
 
   const CollectionInfo({
     required this.id,
@@ -221,6 +225,7 @@ class CollectionInfo {
     required this.pendingMedia,
     this.etaSecs,
     required this.state,
+    this.ingestion,
   });
 
   @override
@@ -241,7 +246,8 @@ class CollectionInfo {
       torrentPeers.hashCode ^
       pendingMedia.hashCode ^
       etaSecs.hashCode ^
-      state.hashCode;
+      state.hashCode ^
+      ingestion.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -264,7 +270,8 @@ class CollectionInfo {
           torrentPeers == other.torrentPeers &&
           pendingMedia == other.pendingMedia &&
           etaSecs == other.etaSecs &&
-          state == other.state;
+          state == other.state &&
+          ingestion == other.ingestion;
 }
 
 /// What kind of collection this is — the two ways one can come into
@@ -279,6 +286,41 @@ enum CollectionKind {
   /// collaborators, fixed contents.
   torrent,
   ;
+}
+
+class ImportInfo {
+  final String stage;
+  final double progress;
+  final BigInt processedBytes;
+  final BigInt totalBytes;
+  final String? error;
+
+  const ImportInfo({
+    required this.stage,
+    required this.progress,
+    required this.processedBytes,
+    required this.totalBytes,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      stage.hashCode ^
+      progress.hashCode ^
+      processedBytes.hashCode ^
+      totalBytes.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ImportInfo &&
+          runtimeType == other.runtimeType &&
+          stage == other.stage &&
+          progress == other.progress &&
+          processedBytes == other.processedBytes &&
+          totalBytes == other.totalBytes &&
+          error == other.error;
 }
 
 class MediaInfo {

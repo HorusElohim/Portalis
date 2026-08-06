@@ -1,4 +1,5 @@
 import '../../media/domain/media_item.dart';
+import 'collection_import.dart';
 
 /// Pure collection state used by the Flutter application.
 ///
@@ -44,6 +45,7 @@ class Collection {
     this.pendingMedia = 0,
     this.etaSecs,
     this.state = '',
+    this.ingestion,
   });
 
   final String id;
@@ -66,9 +68,10 @@ class Collection {
   final int pendingMedia;
   final int? etaSecs;
 
-  /// Backend-defined state: `seeding`, `downloading`, `connecting`,
-  /// `pending`, or `empty`.
+  /// Backend-defined state, including native `importing` and `import_failed`
+  /// publication states.
   final String state;
+  final CollectionImport? ingestion;
 
   bool get isShared => kind == CollectionKind.shared;
   bool get isComplete => progress >= 1.0 && pendingMedia == 0;
@@ -78,6 +81,7 @@ class Collection {
       downloadMbps > 0 ||
       uploadMbps > 0 ||
       state == 'downloading' ||
+      (ingestion != null && !ingestion!.failed) ||
       pendingMedia > 0;
 
   /// The entries that made this collection grow, regrouped from its flat media
@@ -115,6 +119,15 @@ class Collection {
         pendingMedia,
         etaSecs,
         state,
+        ingestion == null
+            ? null
+            : Object.hash(
+                ingestion!.stage,
+                ingestion!.progress,
+                ingestion!.processedBytes,
+                ingestion!.totalBytes,
+                ingestion!.error,
+              ),
         Object.hashAll(
           collaborators.map((c) => Object.hash(c.deviceId, c.name, c.isAdmin)),
         ),

@@ -11,6 +11,15 @@ CRATE="rust/backend"
 PLATFORM="${1:-macos}"
 
 function maybe_codegen() {
+  # PowerShell sees Cargo's bin directory automatically on a typical Windows
+  # install, while Git Bash may not inherit it. Resolve the same directory
+  # before declaring a tool that is already installed to be missing.
+  if ! command -v flutter_rust_bridge_codegen >/dev/null 2>&1 \
+      && [[ -n "${USERPROFILE:-}" ]] \
+      && command -v cygpath >/dev/null 2>&1; then
+    CARGO_BIN=$(cygpath -u "${CARGO_HOME:-$USERPROFILE/.cargo}/bin")
+    export PATH="$PATH:$CARGO_BIN"
+  fi
   if ! command -v flutter_rust_bridge_codegen >/dev/null 2>&1; then
     echo "(error) flutter_rust_bridge_codegen not found."
     echo "        Install with: cargo install flutter_rust_bridge_codegen"

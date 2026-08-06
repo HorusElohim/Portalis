@@ -1,6 +1,7 @@
 import '../../../bridge_generated/collections.dart' as bridge;
 import '../../media/domain/media_item.dart';
 import '../domain/collection.dart';
+import '../domain/collection_import.dart';
 
 /// Converts generated Flutter-Rust Bridge DTOs into the frontend's stable,
 /// framework-free collection model. This is the only collection file allowed
@@ -27,6 +28,15 @@ abstract final class CollectionMapper {
         pendingMedia: info.pendingMedia,
         etaSecs: info.etaSecs?.toInt(),
         state: info.state,
+        ingestion: info.ingestion == null
+            ? null
+            : CollectionImport(
+                stage: info.ingestion!.stage,
+                progress: info.ingestion!.progress,
+                processedBytes: info.ingestion!.processedBytes.toInt(),
+                totalBytes: info.ingestion!.totalBytes.toInt(),
+                error: info.ingestion!.error,
+              ),
       );
 
   static Collaborator _collaborator(bridge.CollaboratorInfo info) =>

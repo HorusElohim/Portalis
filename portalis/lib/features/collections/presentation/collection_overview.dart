@@ -6,6 +6,7 @@ import '../domain/collection.dart';
 import '../domain/peer_observation.dart';
 import '../domain/transfer_history.dart';
 import 'collection_commands.dart';
+import 'collection_import_progress.dart';
 import 'collection_peers.dart';
 import 'collection_presentation.dart';
 
@@ -50,6 +51,8 @@ class CollectionOverview extends StatelessWidget {
           uploadMbps: sample.uploadMbps,
         ),
     ];
+    final ingestion = collection.ingestion;
+    final commandBusy = busy || (ingestion != null && !ingestion.failed);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -79,6 +82,10 @@ class CollectionOverview extends StatelessWidget {
           label: collection.copiesLabel,
           fontSize: 13,
         ),
+        if (ingestion != null) ...[
+          const SizedBox(height: 10),
+          CollectionImportProgress(ingestion: ingestion),
+        ],
         if (collection.totalBytes > 0 ||
             collection.downloadMbps > 0 ||
             collection.uploadMbps > 0 ||
@@ -101,7 +108,7 @@ class CollectionOverview extends StatelessWidget {
         if (showCommands) ...[
           const SizedBox(height: 14),
           CollectionCommandBar(
-            busy: busy,
+            busy: commandBusy,
             onCommand: onCommand,
             trailingActions: [
               if (collection.isShared)
@@ -112,18 +119,18 @@ class CollectionOverview extends StatelessWidget {
                     size: 16,
                     color: AppColors.signalSoft,
                   ),
-                  onTap: busy ? null : onInvite,
+                  onTap: commandBusy ? null : onInvite,
                 ),
               if (collection.isShared)
                 PillButton(
                   label: 'Add media',
                   dim: true,
-                  onTap: busy ? null : onAddMedia,
+                  onTap: commandBusy ? null : onAddMedia,
                 ),
               if (collection.pendingMedia > 0)
                 PillButton(
                   label: 'Fetch ${collection.pendingMedia}',
-                  onTap: busy ? null : onFetch,
+                  onTap: commandBusy ? null : onFetch,
                 ),
             ],
           ),

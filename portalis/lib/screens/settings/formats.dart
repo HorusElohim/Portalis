@@ -12,9 +12,8 @@ import '../../theme.dart';
 /// so, with the reason. Registering a new type makes it show up here with no
 /// edit to this file.
 ///
-/// The point is transparency about the user's own data — what gets converted
-/// on the way in, what can be viewed in-app, and what is handed to the
-/// system untouched.
+/// The point is transparency about the user's own data: what can be viewed
+/// in-app and what is handed to the system untouched.
 class FormatsScreen extends StatefulWidget {
   const FormatsScreen({super.key, this.embedded = false, this.onBack});
 
@@ -46,14 +45,12 @@ class _FormatsScreenState extends State<FormatsScreen> {
                 f.extensions.any((e) => e.contains(q)))
             .toList();
 
-    final converted = all.where((f) => f.isTransformedOnShare).length;
     final viewable =
         all.where((f) => f.preview != PreviewSupport.externalOnly).length;
 
     return AppScreen(
       title: 'File formats',
-      subtitle: Text('${all.length} types · $viewable viewable in the app · '
-          '$converted converted when shared'),
+      subtitle: Text('${all.length} types · $viewable viewable in the app'),
       embedded: widget.embedded,
       forceShowBack: true,
       onBack: widget.onBack,
@@ -95,10 +92,9 @@ class _FormatsScreenState extends State<FormatsScreen> {
                     padding: const EdgeInsets.fromLTRB(
                         kScreenGutter, 26, kScreenGutter, 28),
                     child: Text(
-                      'Anything not listed is still shareable. Portalis never '
-                      'inspects or re-encodes a file unless a conversion is '
-                      'shown above — everything else is seeded exactly as it '
-                      'is on your disk.',
+                      'Anything not listed is still shareable. Portalis '
+                      'preserves every file byte-for-byte and seeds the '
+                      'original format.',
                       style: AppText.secondary(height: 1.6),
                     ),
                   ),
@@ -230,16 +226,6 @@ class _FormatCard extends StatelessWidget {
               text: format.previewNote!,
             ),
           ],
-          if (format.shareNote != null) ...[
-            const SizedBox(height: 8),
-            _Note(
-              icon: Icons.autorenew,
-              // Conversion is the one thing that changes the user's bytes, so
-              // it gets the emphatic treatment rather than a footnote.
-              color: AppColors.ember,
-              text: format.shareNote!,
-            ),
-          ],
         ],
       ),
     );
@@ -266,24 +252,23 @@ class _PreviewBadge extends StatelessWidget {
 }
 
 class _Note extends StatelessWidget {
-  const _Note({required this.icon, required this.text, this.color});
+  const _Note({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? AppColors.textFaint;
+    const color = AppColors.textFaint;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 13, color: c),
+        Icon(icon, size: 13, color: color),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
-            style: AppText.caption(color: c, height: 1.45),
+            style: AppText.caption(color: color, height: 1.45),
           ),
         ),
       ],

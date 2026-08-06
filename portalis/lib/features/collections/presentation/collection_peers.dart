@@ -114,7 +114,11 @@ class _PeerLabel extends StatelessWidget {
   final VoidCallback? onForget;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final maxWidth = MediaQuery.sizeOf(context).width - 2 * kScreenGutter;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
           color: color == AppColors.ember
@@ -131,16 +135,25 @@ class _PeerLabel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (leading != null) ...[leading!, const SizedBox(width: 6)],
-            Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: monoLabel(size: 10.5, color: color, letterSpacing: 0),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: monoLabel(size: 10.5, color: color, letterSpacing: 0),
+              ),
             ),
             if (detail != null) ...[
               const SizedBox(width: 6),
-              Text(
-                detail!,
-                style: monoLabel(size: 9, color: AppColors.textDim, letterSpacing: 0),
+              Flexible(
+                child: Text(
+                  detail!,
+                  overflow: TextOverflow.ellipsis,
+                  style: monoLabel(
+                    size: 9,
+                    color: AppColors.textDim,
+                    letterSpacing: 0,
+                  ),
+                ),
               ),
             ],
             if (onForget != null)
@@ -155,5 +168,7 @@ class _PeerLabel extends StatelessWidget {
               ),
           ],
         ),
-      );
+      ),
+    );
+  }
 }

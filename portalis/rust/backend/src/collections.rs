@@ -91,10 +91,22 @@ pub struct CollectionInfo {
     /// remaining bytes are their business and not visible from here — so an
     /// upload "ETA" would be a fabricated number.
     pub eta_secs: Option<u64>,
-    /// Coarse status for display: `seeding` / `downloading` / `pending` /
-    /// `empty`. Derived here rather than in the UI so both kinds of
-    /// collection describe themselves the same way.
+    /// Coarse status for display, including `importing` and `import_failed`
+    /// while Rust owns a local publication job. Derived here rather than in
+    /// the UI so both kinds of collection describe themselves the same way.
     pub state: String,
+    /// Native-owned local publication work, while selected files are copied,
+    /// hashed into torrent pieces, and attached to the collection.
+    pub ingestion: Option<ImportInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportInfo {
+    pub stage: String,
+    pub progress: f64,
+    pub processed_bytes: u64,
+    pub total_bytes: u64,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -158,7 +170,7 @@ pub async fn create_collection(name: String) -> anyhow::Result<CollectionInfo> {
 /// bare torrent with no invite code and therefore nothing to share.
 pub async fn create_collection_with_media(
     name: String,
-    files: Vec<crate::torrent::NewFile>,
+    files: Vec<crate::torrent::SourceFile>,
 ) -> anyhow::Result<CollectionInfo> {
     native::create_collection_with_media(name, files).await
 }
@@ -178,7 +190,7 @@ pub async fn join_collection(
 pub async fn add_media_to_collection(
     collection_id: String,
     label: String,
-    files: Vec<crate::torrent::NewFile>,
+    files: Vec<crate::torrent::SourceFile>,
 ) -> anyhow::Result<CollectionInfo> {
     native::add_media_to_collection(collection_id, label, files).await
 }
@@ -207,6 +219,7 @@ pub(crate) async fn pursue_fetches() {
 /// drew, and an invite generated before that drew carried no address for
 /// anyone to reach.
 pub async fn start_engine() -> anyhow::Result<()> {
+    native::resume_imports();
     crate::collab_sync::ensure_listener().await.map(|_| ())
 }
 
@@ -286,18 +299,130 @@ pub async fn storage_breakdown() -> anyhow::Result<Vec<StorageEntry>> {
 
 mod native {
     use std::collections::{BTreeSet, HashMap, HashSet};
+    use std::sync::{Mutex, OnceLock};
 
     use crate::collab_store::{read_store, with_store};
     use crate::domain::collaborator::{Collaborator, Role};
     use crate::domain::collection::{Collection, CollectionId};
     use crate::domain::invite::InviteSecret;
     use crate::domain::manifest::{InfoHash, ManifestEntry};
+    use crate::import_store::ImportRecord;
     use crate::log::clog;
-    use crate::torrent::TorrentInfo;
+    use crate::torrent::{PublishProgress, SourceFile, TorrentInfo};
 
     use anyhow::Context;
 
-    use super::{CollaboratorInfo, CollectionInfo, CollectionKind, MediaInfo, StorageEntry};
+    use super::{
+        CollaboratorInfo, CollectionInfo, CollectionKind, ImportInfo, MediaInfo, StorageEntry,
+    };
+
+    struct ActiveImport {
+        label: String,
+        batch_name: String,
+        files: Vec<SourceFile>,
+        progress: PublishProgress,
+        running: bool,
+    }
+
+    static IMPORTS: OnceLock<Mutex<HashMap<String, ActiveImport>>> = OnceLock::new();
+    static IMPORTS_LOAD_ERROR: OnceLock<String> = OnceLock::new();
+
+    fn imports() -> &'static Mutex<HashMap<String, ActiveImport>> {
+        IMPORTS.get_or_init(|| Mutex::new(load_imports()))
+    }
+
+    fn load_imports() -> HashMap<String, ActiveImport> {
+        match crate::import_store::load() {
+            Ok(records) => records
+                .into_iter()
+                .map(|record| {
+                    let progress = PublishProgress::new(record.total_bytes);
+                    if let Some(error) = record.error {
+                        progress.fail(error);
+                    }
+                    (
+                        record.collection_id,
+                        ActiveImport {
+                            label: record.label,
+                            batch_name: record.batch_name,
+                            files: record.files,
+                            progress,
+                            running: false,
+                        },
+                    )
+                })
+                .collect(),
+            Err(error) => {
+                let message = format!("{error:#}");
+                IMPORTS_LOAD_ERROR.set(message.clone()).ok();
+                clog!("collections", "could not restore import jobs: {message}");
+                HashMap::new()
+            }
+        }
+    }
+
+    fn persist_imports(active: &HashMap<String, ActiveImport>) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            IMPORTS_LOAD_ERROR.get().is_none(),
+            "refusing to overwrite an unreadable imports.json"
+        );
+        crate::import_store::save(
+            active
+                .iter()
+                .map(|(collection_id, job)| {
+                    let state = job.progress.snapshot();
+                    ImportRecord {
+                        collection_id: collection_id.clone(),
+                        label: job.label.clone(),
+                        batch_name: job.batch_name.clone(),
+                        files: job.files.clone(),
+                        total_bytes: state.total_bytes,
+                        error: state.error,
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    fn import_info(collection_id: &str) -> Option<ImportInfo> {
+        let progress = imports()
+            .lock()
+            .unwrap()
+            .get(collection_id)
+            .map(|job| job.progress.clone())?;
+        let state = progress.snapshot();
+        let progress = match state.stage.as_str() {
+            "preparing" => 0.0,
+            "copying" if state.total_bytes > 0 => {
+                (state.processed_bytes as f64 / state.total_bytes as f64) * 0.65
+            }
+            "copying" => 0.65,
+            "hashing" => 0.75,
+            "seeding" => 0.95,
+            "failed" => 0.0,
+            _ => 0.0,
+        };
+        Some(ImportInfo {
+            stage: state.stage,
+            progress,
+            processed_bytes: state.processed_bytes,
+            total_bytes: state.total_bytes,
+            error: state.error,
+        })
+    }
+
+    fn cancel_import(collection_id: &str) {
+        let mut active = imports().lock().unwrap();
+        if let Some(job) = active.remove(collection_id) {
+            job.progress.cancel();
+            if let Err(error) = persist_imports(&active) {
+                clog!(
+                    "collections",
+                    "could not persist import cancellation: {error:#}"
+                );
+            }
+        }
+    }
 
     fn now_unix_ms() -> i64 {
         std::time::SystemTime::now()
@@ -623,6 +748,7 @@ mod native {
                     }
                 }
 
+                let ingestion = import_info(&collection.id.to_string());
                 out.push(CollectionInfo {
                     id: collection.id.to_string(),
                     name: collection.name.clone(),
@@ -637,10 +763,15 @@ mod native {
                     upload_mbps: totals.upload_mbps,
                     live_peers: totals.live_peers,
                     torrent_peers: torrent_peers.into_iter().collect(),
-                    state: state_for(&totals, pending_media, media.len(), connecting),
+                    state: match ingestion.as_ref() {
+                        Some(info) if info.error.is_some() => "import_failed".into(),
+                        Some(_) => "importing".into(),
+                        None => state_for(&totals, pending_media, media.len(), connecting),
+                    },
                     pending_media,
                     eta_secs: totals.eta_secs(),
                     media,
+                    ingestion,
                 });
             }
             Ok((out, claimed))
@@ -674,6 +805,7 @@ mod native {
                 pending_media: 0,
                 eta_secs: totals.eta_secs(),
                 media,
+                ingestion: None,
             });
         }
 
@@ -724,34 +856,25 @@ mod native {
 
     pub(super) async fn create_collection_with_media(
         name: String,
-        files: Vec<crate::torrent::NewFile>,
+        files: Vec<SourceFile>,
     ) -> anyhow::Result<CollectionInfo> {
         clog!(
             "collections",
             "create_collection_with_media: name={name:?} files={}",
             files.len()
         );
+        let total_bytes = crate::torrent::inspect_source_files(&files).await?;
         let created = create_collection(name.clone()).await?;
-        match add_media_to_collection(created.id.clone(), name, files).await {
-            Ok(info) => Ok(info),
-            Err(e) => {
-                // Roll back, or a failure here leaves a persisted empty
-                // collection behind on top of the error the user already
-                // sees — the same silent accumulation that produced piles of
-                // indistinguishable duplicates before.
+        if let Err(error) = start_import(created.id.clone(), name, files, total_bytes) {
+            if let Err(cleanup_error) = delete_collection(created.id.clone()).await {
                 clog!(
                     "collections",
-                    "create_collection_with_media: adding media failed ({e:#}), \
-                     removing the empty collection {}",
-                    created.id
+                    "could not roll back collection after import setup failed: {cleanup_error:#}"
                 );
-                if let Err(cleanup) = delete_collection(created.id).await {
-                    clog!("collections", "create_collection_with_media: rollback also \
-                         failed ({cleanup:#}) — an empty collection may remain");
-                }
-                Err(e)
             }
+            return Err(error);
         }
+        reload(&created.id).await
     }
 
     pub(super) async fn join_collection(
@@ -843,51 +966,212 @@ mod native {
     pub(super) async fn add_media_to_collection(
         collection_id: String,
         label: String,
-        files: Vec<crate::torrent::NewFile>,
+        files: Vec<SourceFile>,
     ) -> anyhow::Result<CollectionInfo> {
         clog!(
             "collections",
             "add_media_to_collection: id={collection_id} label={label:?} files={}",
             files.len()
         );
+        let id = CollectionId::from_string(&collection_id)?;
+        read_store(|collections| {
+            anyhow::ensure!(
+                collections.iter().any(|collection| collection.id == id),
+                "no such collection"
+            );
+            Ok(())
+        })?;
+        let total_bytes = crate::torrent::inspect_source_files(&files).await?;
+        start_import(collection_id.clone(), label, files, total_bytes)?;
+        reload(&collection_id).await
+    }
+
+    fn start_import(
+        collection_id: String,
+        label: String,
+        files: Vec<SourceFile>,
+        total_bytes: u64,
+    ) -> anyhow::Result<()> {
+        let progress = PublishProgress::new(total_bytes);
+        let batch_name = format!("{label}-{}", uuid::Uuid::new_v4());
+        {
+            let mut active = imports().lock().unwrap();
+            if let Some(existing) = active.get(&collection_id) {
+                anyhow::ensure!(
+                    existing.progress.snapshot().error.is_some(),
+                    "this collection is already importing files"
+                );
+            }
+            active.insert(
+                collection_id.clone(),
+                ActiveImport {
+                    label: label.clone(),
+                    batch_name: batch_name.clone(),
+                    files: files.clone(),
+                    progress: progress.clone(),
+                    running: true,
+                },
+            );
+            if let Err(error) = persist_imports(&active) {
+                active.remove(&collection_id);
+                return Err(error.context("persisting import before it starts"));
+            }
+        }
+
+        spawn_import(collection_id, label, batch_name, files, progress);
+        Ok(())
+    }
+
+    pub(super) fn resume_imports() {
+        let resumable = {
+            let mut active = imports().lock().unwrap();
+            active
+                .iter_mut()
+                .filter_map(|(collection_id, job)| {
+                    if job.running || job.progress.snapshot().error.is_some() {
+                        return None;
+                    }
+                    job.running = true;
+                    Some((
+                        collection_id.clone(),
+                        job.label.clone(),
+                        job.batch_name.clone(),
+                        job.files.clone(),
+                        job.progress.clone(),
+                    ))
+                })
+                .collect::<Vec<_>>()
+        };
+        for (collection_id, label, batch_name, files, progress) in resumable {
+            clog!(
+                "collections",
+                "resuming interrupted import for {collection_id}"
+            );
+            spawn_import(collection_id, label, batch_name, files, progress);
+        }
+    }
+
+    fn spawn_import(
+        collection_id: String,
+        label: String,
+        batch_name: String,
+        files: Vec<SourceFile>,
+        progress: PublishProgress,
+    ) {
+        tokio::spawn(async move {
+            let result = publish_and_attach(
+                collection_id.clone(),
+                label,
+                batch_name,
+                files,
+                progress.clone(),
+            )
+            .await;
+            match result {
+                Ok(()) => {
+                    let mut active = imports().lock().unwrap();
+                    active.remove(&collection_id);
+                    if let Err(error) = persist_imports(&active) {
+                        clog!(
+                            "collections",
+                            "could not persist completed import: {error:#}"
+                        );
+                    }
+                    crate::reconciliation::request_reconciliation();
+                }
+                Err(error) => {
+                    clog!(
+                        "collections",
+                        "import failed for {collection_id}: {error:#}"
+                    );
+                    progress.fail(format!("{error:#}"));
+                    let mut active = imports().lock().unwrap();
+                    if let Some(job) = active.get_mut(&collection_id) {
+                        job.running = false;
+                    }
+                    if let Err(save_error) = persist_imports(&active) {
+                        clog!(
+                            "collections",
+                            "could not persist failed import: {save_error:#}"
+                        );
+                    }
+                }
+            }
+        });
+    }
+
+    async fn publish_and_attach(
+        collection_id: String,
+        label: String,
+        batch_name: String,
+        files: Vec<SourceFile>,
+        progress: PublishProgress,
+    ) -> anyhow::Result<()> {
         let identity = crate::device::current_identity()?;
         let id = CollectionId::from_string(&collection_id)?;
 
-        // A fresh torrent per batch — its own directory, own info-hash —
-        // since a torrent's piece layout is fixed forever at creation (see
-        // the backend README). The random suffix keeps each batch's directory
-        // distinct even when two batches share a label.
-        let batch_dir_name = format!("{label}-{}", uuid::Uuid::new_v4());
-        let torrent_info = crate::substrate::current().publish(batch_dir_name, files).await?;
+        // A fresh torrent per batch: its own directory and info-hash. The
+        // persisted name is reused after restart so interrupted work resumes
+        // in the same staging directory instead of orphaning another copy.
+        let torrent_info = crate::substrate::current()
+            .publish(batch_name, files, progress.clone())
+            .await?;
         clog!(
             "collections",
             "add_media_to_collection: seeded torrent info_hash={}",
             torrent_info.info_hash
         );
-        let info_hash_bytes: [u8; 20] = hex::decode(&torrent_info.info_hash)?
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("torrent info hash is not 20 bytes"))?;
-
-        with_store(|collections| {
-            let collection = collections
-                .iter_mut()
-                .find(|c| c.id == id)
-                .ok_or_else(|| anyhow::anyhow!("no such collection"))?;
-            let entry = ManifestEntry::new_signed(
-                InfoHash::from_bytes(info_hash_bytes),
-                label,
-                None,
-                &identity,
-                now_unix_ms(),
-            );
-            anyhow::ensure!(
-                collection.add_manifest_entry(entry),
-                "failed to add manifest entry (should never happen for a freshly-signed entry)"
-            );
-            Ok(())
-        })?;
-        crate::reconciliation::request_reconciliation();
-        reload(&collection_id).await
+        let attach_result = (|| -> anyhow::Result<()> {
+            progress.ensure_active()?;
+            let info_hash_bytes: [u8; 20] = hex::decode(&torrent_info.info_hash)?
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("torrent info hash is not 20 bytes"))?;
+            let info_hash = InfoHash::from_bytes(info_hash_bytes);
+            with_store(|collections| {
+                let collection = collections
+                    .iter_mut()
+                    .find(|c| c.id == id)
+                    .ok_or_else(|| anyhow::anyhow!("no such collection"))?;
+                if collection
+                    .manifest()
+                    .entries()
+                    .any(|entry| entry.info_hash == info_hash)
+                {
+                    // The manifest write won the race with a process exit but
+                    // imports.json did not. Treat replay as completion rather
+                    // than adding the same immutable torrent twice.
+                    return Ok(());
+                }
+                let entry = ManifestEntry::new_signed(
+                    info_hash,
+                    label,
+                    None,
+                    &identity,
+                    now_unix_ms(),
+                );
+                anyhow::ensure!(
+                    collection.add_manifest_entry(entry),
+                    "failed to add manifest entry (should never happen for a freshly-signed entry)"
+                );
+                Ok(())
+            })
+        })();
+        if let Err(error) = attach_result {
+            // Publishing succeeded but the manifest did not. Do not leave a
+            // live, unclaimed torrent masquerading as a separate collection.
+            if let Err(release_error) = crate::substrate::current()
+                .release(&torrent_info.info_hash)
+                .await
+            {
+                clog!(
+                    "collections",
+                    "could not release orphaned import {}: {release_error:#}",
+                    torrent_info.info_hash
+                );
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Info-hashes whose `add_torrent` is still running.
@@ -1105,6 +1389,7 @@ mod native {
 
     pub(super) async fn delete_collection(collection_id: String) -> anyhow::Result<()> {
         clog!("collections", "delete_collection: id={collection_id}");
+        cancel_import(&collection_id);
         // A shared collection's id is a UUID; a plain torrent's is its
         // info-hash. Which one it parses as tells us where it lives.
         if let Ok(id) = CollectionId::from_string(&collection_id) {

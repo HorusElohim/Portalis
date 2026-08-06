@@ -1,6 +1,6 @@
 [package]
 name = "backend"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 
 [lib]
@@ -52,6 +52,9 @@ librqbit-upnp = "1"
 # compilation. Needed because inferring "our LAN address" from the default
 # route is wrong whenever a VPN owns that route — see collab_sync::lan_ips.
 network-interface = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }
 
 # The domain layer's randomness (device keygen, invite secrets, collection
 # ids) has no OS RNG to call into on wasm32 — route it through the browser's

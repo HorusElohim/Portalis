@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../app/app_controllers.dart';
 import '../design/design.dart';
+import '../features/collections/domain/picked_file.dart';
 import '../services/navigation.dart';
-import '../features/collections/presentation/collection_share.dart';
+import '../theme.dart';
 import 'home.dart';
 import 'people.dart';
 import 'settings.dart';
@@ -78,7 +79,7 @@ class AppBottomNav extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
 
-  static const items = [
+  static const items = <({IconData? icon, String label})>[
     (icon: null, label: 'Home'),
     (icon: Icons.person_outline, label: 'User'),
     (icon: Icons.people_outline, label: 'People'),

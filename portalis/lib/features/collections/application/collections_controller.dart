@@ -194,8 +194,8 @@ class CollectionsController extends ChangeNotifier {
   Future<void> addFromMagnet(String magnetOrHash) =>
       _refreshAfter(() => _repository.addTorrentFromMagnet(magnetOrHash));
 
-  Future<void> addFromFileBytes(Uint8List bytes) =>
-      _refreshAfter(() => _repository.addTorrentFromBytes(bytes));
+  Future<void> addFromFilePath(String path) =>
+      _refreshAfter(() => _repository.addTorrentFromPath(path));
 
   /// Test-only state injection. Production tests should prefer a repository
   /// fake and call [refresh], but this keeps the existing widget suite stable
@@ -346,7 +346,9 @@ class CollectionsController extends ChangeNotifier {
 
   void _retuneInterval() {
     if (_paused || _timer == null) return;
-    final wanted = liveRate > 0 ? _activeInterval : _idleInterval;
+    final wanted = _collections.any((collection) => collection.isMoving)
+        ? _activeInterval
+        : _idleInterval;
     if (wanted != _interval) _schedule(wanted);
   }
 }

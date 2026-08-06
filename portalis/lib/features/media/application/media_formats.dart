@@ -1,8 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
-import '../data/heic_converter.dart';
 import '../../../theme.dart';
 
 /// What the app can actually do with a file of a given type, in the app.
@@ -27,8 +24,8 @@ enum PreviewSupport {
 /// A single file type the app knows how to handle.
 ///
 /// Everything the UI needs to present a file is declared here once —
-/// classification, icon, accent, what preview is possible, and any transform
-/// applied when sharing. Nothing downstream re-derives these from the
+/// classification, icon, accent, and what preview is possible. Nothing
+/// downstream re-derives these from the
 /// extension, so a format behaves identically in the grid, the viewer, the
 /// details panel and the formats reference.
 @immutable
@@ -40,8 +37,6 @@ class MediaFormat {
     required this.preview,
     this.previewNote,
     this.icon,
-    this.shareTransform,
-    this.shareNote,
   });
 
   /// Lower-case, without the dot. The first is treated as canonical.
@@ -61,13 +56,6 @@ class MediaFormat {
   /// Overrides the kind's default icon.
   final IconData? icon;
 
-  /// Applied to the bytes before seeding. `null` means the file is shared
-  /// byte-for-byte, which is the default and the honest one.
-  final ShareTransform? shareTransform;
-
-  /// What [shareTransform] does, in the user's terms.
-  final String? shareNote;
-
   String get canonicalExtension => extensions.first;
 
   IconData get effectiveIcon => icon ?? iconFor(kind);
@@ -83,16 +71,7 @@ class MediaFormat {
         MediaKind.archive => AppColors.hues[0],
         MediaKind.other => AppColors.textDim,
       };
-
-  bool get isTransformedOnShare => shareTransform != null;
 }
-
-/// Rewrites a file on its way into a collection. Returns the (possibly
-/// renamed) file that will actually be seeded.
-typedef ShareTransform = Future<({String name, Uint8List bytes})> Function({
-  required String name,
-  required Uint8List bytes,
-});
 
 /// The coarse bucket a format belongs to. Drives grouping and the default
 /// icon; formats can still override individually.
@@ -263,17 +242,12 @@ final List<MediaFormat> _builtIns = [
     kind: MediaKind.image,
     preview: PreviewSupport.image,
   ),
-  MediaFormat(
-    extensions: const ['heic', 'heif'],
+  const MediaFormat(
+    extensions: ['heic', 'heif'],
     label: 'HEIC photo',
     kind: MediaKind.image,
-    // Converted on the way in, so what actually lands in the collection is a
-    // JPEG and previews like one. The original is never what gets seeded.
-    preview: PreviewSupport.image,
-    shareTransform: heicToJpeg,
-    shareNote: 'Converted to JPEG when shared — Flutter cannot decode HEIC, '
-        'so an untouched one would never preview for anybody, including on '
-        'the sending device.',
+    preview: PreviewSupport.externalOnly,
+    previewNote: 'HEIC is preserved byte-for-byte and opened by your system.',
   ),
 
   // --- Video --------------------------------------------------------------
@@ -409,18 +383,3 @@ final List<MediaFormat> _builtIns = [
     previewNote: 'Archives are shared as-is and opened by your system.',
   ),
 ];
-
-/// Applies whatever the registry says should happen to a file on its way
-/// into a collection, and nothing otherwise.
-///
-/// This is the whole share-time transform pipeline: one lookup, one optional
-/// call. Adding a conversion for a new type means declaring it on that type's
-/// [MediaFormat] — no call site changes, and no second list to keep in step.
-Future<({String name, Uint8List bytes})> normalizeForSharing({
-  required String name,
-  required Uint8List bytes,
-}) async {
-  final transform = MediaFormats.resolve(name).shareTransform;
-  if (transform == null) return (name: name, bytes: bytes);
-  return transform(name: name, bytes: bytes);
-}

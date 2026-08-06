@@ -7,20 +7,19 @@ class EfficiencyBenchmark {
 
   static const _iterations = 180000;
 
-  Future<EfficiencyBenchmarkResult> run() async {
+  Future<EfficiencyBenchmarkResult> run() {
     final stopwatch = Stopwatch()..start();
     var value = 0x12345678;
     for (var index = 0; index < _iterations; index++) {
       value = (value * 1664525 + 1013904223) & 0x7fffffff;
-      if (index % 12000 == 0) {
-        await Future<void>.delayed(Duration.zero);
-      }
     }
     stopwatch.stop();
-    return EfficiencyBenchmarkResult(
-      iterations: _iterations,
-      elapsed: stopwatch.elapsed,
-      checksum: value,
+    return Future.value(
+      EfficiencyBenchmarkResult(
+        iterations: _iterations,
+        elapsed: stopwatch.elapsed,
+        checksum: value,
+      ),
     );
   }
 }

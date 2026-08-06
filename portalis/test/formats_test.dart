@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:portalis/features/media/application/media_formats.dart';
@@ -83,17 +81,6 @@ void main() {
       }
     });
 
-    test('every format that rewrites bytes on share says so', () {
-      // Converting a user's file is the one thing that must never be
-      // silent.
-      for (final f in MediaFormats.all) {
-        if (f.isTransformedOnShare) {
-          expect(f.shareNote, isNotNull,
-              reason: '${f.label} converts on share without saying so');
-        }
-      }
-    });
-
     test('no extension is claimed by two formats', () {
       final seen = <String, String>{};
       for (final f in MediaFormats.all) {
@@ -115,46 +102,13 @@ void main() {
     });
   });
 
-  group('share transforms', () {
-    test('a file with no transform is passed through untouched', () async {
-      final bytes = Uint8List.fromList([1, 2, 3]);
-
-      final result = await normalizeForSharing(name: 'a.png', bytes: bytes);
-
-      expect(result.name, 'a.png');
-      expect(identical(result.bytes, bytes), isTrue,
-          reason: 'untransformed files must not be copied or re-encoded');
-    });
-
-    test('the registry decides, not the call site', () async {
-      // Registering a transform is enough to make it run — no call site
-      // knows about any specific format.
-      MediaFormats.register(MediaFormat(
-        extensions: const ['weird'],
-        label: 'Weird',
-        kind: MediaKind.other,
-        preview: PreviewSupport.externalOnly,
-        previewNote: 'test',
-        shareNote: 'renamed on share',
-        shareTransform: ({required name, required bytes}) async =>
-            (name: 'converted.txt', bytes: Uint8List.fromList([9])),
-      ));
-
-      final result =
-          await normalizeForSharing(name: 'x.weird', bytes: Uint8List(0));
-
-      expect(result.name, 'converted.txt');
-      expect(result.bytes, [9]);
-    });
-
-    test('HEIC is registered as converted, and says why', () {
+  group('sharing', () {
+    test('HEIC originals are preserved and delegated to the system viewer', () {
       final heic = MediaFormats.resolve('IMG_1234.HEIC');
 
-      expect(heic.isTransformedOnShare, isTrue);
-      expect(heic.shareNote, contains('JPEG'));
-      // It previews as an image *because* it is converted on the way in —
-      // the file that lands in the collection is a JPEG.
-      expect(heic.preview, PreviewSupport.image);
+      expect(heic.kind, MediaKind.image);
+      expect(heic.preview, PreviewSupport.externalOnly);
+      expect(heic.previewNote, isNotEmpty);
     });
   });
 

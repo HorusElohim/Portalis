@@ -1,18 +1,16 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+// image_picker also exports a (legacy, deprecated) PickedFile — this
+// screen's own is the one everywhere else in the app means by that name.
+import 'package:image_picker/image_picker.dart' hide PickedFile;
 
 import '../../../app/app_controllers.dart';
 import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../../media/application/media_formats.dart';
-import '../domain/share_payload_limits.dart';
-
-/// One locally selected file, ready to become a shared manifest entry.
-typedef PickedFile = ({String name, Uint8List bytes});
+import '../domain/picked_file.dart';
 
 /// The registry already names every type it knows, so this reads the label
 /// off the format rather than maintaining a second mapping that could drift.
@@ -50,12 +48,7 @@ class _ShareScreenState extends State<ShareScreen> {
     super.initState();
     final initial = widget.initialFiles;
     if (initial != null && initial.isNotEmpty) {
-      final error = _payloadError(initial);
-      if (error == null) {
-        _files = initial;
-      } else {
-        _error = error;
-      }
+      _files = initial;
     }
   }
 
@@ -68,54 +61,41 @@ class _ShareScreenState extends State<ShareScreen> {
   void _add(Iterable<PickedFile> picked) {
     final existing = _files.map((f) => f.name).toSet();
     final additions = picked.where((f) => !existing.contains(f.name)).toList();
-    final candidate = [..._files, ...additions];
-    final error = _payloadError(candidate);
-    if (error != null) {
-      _toast(error, severity: ToastSeverity.error);
-      return;
-    }
     setState(() {
       _error = null;
-      _files = candidate;
+      _files = [..._files, ...additions];
     });
   }
 
-  String? _payloadError(Iterable<PickedFile> files) {
-    var totalBytes = 0;
-    var largestFileBytes = 0;
-    var fileCount = 0;
-    for (final file in files) {
-      fileCount++;
-      totalBytes += file.bytes.length;
-      if (file.bytes.length > largestFileBytes) {
-        largestFileBytes = file.bytes.length;
-      }
-    }
-    return SharePayloadLimits.error(
-      fileCount: fileCount,
-      totalBytes: totalBytes,
-      largestFileBytes: largestFileBytes,
-    );
-  }
-
   Future<void> _pickPhotos() async {
-    final xfiles = await ImagePicker().pickMultipleMedia();
-    if (xfiles.isEmpty) return;
-    _add(await Future.wait(
-      xfiles.map((f) async => (name: f.name, bytes: await f.readAsBytes())),
-    ));
+    try {
+      final xfiles = await ImagePicker().pickMultipleMedia();
+      if (xfiles.isEmpty) return;
+      _add(await Future.wait(xfiles.map((f) => pickedFileFrom(
+            name: f.name,
+            nativePath: f.path,
+          ))));
+    } catch (error) {
+      _toast('Couldn\'t read those files: $error',
+          severity: ToastSeverity.error);
+    }
   }
 
   Future<void> _pickFiles() async {
     final result = await FilePicker.pickFiles(
-      withData: true,
+      withData: false,
       allowMultiple: true,
       type: FileType.any,
     );
     if (result == null) return;
-    _add(result.files
-        .where((f) => f.bytes != null)
-        .map((f) => (name: f.name, bytes: f.bytes!)));
+    try {
+      _add(await Future.wait(result.files.map((f) => pickedFileFrom(
+            name: f.name,
+            nativePath: f.path,
+          ))));
+    } catch (error) {
+      _toast('$error', severity: ToastSeverity.error);
+    }
   }
 
   Future<void> _pickFolder() async {
@@ -134,7 +114,10 @@ class _ShareScreenState extends State<ShareScreen> {
       final picked = <PickedFile>[];
       for (final file in entries) {
         final basename = file.path.split(Platform.pathSeparator).last;
-        picked.add((name: basename, bytes: await file.readAsBytes()));
+        picked.add(await pickedFileFrom(
+          name: basename,
+          nativePath: file.path,
+        ));
       }
       _add(picked);
     } catch (e) {
@@ -160,9 +143,8 @@ class _ShareScreenState extends State<ShareScreen> {
       setState(() => _error = 'Name the collection before creating it');
       return;
     }
-    final payloadError = _payloadError(_files);
-    if (payloadError != null) {
-      setState(() => _error = payloadError);
+    if (_files.isEmpty) {
+      setState(() => _error = 'Add at least one file');
       return;
     }
     setState(() {
@@ -170,16 +152,11 @@ class _ShareScreenState extends State<ShareScreen> {
       _error = null;
     });
     try {
-      final normalized = await Future.wait(
-        _files.map((f) => normalizeForSharing(name: f.name, bytes: f.bytes)),
-      );
-      // Creates a *shared* collection, not a bare torrent: what you share is
-      // now invitable and can grow later.
-      await AppControllers.collections.createWithMedia(name, normalized);
+      await AppControllers.collections.createWithMedia(name, _files);
       if (mounted) {
         FocusScope.of(context).unfocus();
         _close();
-        _toastGlobal('"$name" is live — seeding from this device');
+        _toastGlobal('"$name" is preparing in the background');
       }
     } catch (e) {
       setState(() => _error = 'Couldn\'t create collection: $e');
@@ -195,7 +172,7 @@ class _ShareScreenState extends State<ShareScreen> {
     showToast(context, msg, severity: ToastSeverity.success);
   }
 
-  int get _totalBytes => _files.fold(0, (sum, f) => sum + f.bytes.length);
+  int get _totalBytes => _files.fold(0, (sum, f) => sum + f.lengthBytes);
 
   @override
   Widget build(BuildContext context) {
@@ -392,7 +369,7 @@ class _ShareScreenState extends State<ShareScreen> {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  '${_kindLabel(f.name)} · ${formatBytes(f.bytes.length)}',
+                  '${_kindLabel(f.name)} · ${formatBytes(f.lengthBytes)}',
                   style: AppText.caption(color: AppColors.textDim),
                 ),
               ],

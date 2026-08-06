@@ -10,23 +10,60 @@
 
 <!-- User-visible behavior, UX, or architecture changes go here. -->
 
+### Fixed
+
+<!-- Bug fixes and regressions go here. -->
+
+### Engineering
+
+<!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+## Portalis 1.0.5 / backend 0.1.4 — 2026-08-06
+
+### Added
+
+- Added live native import progress for collection creation and media batches,
+  covering bounded copying, torrent hashing, seed startup, and visible failures.
+- Added durable Rust import descriptors so an interrupted large share resumes
+  from the same staging batch after Portalis restarts instead of becoming an
+  empty collection with lost progress state.
+
+### Changed
+
 - Unified compact and wide window navigation under one adaptive shell state,
   preserving open collections and add flows while resizing on Windows.
 - Tightened collection previews around a fuller first media row, grouped
   Invite and Add media with lifecycle actions, removed manual Sync from the
   collection view, and added a compact media-details layout with refresh.
+- Moved collection publication to Rust-owned native file paths: Flutter now
+  sends lightweight descriptors while Rust validates, copies, hashes, and
+  seeds files without loading their contents into Dart or the FFI bridge.
+- Made each published batch an immutable Portalis-owned snapshot in the
+  configured download folder, preventing later source edits or deletion from
+  corrupting pieces already announced to the swarm.
+- Preserved selected media byte-for-byte, including HEIC originals, instead of
+  rewriting files in the frontend before sharing.
 
 ### Fixed
 
-<!-- Bug fixes and regressions go here. -->
-
-- Prevented the Create & share action from sending an oversized one-shot FFI
-  payload that could panic the native bridge with a capacity overflow; the
-  share screen now reports the limit clearly.
+- Fixed narrow mobile collection peer chips overflowing and prevented the
+  Settings efficiency benchmark from leaving pending test timers.
+- Removed the one-shot byte payload that could overflow the native bridge when
+  creating a large share; share size is now bounded only by filesystem,
+  platform, and BitTorrent implementation constraints.
+- Made atomic state replacement work when the destination JSON already exists
+  on Windows, including repeated import-progress persistence.
 
 ### Engineering
 
-<!-- Tests, tooling, refactors, and maintenance notes go here. -->
+- Removed the frontend HEIC conversion dependency and obsolete payload-limit
+  tests now that ingestion has one Rust-owned path.
+- Regenerated Flutter-Rust Bridge bindings around `SourceFile` and native
+  `ImportInfo`, and made the Windows helper discover Cargo-installed codegen
+  from Git Bash.
+- Added coverage for large persisted import descriptors, portable source-name
+  validation, active-versus-failed polling, atomic state replacement, and the
+  unified responsive navigation contract.
 
 ## Portalis 1.0.4 / backend 0.1.3 — 2026-08-06
 

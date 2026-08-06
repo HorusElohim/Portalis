@@ -1,8 +1,7 @@
-import 'dart:typed_data';
-
 import '../../../bridge_generated/collections.dart' as bridge;
 import '../../../bridge_generated/torrent.dart' as torrent_bridge;
 import '../domain/collection.dart';
+import '../domain/picked_file.dart';
 import 'collection_mapper.dart';
 
 /// The collection operations the application needs from its native backend.
@@ -30,12 +29,12 @@ abstract interface class CollectionsRepository {
   Future<void> deleteFiles(String collectionId);
   Future<String> syncAddress();
   Future<void> addTorrentFromMagnet(String magnetOrHash);
-  Future<void> addTorrentFromBytes(Uint8List bytes);
+  Future<void> addTorrentFromPath(String path);
 }
 
-/// Bytes selected by the user before they are seeded. This stays at the
-/// application boundary; a collection snapshot never contains source bytes.
-typedef CollectionFiles = List<({String name, Uint8List bytes})>;
+/// Files selected by the user before they are seeded. This stays at the
+/// application boundary; a collection snapshot never contains source data.
+typedef CollectionFiles = List<PickedFile>;
 
 /// Production adapter. No widget, controller, or domain model imports the
 /// generated bridge directly; any bridge schema change is contained here and
@@ -133,10 +132,13 @@ class FrbCollectionsRepository implements CollectionsRepository {
       torrent_bridge.addTorrentFromMagnet(magnetOrHash: magnetOrHash);
 
   @override
-  Future<void> addTorrentFromBytes(Uint8List bytes) =>
-      torrent_bridge.addTorrentFromFileBytes(bytes: bytes);
+  Future<void> addTorrentFromPath(String path) =>
+      torrent_bridge.addTorrentFromFilePath(path: path);
 
-  List<torrent_bridge.NewFile> _files(CollectionFiles files) => files
-      .map((file) => torrent_bridge.NewFile(name: file.name, bytes: file.bytes))
+  List<torrent_bridge.SourceFile> _files(CollectionFiles files) => files
+      .map((file) => torrent_bridge.SourceFile(
+            name: file.name,
+            path: file.path,
+          ))
       .toList();
 }

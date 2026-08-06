@@ -11,6 +11,8 @@ mod vault;
 // Private and NOT part of tool/frb_build.sh's --rust-input, same reason as
 // `domain` — see collab_store.rs's own module doc.
 mod collab_store;
+/// Durable descriptors for native publication jobs interrupted by shutdown.
+mod import_store;
 // Real sockets — native targets only, like librqbit.
 mod collab_sync;
 /// Reconciles collection state with known peers while the app is active.

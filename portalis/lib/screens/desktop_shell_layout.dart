@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/design.dart';
+import '../theme.dart';
 import 'desktop_pane.dart';
 import 'desktop_top_bar.dart';
 

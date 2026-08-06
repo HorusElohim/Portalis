@@ -35,6 +35,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EngineSettings dco_decode_box_autoadd_engine_settings(dynamic raw);
 
   @protected
+  ImportInfo dco_decode_box_autoadd_import_info(dynamic raw);
+
+  @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
@@ -62,6 +65,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  ImportInfo dco_decode_import_info(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -74,13 +80,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<MediaInfo> dco_decode_list_media_info(dynamic raw);
 
   @protected
-  List<NewFile> dco_decode_list_new_file(dynamic raw);
-
-  @protected
-  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
-
-  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<SourceFile> dco_decode_list_source_file(dynamic raw);
 
   @protected
   List<StorageEntry> dco_decode_list_storage_entry(dynamic raw);
@@ -95,16 +98,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaInfo dco_decode_media_info(dynamic raw);
 
   @protected
-  NewFile dco_decode_new_file(dynamic raw);
+  String? dco_decode_opt_String(dynamic raw);
 
   @protected
-  String? dco_decode_opt_String(dynamic raw);
+  ImportInfo? dco_decode_opt_box_autoadd_import_info(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  SourceFile dco_decode_source_file(dynamic raw);
 
   @protected
   StorageEntry dco_decode_storage_entry(dynamic raw);
@@ -147,6 +153,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  ImportInfo sse_decode_box_autoadd_import_info(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
@@ -175,6 +184,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  ImportInfo sse_decode_import_info(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
@@ -189,13 +201,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<MediaInfo> sse_decode_list_media_info(SseDeserializer deserializer);
 
   @protected
-  List<NewFile> sse_decode_list_new_file(SseDeserializer deserializer);
-
-  @protected
-  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
-
-  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<SourceFile> sse_decode_list_source_file(SseDeserializer deserializer);
 
   @protected
   List<StorageEntry> sse_decode_list_storage_entry(
@@ -211,16 +220,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaInfo sse_decode_media_info(SseDeserializer deserializer);
 
   @protected
-  NewFile sse_decode_new_file(SseDeserializer deserializer);
+  String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
-  String? sse_decode_opt_String(SseDeserializer deserializer);
+  ImportInfo? sse_decode_opt_box_autoadd_import_info(
+      SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  SourceFile sse_decode_source_file(SseDeserializer deserializer);
 
   @protected
   StorageEntry sse_decode_storage_entry(SseDeserializer deserializer);
@@ -264,6 +277,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       EngineSettings self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_import_info(
+      ImportInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
@@ -296,6 +313,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_import_info(ImportInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
@@ -311,14 +331,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<MediaInfo> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_new_file(List<NewFile> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_source_file(
+      List<SourceFile> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_storage_entry(
@@ -336,16 +354,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_media_info(MediaInfo self, SseSerializer serializer);
 
   @protected
-  void sse_encode_new_file(NewFile self, SseSerializer serializer);
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_String(String? self, SseSerializer serializer);
+  void sse_encode_opt_box_autoadd_import_info(
+      ImportInfo? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_source_file(SourceFile self, SseSerializer serializer);
 
   @protected
   void sse_encode_storage_entry(StorageEntry self, SseSerializer serializer);

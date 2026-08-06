@@ -116,18 +116,22 @@ class _CommandBarState extends State<PortalisCommandBar> {
   /// does not otherwise absorb.
   Future<void> _pickTorrentFile() async {
     final result = await FilePicker.pickFiles(
-      withData: true,
+      withData: false,
       type: FileType.custom,
       allowedExtensions: ['torrent'],
     );
-    final bytes = result?.files.single.bytes;
-    if (bytes == null) return;
+    final path = result?.files.single.path;
+    if (result == null) return;
+    if (path == null || path.isEmpty) {
+      setState(() => _error = 'This platform did not provide a readable file path');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await AppControllers.collections.addFromFileBytes(bytes);
+      await AppControllers.collections.addFromFilePath(path);
       if (!mounted) return;
       showToast(context, 'Torrent added — joining swarm',
           severity: ToastSeverity.success);

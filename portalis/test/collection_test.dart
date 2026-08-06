@@ -4,6 +4,29 @@ void main() {
   tearDown(resetTestState);
 
 group('collection', () {
+    test('only active native imports keep real-time polling enabled', () {
+      final active = buildCollection(
+        ingestion: const CollectionImport(
+          stage: 'copying',
+          progress: 0.4,
+          processedBytes: 400,
+          totalBytes: 1000,
+        ),
+      );
+      final failed = buildCollection(
+        ingestion: const CollectionImport(
+          stage: 'failed',
+          progress: 0,
+          processedBytes: 400,
+          totalBytes: 1000,
+          error: 'source disappeared',
+        ),
+      );
+
+      expect(active.isMoving, isTrue);
+      expect(failed.isMoving, isFalse);
+    });
+
     testWidgets('a shared collection shows its own invite code', (tester) async {
       // The invite code travels *with* the collection, so showing it needs no
       // round trip â€” this used to mint a throwaway collection on every tap.
