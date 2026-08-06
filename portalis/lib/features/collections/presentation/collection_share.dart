@@ -11,6 +11,7 @@ import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../../media/application/media_formats.dart';
 import '../domain/picked_file.dart';
+import '../platform/no_copy_source_picker.dart';
 import '../platform/source_access.dart';
 
 /// The registry already names every type it knows, so this reads the label
@@ -70,7 +71,7 @@ class _ShareScreenState extends State<ShareScreen> {
 
   Future<void> _pickPhotos() async {
     if (!supportsDirectPathSources) {
-      _toast(directPathSourcesUnavailableMessage);
+      _toast(noCopySourceUnavailableMessage);
       return;
     }
     try {
@@ -87,8 +88,17 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 
   Future<void> _pickFiles() async {
+    if (supportsNativeFilesSources) {
+      try {
+        _add(await NoCopySourcePicker.pickFiles());
+      } catch (error) {
+        _toast('Couldn\'t access those files: $error',
+            severity: ToastSeverity.error);
+      }
+      return;
+    }
     if (!supportsDirectPathSources) {
-      _toast(directPathSourcesUnavailableMessage);
+      _toast(noCopySourceUnavailableMessage);
       return;
     }
     final result = await FilePicker.pickFiles(
@@ -109,7 +119,7 @@ class _ShareScreenState extends State<ShareScreen> {
 
   Future<void> _pickFolder() async {
     if (!supportsDirectPathSources) {
-      _toast(directPathSourcesUnavailableMessage);
+      _toast(noCopySourceUnavailableMessage);
       return;
     }
     try {
@@ -151,8 +161,8 @@ class _ShareScreenState extends State<ShareScreen> {
       widget.onClose != null ? widget.onClose!() : Navigator.of(context).pop();
 
   Future<void> _createShare() async {
-    if (!supportsDirectPathSources) {
-      setState(() => _error = directPathSourcesUnavailableMessage);
+    if (!supportsNoCopySources) {
+      setState(() => _error = noCopySourceUnavailableMessage);
       return;
     }
     final name = _nameController.text.trim();
@@ -206,8 +216,10 @@ class _ShareScreenState extends State<ShareScreen> {
       subtitle: Text(
         supportsDirectPathSources
             ? 'Files stay on this device — collaborators pull them from you.'
-            : 'Gallery sharing will use the native asset directly. Portalis '
-                'will never create a temporary copy.',
+            : supportsNativeFilesSources
+                ? 'Choose files in Files. Portalis keeps the original location '
+                    'and never imports a second copy.'
+                : noCopySourceUnavailableMessage,
       ),
       onBack: _close,
       body: SingleChildScrollView(
@@ -245,33 +257,42 @@ class _ShareScreenState extends State<ShareScreen> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: _PickerButton(
-                    label: 'Photos',
-                    icon: Icons.photo_camera_outlined,
-                    onTap: _busy ? null : _pickPhotos,
+            if (supportsDirectPathSources)
+              Row(
+                children: [
+                  Expanded(
+                    child: _PickerButton(
+                      label: 'Photos',
+                      icon: Icons.photo_camera_outlined,
+                      onTap: _busy ? null : _pickPhotos,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: _PickerButton(
-                    label: 'Files',
-                    icon: Icons.description_outlined,
-                    onTap: _busy ? null : _pickFiles,
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: _PickerButton(
+                      label: 'Files',
+                      icon: Icons.description_outlined,
+                      onTap: _busy ? null : _pickFiles,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: _PickerButton(
-                    label: 'Folder',
-                    icon: Icons.folder_outlined,
-                    onTap: _busy ? null : _pickFolder,
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: _PickerButton(
+                      label: 'Folder',
+                      icon: Icons.folder_outlined,
+                      onTap: _busy ? null : _pickFolder,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else if (supportsNativeFilesSources)
+              _PickerButton(
+                label: 'Choose from Files',
+                icon: Icons.folder_open_outlined,
+                onTap: _busy ? null : _pickFiles,
+              )
+            else
+              _NoCopySourceNotice(message: noCopySourceUnavailableMessage),
             const SizedBox(height: 14),
             if (_files.isEmpty)
               Container(
@@ -440,4 +461,21 @@ class _PickerButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _NoCopySourceNotice extends StatelessWidget {
+  const _NoCopySourceNotice({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.borderStrong),
+          borderRadius: BorderRadius.circular(AppRadius.inner),
+        ),
+        child: Text(message, style: AppText.caption(color: AppColors.textDim)),
+      );
 }

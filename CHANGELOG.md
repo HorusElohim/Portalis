@@ -6,13 +6,29 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+- Added iOS Files open-in-place sharing: selected sources retain security-
+  scoped, read-only access across restarts while Rust seeds the original file.
+
 ### Changed
 
 <!-- Behaviour and UX changes go here before the next release. -->
 
+- Removed the misleading iOS Photos import promise. iOS now offers Files as
+  the no-copy source and never stages picker content in the app cache.
+
 ### Fixed
 
 <!-- Bug fixes and regressions go here. -->
+
+- Silenced repetitive background collection, sync-address, and identity
+  restoration logs.
+- Fixed near-complete transfers displaying 100% before their final bytes, and
+  stopped anonymous peer cards from repeating collection-level speed and size
+  as per-peer data.
+- Reduced live transfer lag by coalescing overlapping refreshes and moving
+  history persistence off the snapshot update path.
+- Kept the internal hard-link layout for multi-file shares in Portalis' private
+  state directory so source files no longer appear as copied files in Downloads.
 
 ### Engineering
 

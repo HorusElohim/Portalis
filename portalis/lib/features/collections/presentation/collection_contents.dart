@@ -184,7 +184,7 @@ class _MediaGrid extends StatelessWidget {
                 !item.fetched
                     ? 'not fetched'
                     : item.progress < 1.0
-                        ? '${(item.progress * 100).toStringAsFixed(0)}%'
+                        ? formatProgressPercent(item.progress)
                         : item.sizeBytes > 0
                             ? formatBytes(item.sizeBytes)
                             : '',

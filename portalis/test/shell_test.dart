@@ -107,7 +107,7 @@ group('shell', () {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a destination survives crossing the breakpoint',
+    testWidgets('a destination survives a live breakpoint crossing',
         (tester) async {
       // The window can now be dragged between the two layouts freely, so the
       // shells have to agree about where you are rather than each keeping its
@@ -117,7 +117,13 @@ group('shell', () {
       await tester.pump();
 
       await tester.binding.setSurfaceSize(phoneSize);
-      await tester.pumpWidget(const MyApp());
+      await tester.pump();
+
+      expect(find.byType(UserScreen), findsOneWidget);
+
+      // Resize the mounted app back again. Re-pumping MyApp would hide the
+      // ownership error this protects against by replacing the whole tree.
+      await tester.binding.setSurfaceSize(desktopSize);
       await tester.pump();
 
       expect(find.byType(UserScreen), findsOneWidget);

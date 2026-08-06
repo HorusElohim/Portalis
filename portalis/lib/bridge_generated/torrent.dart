@@ -10,8 +10,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PublishProgressState`, `PublishProgress`, `RawStorageEntry`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
-/// Create a new collection by seeding local files: write them to disk,
-/// build a `.torrent` from them, and add it back to the session pointed at
+/// Create a new collection by linking local files into a torrent layout,
+/// building a `.torrent` from that layout and adding it back to the session at
 /// the same location — since the files are already there and match the
 /// piece hashes just computed from them, librqbit verifies them as already
 /// complete and starts seeding immediately, no download needed. This is
@@ -53,9 +53,10 @@ Future<BigInt> storageUsageBytes() =>
 
 /// One native file Rust will publish as torrent content.
 ///
-/// Only the path crosses the Flutter boundary. Rust owns reading, copying,
-/// hashing, torrent construction, and seeding, so file size is never limited
-/// by Dart memory or the bridge's signed 32-bit byte-vector encoding.
+/// Only the path crosses the Flutter boundary. Rust owns reading, hashing,
+/// torrent construction, and seeding, so file size is never limited by Dart
+/// memory or the bridge's signed 32-bit byte-vector encoding. Publication
+/// links this source into its torrent layout; it never copies its bytes.
 class SourceFile {
   final String name;
   final String path;

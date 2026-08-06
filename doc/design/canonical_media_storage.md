@@ -21,10 +21,11 @@ encourages duplicate data.
 Desktop and the user-visible Portalis folder on iOS use filesystem paths.
 When creating a share from one filesystem file, Rust seeds the original path
 directly. For several independent files it builds the required common torrent
-layout with hard links. A hard link gives the torrent a stable collection name
-while retaining one physical file allocation. Portalis deliberately refuses
-to copy when the filesystem cannot make that link (for example, across
-volumes).
+layout with hard links in Portalis' private state directory. A hard link gives
+the torrent a stable collection name while retaining one physical file
+allocation, without placing link entries in the user's Downloads folder.
+Portalis deliberately refuses to copy when the filesystem cannot make that
+link (for example, across volumes).
 
 Changing a shared source changes the same canonical bytes. The next torrent
 verification correctly detects changed pieces; users should not edit source
@@ -36,7 +37,7 @@ files while they are being seeded.
 | --- | --- | --- |
 | Desktop | Chosen filesystem folder | The operating-system filesystem |
 | Android | Persisted MediaStore `content://` item | Gallery sees the same item |
-| iOS | `On My iPhone/Portalis` Files location | Portalis media library/editor |
+| iOS | Portalis Documents, visible in Files under On My iPhone | Portalis media library/editor |
 
 Apple Photos is an external export target, not canonical storage: Photos
 imports its own managed asset. Exporting there is an explicit user action and
@@ -69,3 +70,10 @@ may be exported into Portalis only with clear copy semantics. A future
 PHAsset-backed reader is possible, but cannot promise local availability,
 stable random access, or a no-copy Photos import when iCloud manages the
 asset, so it is not part of the canonical storage contract.
+
+When a user selects a file from iOS Files, Portalis opens it in place through
+`UIDocumentPickerViewController`. Native code keeps the security-scoped URL
+active and saves a read-only bookmark so the same path remains available after
+an app restart. The Flutter channel transports file name, path, and length
+only; media bytes never cross it. A selected source must remain in place while
+it seeds, just like a desktop filesystem source.

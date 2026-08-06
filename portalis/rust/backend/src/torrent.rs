@@ -460,6 +460,10 @@ mod native {
         output_dir_for(&settings)
     }
 
+    fn source_link_dir(name: &str) -> PathBuf {
+        crate::paths::state_dir().join("source-links").join(name)
+    }
+
     fn output_dir_for(settings: &crate::settings::EngineSettings) -> PathBuf {
         if let Some(dir) = settings
             .download_dir
@@ -560,7 +564,12 @@ mod native {
                 torrent_name: None,
             }
         } else {
-            let dir = output_dir().join(&collection_name);
+            // Multi-file torrents need one common filesystem root for
+            // librqbit, but this internal layout is made of hard links, not
+            // downloaded content. Keep the directory entries in Portalis'
+            // private state rather than making them look like copied files in
+            // the user's Downloads folder.
+            let dir = source_link_dir(&collection_name);
             std::fs::create_dir_all(&dir)
                 .with_context(|| format!("creating collection dir {dir:?}"))?;
             progress.set_stage("linking");

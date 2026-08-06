@@ -44,6 +44,7 @@ class CollectionsController extends ChangeNotifier {
 
   int? _lastSeen;
   Timer? _timer;
+  Future<void>? _refreshing;
   Duration _interval = _activeInterval;
   bool _paused = false;
 
@@ -95,15 +96,39 @@ class CollectionsController extends ChangeNotifier {
     _timer = null;
   }
 
-  Future<void> refresh() async {
+  /// Coalesces timer ticks and manual refreshes onto one native snapshot.
+  ///
+  /// The old periodic timer could start a second bridge call while the first
+  /// one was still collecting torrent and peer stats. That made updates arrive
+  /// late and occasionally let an older snapshot overwrite a newer one.
+  Future<void> refresh() {
+    final active = _refreshing;
+    if (active != null) return active;
+
+    final future = _refreshNow();
+    _refreshing = future;
+    future.then<void>(
+      (_) {
+        if (identical(_refreshing, future)) _refreshing = null;
+      },
+      onError: (Object _, StackTrace __) {
+        if (identical(_refreshing, future)) _refreshing = null;
+      },
+    );
+    return future;
+  }
+
+  Future<void> _refreshNow() async {
     var historyChanged = false;
     var peerHistoryChanged = false;
     try {
-      _collections = await _repository.list();
+      final collectionsFuture = _repository.list();
+      final engineReadyFuture = _repository.isEngineReady();
+      _collections = await collectionsFuture;
       historyChanged = _recordTransferHistory(_collections);
-      if (historyChanged) await _saveTransferHistories();
-      peerHistoryChanged = await _recordPeerHistory(_collections);
-      engineReady = await _repository.isEngineReady();
+      if (historyChanged) unawaited(_saveTransferHistories());
+      peerHistoryChanged = _recordPeerHistory(_collections);
+      engineReady = await engineReadyFuture;
       lastError = null;
     } catch (error) {
       lastError = '$error';
@@ -224,7 +249,7 @@ class CollectionsController extends ChangeNotifier {
       ..sort((a, b) => b.lastSeen.compareTo(a.lastSeen));
   }
 
-  Future<bool> _recordPeerHistory(List<Collection> collections) async {
+  bool _recordPeerHistory(List<Collection> collections) {
     if (!_peerHistoryLoaded) return false;
     final now = DateTime.now();
     final ids = collections.map((collection) => collection.id).toSet();
@@ -262,7 +287,7 @@ class CollectionsController extends ChangeNotifier {
     _hiddenPeerAddresses.removeWhere((address) => !liveAddresses.contains(address));
     if (!changed) return false;
     _peerHistory = byKey.values.toList();
-    await _savePeerHistory();
+    unawaited(_savePeerHistory());
     return true;
   }
 

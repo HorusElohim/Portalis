@@ -44,7 +44,7 @@ extension CollectionPresentation on Collection {
     }
     if (!isComplete) {
       final eta = etaLabel;
-      final completed = '${(progress * 100).round()}%';
+      final completed = formatProgressPercent(progress);
       return eta == null
           ? '$completed · $peersLabel'
           : '$completed · $eta · $peersLabel';

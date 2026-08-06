@@ -12,6 +12,7 @@ import '../../media/domain/media_item.dart';
 import '../../media/presentation/media_viewer_screen.dart';
 import '../domain/collection.dart';
 import '../domain/picked_file.dart';
+import '../platform/no_copy_source_picker.dart';
 import '../platform/source_access.dart';
 import 'collection_contents.dart';
 import 'collection_commands.dart';
@@ -165,8 +166,22 @@ class _CollectionDetailState extends State<CollectionDetail> {
   }
 
   Future<void> _addMedia() async {
+    if (supportsNativeFilesSources) {
+      try {
+        final picked = await NoCopySourcePicker.pickFiles();
+        if (picked.isEmpty || !mounted) return;
+        await _run(() async {
+          final label = 'Added ${DateTime.now().toIso8601String().split('T').first}';
+          await AppControllers.collections.addMedia(_collection.id, label, picked);
+          _toast('Preparing ${picked.length} item${picked.length == 1 ? '' : 's'}');
+        });
+      } catch (error) {
+        _toast('Couldn\'t access those files: $error');
+      }
+      return;
+    }
     if (!supportsDirectPathSources) {
-      _toast(directPathSourcesUnavailableMessage);
+      _toast(noCopySourceUnavailableMessage);
       return;
     }
     final source = await showModalBottomSheet<String>(

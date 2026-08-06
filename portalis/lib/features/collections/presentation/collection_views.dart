@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme.dart';
+import '../../../design/formatters.dart';
 import '../../media/presentation/media_thumbnail.dart';
 import '../domain/collection.dart';
 import 'collection_commands.dart';
@@ -192,7 +193,7 @@ class _CollectionRowState extends State<CollectionRow> {
         const SizedBox(width: 12),
         if (downloading)
           StatusBadge(
-            label: '${(collection.progress * 100).round()}%',
+            label: formatProgressPercent(collection.progress),
             color: accent,
           )
         else if (collection.isSharing)

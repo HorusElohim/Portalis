@@ -15,7 +15,7 @@ class CollectionImportProgress extends StatelessWidget {
     final failed = ingestion.failed;
     final color = failed ? AppColors.danger : AppColors.signal;
     final progress = ingestion.progress.clamp(0.0, 1.0).toDouble();
-    final percent = (progress * 100).round();
+    final percent = formatProgressPercent(progress);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -41,7 +41,7 @@ class CollectionImportProgress extends StatelessWidget {
               ),
               if (!failed)
                 Text(
-                  '$percent%',
+                  percent,
                   style: monoLabel(color: color, weight: FontWeight.w700),
                 ),
             ],

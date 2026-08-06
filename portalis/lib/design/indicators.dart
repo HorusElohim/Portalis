@@ -298,7 +298,7 @@ class TransferFacts extends StatelessWidget {
 
     final size = totalBytes > 0
         ? '${formatBytes(downloadedBytes)} of ${formatBytes(totalBytes)}'
-            ' · ${(progress * 100).toStringAsFixed(0)}%'
+            ' · ${formatProgressPercent(progress)}'
         : pendingLabel;
 
     // Rates only while something is actually moving; peers whenever any are

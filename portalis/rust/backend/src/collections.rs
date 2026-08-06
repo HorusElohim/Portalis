@@ -443,7 +443,6 @@ mod native {
     /// first second of a launch carried no addresses at all.
     fn current_sync_addresses() -> Vec<String> {
         let Some(addr) = crate::collab_sync::listening_at() else {
-            clog!("collections", "current_sync_addresses: not listening yet");
             return Vec::new();
         };
         // Every real interface address, not just the default route's — a VPN
@@ -459,7 +458,6 @@ mod native {
                 addrs.push(candidate);
             }
         }
-        clog!("collections", "current_sync_addresses: {addrs:?}");
         addrs
     }
 
@@ -809,13 +807,6 @@ mod native {
             });
         }
 
-        clog!(
-            "collections",
-            "list_collections: {} collection(s) ({} shared, {} plain torrent)",
-            result.len(),
-            result.iter().filter(|c| c.kind == CollectionKind::Shared).count(),
-            result.iter().filter(|c| c.kind == CollectionKind::Torrent).count(),
-        );
         Ok(result)
     }
 

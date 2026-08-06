@@ -1,5 +1,12 @@
 import 'test_support.dart';
 
+import 'package:portalis/features/collections/application/collections_controller.dart';
+import 'package:portalis/features/collections/data/collections_repository.dart';
+import 'package:portalis/features/collections/data/peer_history_store.dart';
+import 'package:portalis/features/collections/data/transfer_history_store.dart';
+import 'package:portalis/features/collections/domain/peer_observation.dart';
+import 'package:portalis/features/collections/domain/transfer_history.dart';
+
 void main() {
   tearDown(resetTestState);
 
@@ -13,6 +20,11 @@ group('how long is left', () {
       // Past a day, a precise figure extrapolated from five seconds of
       // throughput would be false precision.
       expect(formatEta(90000), 'over a day');
+    });
+
+    test('does not round an incomplete transfer up to 100%', () {
+      expect(formatProgressPercent(0.999), '99%');
+      expect(formatProgressPercent(1), '100%');
     });
 
     testWidgets('a downloading collection says when it lands', (tester) async {
@@ -94,7 +106,7 @@ group('how long is left', () {
       ]);
 
       expect(find.text('Iceland trip'), findsOneWidget);
-      expect(find.text('74%'), findsOneWidget);
+      expect(find.text('73%'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -251,14 +263,20 @@ group('how long is left', () {
       // those polls used to rebuild every widget listening to this.
       // Whatever earlier tests left behind, one poll records it â€” the
       // singleton is process-wide, so this cannot assume a starting point.
-      await AppControllers.collections.refresh();
+      final controller = CollectionsController(
+        repository: _EmptyCollectionsRepository(),
+        peerHistoryStore: _EmptyPeerHistoryStore(),
+        transferHistoryStore: _EmptyTransferHistoryStore(),
+      );
+      await controller.refresh();
 
       var notifications = 0;
       void count() => notifications++;
-      AppControllers.collections.addListener(count);
-      addTearDown(() => AppControllers.collections.removeListener(count));
+      controller.addListener(count);
+      addTearDown(controller.dispose);
+      addTearDown(() => controller.removeListener(count));
 
-      await AppControllers.collections.refresh();
+      await controller.refresh();
 
       expect(notifications, 0);
     });
@@ -305,4 +323,32 @@ group('how long is left', () {
       expect(tester.takeException(), isNull);
     });
   });
+}
+
+class _EmptyCollectionsRepository implements CollectionsRepository {
+  @override
+  Future<bool> isEngineReady() async => true;
+
+  @override
+  Future<List<Collection>> list() async => const [];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      Future<dynamic>.error(UnimplementedError());
+}
+
+class _EmptyPeerHistoryStore implements PeerHistoryStore {
+  @override
+  Future<List<PeerObservation>> load() async => const [];
+
+  @override
+  Future<void> save(List<PeerObservation> peers) async {}
+}
+
+class _EmptyTransferHistoryStore implements TransferHistoryStore {
+  @override
+  Future<Map<String, TransferHistory>> load() async => const {};
+
+  @override
+  Future<void> save(Map<String, TransferHistory> histories) async {}
 }

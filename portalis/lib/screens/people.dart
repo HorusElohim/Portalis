@@ -63,32 +63,21 @@ class PeopleScreen extends StatelessWidget {
     final people = byDevice.values.toList();
 
     // Anonymous swarm peers across every collection. An address is a
-    // connection, not a signed identity, but its collection-level telemetry
-    // can still be pooled for the same summary card.
-    final collectionByName = <String, Collection>{
-      for (final collection in AppControllers.collections.collections)
-        collection.name: collection,
-    };
+    // connection, not a signed identity. Only its collection names and last
+    // seen time are known at this level; per-peer speed and bytes are not.
     final byAddress = <String,
         ({
           String address,
           List<String> collections,
           DateTime lastSeen,
-          int totalBytes,
-          double downloadMbps,
-          double uploadMbps,
         })>{};
     for (final peer in AppControllers.collections.peerHistory) {
-      final collection = collectionByName[peer.collectionName];
       final entry = byAddress[peer.address];
       if (entry == null) {
         byAddress[peer.address] = (
           address: peer.address,
           collections: [peer.collectionName],
           lastSeen: peer.lastSeen,
-          totalBytes: collection?.totalBytes ?? 0,
-          downloadMbps: collection?.downloadMbps ?? 0,
-          uploadMbps: collection?.uploadMbps ?? 0,
         );
       } else {
         if (!entry.collections.contains(peer.collectionName)) {
@@ -100,9 +89,6 @@ class PeopleScreen extends StatelessWidget {
           lastSeen: peer.lastSeen.isAfter(entry.lastSeen)
               ? peer.lastSeen
               : entry.lastSeen,
-          totalBytes: entry.totalBytes + (collection?.totalBytes ?? 0),
-          downloadMbps: entry.downloadMbps + (collection?.downloadMbps ?? 0),
-          uploadMbps: entry.uploadMbps + (collection?.uploadMbps ?? 0),
         );
       }
     }
@@ -215,9 +201,9 @@ class PersonCard extends StatelessWidget {
   final Widget avatar;
   final String title;
   final String subtitle;
-  final int totalBytes;
+  final int? totalBytes;
   final int sharedCount;
-  final double rateMbps;
+  final double? rateMbps;
   final String status;
   final Color statusColor;
   final bool active;
@@ -230,7 +216,7 @@ class PersonCard extends StatelessWidget {
     return SurfaceCard(
       padding: const EdgeInsets.all(16),
       glow: active ? GlowLevel.active : GlowLevel.none,
-      glowIntensity: Glow.intensityForRate(rateMbps),
+      glowIntensity: Glow.intensityForRate(rateMbps ?? 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -279,7 +265,10 @@ class PersonCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _RateValue(rateMbps: rateMbps, color: metricColor),
+              _RateValue(
+                rateMbps: rateMbps,
+                color: rateMbps == null ? AppColors.textFaint : metricColor,
+              ),
               if (trailing != null) trailing!,
             ],
           ),
@@ -288,8 +277,9 @@ class PersonCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _Metric(
-                  value: rateMbps.toStringAsFixed(1),
+                  value: rateMbps == null ? '—' : rateMbps!.toStringAsFixed(1),
                   label: 'MB/S',
+                  color: rateMbps == null ? AppColors.textFaint : metricColor,
                 ),
               ),
               const SizedBox(width: 8),
@@ -301,6 +291,7 @@ class PersonCard extends StatelessWidget {
                 child: _Metric(
                   value: _gigabytes(totalBytes),
                   label: 'GB TOTAL',
+                  color: totalBytes == null ? AppColors.textFaint : metricColor,
                 ),
               ),
             ],
@@ -327,9 +318,6 @@ class TorrentPeerCard extends PersonCard {
       String address,
       List<String> collections,
       DateTime lastSeen,
-      int totalBytes,
-      double downloadMbps,
-      double uploadMbps,
     }) entry,
   }) : super._(
           avatar: Container(
@@ -346,11 +334,9 @@ class TorrentPeerCard extends PersonCard {
           title: entry.address,
           subtitle: '${entry.collections.join(' · ')} · '
               '${formatLastSeen(entry.lastSeen)}',
-          totalBytes: entry.totalBytes,
+          totalBytes: null,
           sharedCount: entry.collections.length,
-          rateMbps: entry.uploadMbps > 0
-              ? entry.uploadMbps
-              : entry.downloadMbps,
+          rateMbps: null,
           status: 'Torrent peer',
           statusColor: AppColors.ember,
           metricColor: AppColors.ember,
@@ -367,7 +353,7 @@ class TorrentPeerCard extends PersonCard {
 class _RateValue extends StatelessWidget {
   const _RateValue({required this.rateMbps, required this.color});
 
-  final double rateMbps;
+  final double? rateMbps;
   final Color color;
 
   @override
@@ -376,7 +362,7 @@ class _RateValue extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            rateMbps.toStringAsFixed(1),
+            rateMbps == null ? '—' : rateMbps!.toStringAsFixed(1),
             style: TextStyle(
               fontFamily: AppFonts.display,
               fontSize: 17,
@@ -393,10 +379,15 @@ class _RateValue extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({required this.value, required this.label});
+  const _Metric({
+    required this.value,
+    required this.label,
+    this.color = AppColors.signal,
+  });
 
   final String value;
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -411,11 +402,11 @@ class _Metric extends StatelessWidget {
           children: [
             Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: AppFonts.display,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: AppColors.signal,
+                color: color,
               ),
             ),
             const SizedBox(height: 2),
@@ -432,7 +423,8 @@ class _Metric extends StatelessWidget {
       );
 }
 
-String _gigabytes(int bytes) => (bytes / 1000000000).toStringAsFixed(1);
+String _gigabytes(int? bytes) =>
+    bytes == null ? '—' : (bytes / 1000000000).toStringAsFixed(1);
 
 String _statusLabel({
   required double uploadMbps,

@@ -54,10 +54,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Portalis saves photos and videos you download into your Photos library, in an album named after the collection.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Portalis lets you pick photos and videos from your library to share, and checks for an existing album named after the collection before saving downloads into it.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>

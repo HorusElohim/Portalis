@@ -62,7 +62,7 @@ class TransferPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                hasTotal ? '${(progress * 100).toStringAsFixed(0)}%' : '—',
+                hasTotal ? formatProgressPercent(progress) : '—',
                 style: displayText(size: 30, color: color, weight: FontWeight.w700),
               ),
               const SizedBox(width: 14),

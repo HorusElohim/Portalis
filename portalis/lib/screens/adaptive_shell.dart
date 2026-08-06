@@ -126,9 +126,17 @@ abstract class AdaptiveShellState<T extends AdaptiveShell> extends State<T>
   Widget build(BuildContext context) => WindowBuilder(
         builder: (context, window) => ListenableBuilder(
           listenable: AppControllers.collections,
-          builder: (context, _) => window.isDesktop
-              ? buildWideLayout(context)
-              : buildCompactLayout(context),
+          builder: (context, _) => KeyedSubtree(
+            // Desktop and compact layouts have incompatible parent chains.
+            // Make a breakpoint crossing an explicit replacement rather than
+            // letting Flutter attempt to retain dependencies from one layout
+            // under the other while MediaQuery is notifying resize listeners.
+            // Navigation itself remains above this boundary in this State.
+            key: ValueKey(window.isDesktop),
+            child: window.isDesktop
+                ? buildWideLayout(context)
+                : buildCompactLayout(context),
+          ),
         ),
       );
 

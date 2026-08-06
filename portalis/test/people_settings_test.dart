@@ -31,6 +31,8 @@ group('people and settings', () {
       await pumpApp(tester, collections: [
         buildCollection(
           id: 'shared-with-peer',
+          totalBytes: 9900000000,
+          uploadMbps: 72.6,
           torrentPeers: const ['198.51.100.7:6881'],
         ),
       ]);
@@ -40,6 +42,8 @@ group('people and settings', () {
 
       expect(find.text('198.51.100.7:6881'), findsOneWidget);
       expect(find.textContaining('Torrent peer'), findsOneWidget);
+      expect(find.text('72.6'), findsNothing);
+      expect(find.text('—'), findsWidgets);
       expect(find.byTooltip('Forget peer'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

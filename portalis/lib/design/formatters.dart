@@ -34,6 +34,15 @@ String formatBytesPrecise(int bytes) {
 /// A throughput figure the engine reports, in MB/s.
 String formatRate(double mbps) => '${mbps.toStringAsFixed(1)} MB/s';
 
+/// Displays an incomplete transfer below 100% until it is actually complete.
+/// Rounding made a nearly-finished transfer look done while its ETA and file
+/// rows still correctly showed work remaining.
+String formatProgressPercent(double progress) {
+  final value = progress.clamp(0.0, 1.0).toDouble();
+  final percent = value >= 1.0 ? 100 : (value * 100).floor();
+  return '$percent%';
+}
+
 /// A configured bytes-per-second cap. `null` or `0` means no cap — and says
 /// so, rather than rendering as "0 B/s".
 String formatLimit(int? bytesPerSecond) {

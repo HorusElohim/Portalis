@@ -83,7 +83,6 @@ mod native {
             .try_into()
             .map_err(|_| anyhow::anyhow!("stored secret key is not 32 bytes"))?;
         let identity = DeviceIdentity::from_bytes(&key);
-        crate::log::clog!("device", "restored identity {}…", &identity.device_id().to_hex()[..8]);
         Ok((identity, persisted.nickname))
     }
 
