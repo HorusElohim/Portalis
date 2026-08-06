@@ -226,51 +226,6 @@ class _CollectionDetailState extends State<CollectionDetail> {
         _toast('Fetching $started item${started == 1 ? '' : 's'}');
       });
 
-  Future<void> _sync() async {
-    final controller = TextEditingController();
-    final peerAddress = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text('Sync "${_collection.name}"'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          style: monoLabel(size: 13, color: AppColors.text, letterSpacing: 0),
-          decoration: InputDecoration(
-            hintText: '192.168.1.23:54321',
-            hintStyle: const TextStyle(color: AppColors.textGhost),
-            helperText: "The other device's sync address (on its User screen)",
-            helperStyle: AppText.caption(color: AppColors.textDim),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('Sync'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (peerAddress == null || peerAddress.isEmpty || !mounted) return;
-
-    await _run(() async {
-      final updated = await AppControllers.collections.sync(
-        _collection.id,
-        peerAddress,
-      );
-      _toast(
-        'Synced — ${updated.media.length} item(s), '
-        '${updated.collaborators.length} collaborator(s)',
-      );
-    });
-  }
-
   Future<void> _delete() => confirmAndRemoveCollection(
         context,
         _collection,
@@ -320,7 +275,6 @@ class _CollectionDetailState extends State<CollectionDetail> {
           showTitle: widget.showTitle,
           onInvite: _showInvite,
           onAddMedia: _addMedia,
-          onSync: _sync,
           onFetch: _fetchPending,
         ),
         if (_busy)
@@ -398,9 +352,9 @@ class _ResizableMediaPreview extends StatefulWidget {
 }
 
 class _ResizableMediaPreviewState extends State<_ResizableMediaPreview> {
-  static const double _minHeight = 100;
-  static const double _maxHeight = 360;
-  static const double _defaultHeight = 120;
+  static const double _minHeight = 180;
+  static const double _maxHeight = 480;
+  static const double _defaultHeight = 220;
 
   double _height = _defaultHeight;
 

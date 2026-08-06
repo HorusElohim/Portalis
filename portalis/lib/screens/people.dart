@@ -9,7 +9,7 @@ import '../theme.dart';
 /// Derived — there is no peer directory in the backend.
 ///
 /// A first-class destination on both layouts — a bottom tab on mobile, a
-/// header button beside the sidebar on desktop (see `DesktopShell`) — after
+/// header button in the wide layout — after
 /// two rounds of being reached only indirectly. The User tab still carries the
 /// same collaborator count as a shortcut, but selects this same screen rather
 /// than pushing a second copy of it. Same content and the same grid either

@@ -57,6 +57,56 @@ pub struct NewFile {
     pub bytes: Vec<u8>,
 }
 
+/// The generated Sse bridge encodes byte-vector lengths as signed 32-bit
+/// integers. Keep this invariant at the native boundary too: malformed or
+/// oversized input must be an ordinary FFI error, never an allocator panic.
+const MAX_NEW_FILES: usize = 10_000;
+const MAX_NEW_FILE_BYTES: usize = 2_000_000_000;
+
+fn validate_new_files(files: &[NewFile]) -> anyhow::Result<()> {
+    anyhow::ensure!(!files.is_empty(), "a collection needs at least one file");
+    anyhow::ensure!(
+        files.len() <= MAX_NEW_FILES,
+        "a collection can contain at most {MAX_NEW_FILES} files"
+    );
+
+    let mut total_bytes = 0usize;
+    for file in files {
+        anyhow::ensure!(
+            file.bytes.len() <= MAX_NEW_FILE_BYTES,
+            "file {:?} is too large to share in one operation",
+            file.name
+        );
+        total_bytes = total_bytes
+            .checked_add(file.bytes.len())
+            .ok_or_else(|| anyhow::anyhow!("share payload size overflow"))?;
+    }
+    anyhow::ensure!(
+        total_bytes <= MAX_NEW_FILE_BYTES,
+        "selected files are too large to share in one operation"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::{validate_new_files, NewFile};
+
+    #[test]
+    fn accepts_a_normal_share() {
+        assert!(validate_new_files(&[NewFile {
+            name: "photo.jpg".into(),
+            bytes: vec![0; 1024],
+        }])
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_an_empty_share() {
+        assert!(validate_new_files(&[]).is_err());
+    }
+}
+
 /// Create a new collection by seeding local files: write them to disk,
 /// build a `.torrent` from them, and add it back to the session pointed at
 /// the same location — since the files are already there and match the
@@ -67,6 +117,7 @@ pub struct NewFile {
 /// shape either way (see the backend README on why: it's the same
 /// protocol regardless of which side of the swarm you started on).
 pub async fn create_collection(name: String, files: Vec<NewFile>) -> anyhow::Result<TorrentInfo> {
+    validate_new_files(&files)?;
     native::create_collection(name, files).await
 }
 
@@ -370,7 +421,7 @@ mod native {
         name: String,
         files: Vec<NewFile>,
     ) -> anyhow::Result<TorrentInfo> {
-        anyhow::ensure!(!files.is_empty(), "a collection needs at least one file");
+        super::validate_new_files(&files)?;
 
         let session = session().await?;
         let collection_name = sanitize_component(&name);

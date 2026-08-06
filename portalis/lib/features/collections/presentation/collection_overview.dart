@@ -22,7 +22,6 @@ class CollectionOverview extends StatelessWidget {
     this.showTitle = true,
     required this.onInvite,
     required this.onAddMedia,
-    required this.onSync,
     required this.onFetch,
     this.peerHistory = const [],
     this.onForgetPeer,
@@ -37,7 +36,6 @@ class CollectionOverview extends StatelessWidget {
   final bool showTitle;
   final VoidCallback onInvite;
   final VoidCallback onAddMedia;
-  final VoidCallback onSync;
   final VoidCallback onFetch;
   final List<PeerObservation> peerHistory;
   final ValueChanged<String>? onForgetPeer;
@@ -105,8 +103,31 @@ class CollectionOverview extends StatelessWidget {
           CollectionCommandBar(
             busy: busy,
             onCommand: onCommand,
+            trailingActions: [
+              if (collection.isShared)
+                PillButton(
+                  label: 'Invite',
+                  icon: const Icon(
+                    Icons.people_alt_outlined,
+                    size: 16,
+                    color: AppColors.signalSoft,
+                  ),
+                  onTap: busy ? null : onInvite,
+                ),
+              if (collection.isShared)
+                PillButton(
+                  label: 'Add media',
+                  dim: true,
+                  onTap: busy ? null : onAddMedia,
+                ),
+              if (collection.pendingMedia > 0)
+                PillButton(
+                  label: 'Fetch ${collection.pendingMedia}',
+                  onTap: busy ? null : onFetch,
+                ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
         ],
         if (level == CollectionDetailLevel.full) ...[
           _CollectionIdentifiers(collection: collection),
@@ -118,14 +139,6 @@ class CollectionOverview extends StatelessWidget {
           ),
           const SizedBox(height: 14),
         ],
-        _CollectionActions(
-          collection: collection,
-          busy: busy,
-          onInvite: onInvite,
-          onAddMedia: onAddMedia,
-          onSync: onSync,
-          onFetch: onFetch,
-        ),
       ],
     );
   }
@@ -149,50 +162,6 @@ class _CollectionControls extends StatelessWidget {
       ],
     );
   }
-}
-
-class _CollectionActions extends StatelessWidget {
-  const _CollectionActions({
-    required this.collection,
-    required this.busy,
-    required this.onInvite,
-    required this.onAddMedia,
-    required this.onSync,
-    required this.onFetch,
-  });
-
-  final Collection collection;
-  final bool busy;
-  final VoidCallback onInvite;
-  final VoidCallback onAddMedia;
-  final VoidCallback onSync;
-  final VoidCallback onFetch;
-
-  @override
-  Widget build(BuildContext context) => Wrap(
-        spacing: 10,
-        runSpacing: 8,
-        children: [
-          if (collection.isShared) ...[
-            PillButton(
-              label: 'Invite',
-              icon: const Icon(
-                Icons.people_alt_outlined,
-                size: 16,
-                color: AppColors.signalSoft,
-              ),
-              onTap: busy ? null : onInvite,
-            ),
-            PillButton(label: 'Add media', dim: true, onTap: busy ? null : onAddMedia),
-            PillButton(label: 'Sync', dim: true, onTap: busy ? null : onSync),
-          ],
-          if (collection.pendingMedia > 0)
-            PillButton(
-              label: 'Fetch ${collection.pendingMedia}',
-              onTap: busy ? null : onFetch,
-            ),
-        ],
-      );
 }
 
 class _CollectionIdentifiers extends StatelessWidget {

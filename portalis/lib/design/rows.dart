@@ -246,33 +246,43 @@ class InfoRow extends StatelessWidget {
     required this.value,
     this.monospace = false,
     this.copyable = false,
+    this.dense = false,
   });
 
   final String label;
   final String value;
   final bool monospace;
   final bool copyable;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: EdgeInsets.symmetric(vertical: dense ? 2 : 5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
+            width: dense ? 86 : 110,
             child: Text(
               label,
-              style: AppText.secondary(color: AppColors.textDim),
+              style: dense
+                  ? AppText.caption(color: AppColors.textDim)
+                  : AppText.secondary(color: AppColors.textDim),
             ),
           ),
           Expanded(
             child: Text(
               value,
               style: monospace
-                  ? monoLabel(size: 12, color: AppColors.text, letterSpacing: 0)
-                  : AppText.secondary(),
+                  ? monoLabel(
+                      size: dense ? 10.5 : 12,
+                      color: AppColors.text,
+                      letterSpacing: 0,
+                    )
+                  : dense
+                      ? AppText.caption(color: AppColors.text)
+                      : AppText.secondary(),
             ),
           ),
           if (copyable)

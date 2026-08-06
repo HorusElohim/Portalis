@@ -11,8 +11,8 @@ class WindowSize {
 
   final double width;
 
-  /// At or above this, [RootShell] shows [DesktopShell]'s three-pane layout
-  /// instead of the phone one.
+/// At or above this, [RootShell] shows the wide layout instead of the compact
+/// one. Both layouts are rendered by the same adaptive shell state.
   ///
   /// Chosen on available width, never on `Platform`: a narrow window on a
   /// Mac should get the phone layout, and a wide tablet should get the

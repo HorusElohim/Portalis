@@ -58,10 +58,12 @@ class CollectionCommandBar extends StatelessWidget {
     super.key,
     required this.busy,
     required this.onCommand,
+    this.trailingActions = const [],
   });
 
   final bool busy;
   final ValueChanged<CollectionCommand> onCommand;
+  final List<Widget> trailingActions;
 
   @override
   Widget build(BuildContext context) => Wrap(
@@ -81,6 +83,7 @@ class CollectionCommandBar extends StatelessWidget {
               compact: true,
               onTap: busy ? null : () => onCommand(command),
             ),
+          ...trailingActions,
         ],
       );
 }

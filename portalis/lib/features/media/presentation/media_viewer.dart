@@ -19,6 +19,7 @@ class CollectionMediaViewer extends StatelessWidget {
     required this.videoFailed,
     required this.videoController,
     required this.onClose,
+    required this.onRefresh,
     required this.onOpenExternally,
   });
 
@@ -28,6 +29,7 @@ class CollectionMediaViewer extends StatelessWidget {
   final bool videoFailed;
   final VideoPlayerController? videoController;
   final VoidCallback onClose;
+  final VoidCallback onRefresh;
   final VoidCallback onOpenExternally;
 
   @override
@@ -44,12 +46,16 @@ class CollectionMediaViewer extends StatelessWidget {
                     _CircleButton(icon: Icons.close, onTap: onClose),
                     Row(
                       children: [
+                        _CircleButton(
+                          icon: Icons.refresh_rounded,
+                          onTap: onRefresh,
+                        ),
                         if (media.isReady) ...[
+                          const SizedBox(width: 8),
                           _CircleButton(
                             icon: Icons.open_in_new_rounded,
                             onTap: onOpenExternally,
                           ),
-                          const SizedBox(width: 8),
                         ],
                       ],
                     ),
@@ -198,27 +204,33 @@ class _MediaDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.only(top: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SectionLabel('DETAILS'),
-            const SizedBox(height: 6),
-            InfoRow(label: 'Collection', value: collection.name),
+            const SizedBox(height: 3),
+            InfoRow(label: 'Collection', value: collection.name, dense: true),
             if (media.entryLabel != media.label)
-              InfoRow(label: 'Added as', value: media.entryLabel),
+              InfoRow(label: 'Added as', value: media.entryLabel, dense: true),
             InfoRow(
               label: 'State',
               value: collection.state.isEmpty ? 'Unknown' : collection.state,
+              dense: true,
             ),
             if (media.sizeBytes > 0)
-              InfoRow(label: 'Size', value: formatBytesPrecise(media.sizeBytes)),
+              InfoRow(
+                label: 'Size',
+                value: formatBytesPrecise(media.sizeBytes),
+                dense: true,
+              ),
             if (media.infoHash.isNotEmpty)
               InfoRow(
                 label: 'Info hash',
                 value: media.infoHash,
                 monospace: true,
                 copyable: true,
+                dense: true,
               ),
           ],
         ),

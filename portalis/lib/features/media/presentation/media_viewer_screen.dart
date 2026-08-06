@@ -121,8 +121,14 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
         videoFailed: _videoFailed,
         videoController: _videoController,
         onClose: () => Navigator.of(context).pop(),
+        onRefresh: _refreshVideo,
         onOpenExternally: _openExternally,
       ),
     );
+  }
+
+  void _refreshVideo() {
+    _disposeVideo();
+    _syncVideo();
   }
 }

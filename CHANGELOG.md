@@ -4,6 +4,34 @@
 
 ### Added
 
+<!-- New user-visible features go here before the next release. -->
+
+### Changed
+
+<!-- User-visible behavior, UX, or architecture changes go here. -->
+
+- Unified compact and wide window navigation under one adaptive shell state,
+  preserving open collections and add flows while resizing on Windows.
+- Tightened collection previews around a fuller first media row, grouped
+  Invite and Add media with lifecycle actions, removed manual Sync from the
+  collection view, and added a compact media-details layout with refresh.
+
+### Fixed
+
+<!-- Bug fixes and regressions go here. -->
+
+- Prevented the Create & share action from sending an oversized one-shot FFI
+  payload that could panic the native bridge with a capacity overflow; the
+  share screen now reports the limit clearly.
+
+### Engineering
+
+<!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+## Portalis 1.0.4 / backend 0.1.3 — 2026-08-06
+
+### Added
+
 - Added real collection lifecycle controls for restart, pause, stop, remove,
   and deleting local files with confirmation.
 - Added a shared live transfer panel with prominent progress, rates, peers,

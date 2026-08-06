@@ -1,232 +1,82 @@
 import 'package:flutter/material.dart';
 
 import '../app/app_controllers.dart';
-import '../design/design.dart';
-import '../services/navigation.dart';
-import '../theme.dart';
-import 'desktop_shell.dart';
+import 'adaptive_shell.dart';
+import 'desktop_pane.dart';
+import 'desktop_shell_layout.dart';
 import 'home.dart';
+import 'mobile_shell_layout.dart';
+import '../features/collections/presentation/collection_join.dart';
+import '../features/collections/presentation/collection_share.dart';
 import 'people.dart';
 import 'settings.dart';
 import 'user.dart';
 
-/// App root. Four destinations on mobile — Home, User, People, Settings — and a
-/// two-pane layout on a wide window.
-class RootShell extends StatefulWidget {
+/// The single application shell. Its parent state owns navigation and
+/// lifecycle; only the arrangement changes when the window crosses the
+/// responsive breakpoint.
+class RootShell extends AdaptiveShell {
   const RootShell({super.key});
 
   @override
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
-  /// The selected tab lives in [AppNavigation] rather than here, so the
-  /// persistent Home button — which sits *above* this widget — can change it.
-  int get _tab => AppNavigation.tab.value;
-
+class _RootShellState extends AdaptiveShellState<RootShell> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    AppNavigation.tab.addListener(_onTabChanged);
-    // One start() covers everything: collections created or joined in a
-    // previous session load from disk and appear immediately, alongside any
-    // plain torrents in the session.
-    AppControllers.collections.start();
-    AppControllers.settings.load();
-    AppControllers.identity.load();
+  Widget buildCompactLayout(BuildContext context) {
+    if (pane == DesktopPane.share) {
+      return ShareScreen(
+        initialFiles: pendingShareFiles,
+        onClose: closeShare,
+      );
+    }
+    if (pane == DesktopPane.join) {
+      return JoinCollectionScreen(
+        initialCode: pendingInvite,
+        onClose: closeJoin,
+      );
+    }
+    return MobileShellLayout(
+        index: tab,
+        onSelected: selectTab,
+        onOpen: (id) => openCollection(id, inline: false),
+        onShare: ([files]) => openShare(files, false),
+        onJoin: (code) => openJoin(code, inline: false),
+      );
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Drop to a slow, fixed-rate background poll whenever the app isn't in
-    // front of the user, rather than stopping outright — a transfer that
-    // finishes while the window is unfocused should still be reflected next
-    // time someone looks, not frozen at whatever it read last. Seeding
-    // itself continues in Rust regardless either way.
-    AppControllers.collections.setPaused(state != AppLifecycleState.resumed);
-  }
-
-  void _onTabChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    AppNavigation.tab.removeListener(_onTabChanged);
-    WidgetsBinding.instance.removeObserver(this);
-    AppControllers.collections.stop();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WindowBuilder(
-      builder: (context, window) {
-        if (window.isDesktop) {
-          return const DesktopShell();
-        }
-        return ListenableBuilder(
-          listenable: AppControllers.collections,
-          builder: (context, _) {
-            final rate = AppControllers.collections.liveRate;
-            return Scaffold(
-              backgroundColor: AppColors.surfaceDeep,
-              body: AmbientBackground(
-                intensity: Glow.intensityForRate(rate),
-                child: SafeArea(
-                  bottom: false,
-                  child: IndexedStack(
-                    index: _tab,
-                    children: [
-                      // IndexedStack keeps every tab alive so switching is
-                      // instant — but that also keeps their animations
-                      // ticking off-screen. TickerMode freezes the ones the
-                      // user can't see, which matters more now that Home
-                      // carries a permanently-animating motif.
-                      for (var i = 0; i < AppBottomNav.items.length; i++)
-                        TickerMode(
-                          enabled: i == _tab,
-                          // UserScreen, PeopleScreen and SettingsScreen render
-                          // through AppScreen, which wraps its own Scaffold and
-                          // back button unless told this parent already
-                          // supplies both — true here, same as every tab.
-                          child: const [
-                            Home(),
-                            UserScreen(embedded: true),
-                            PeopleScreen(embedded: true),
-                            SettingsScreen(embedded: true),
-                          ][i],
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              bottomNavigationBar: AppBottomNav(
-                index: _tab,
-                onSelected: (i) => AppNavigation.tab.value = i,
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-/// The four-destination bottom bar.
-class AppBottomNav extends StatelessWidget {
-  const AppBottomNav({
-    super.key,
-    required this.index,
-    required this.onSelected,
-  });
-
-  final int index;
-  final ValueChanged<int> onSelected;
-
-  /// The leftmost destination is Home, and it carries the app's mark rather
-  /// than a generic glyph — it is both "where you are" and "how you get
-  /// back". Home now answers both "what can I do" and "what do I have": the
-  /// command bar, the New-share/Add-torrent actions and the collection list all
-  /// live there together (see `home.dart`), which is what let the old
-  /// Collections destination fold away — it was the same list a second
-  /// place, reached a second way.
-  ///
-  /// There is no Transfers destination either, for the same reason: every
-  /// collection row carries its own bar, rate and countdown, Home filters to
-  /// what is arriving, and its header states the aggregate.
-  ///
-  /// User owns identity and Settings owns engine behaviour. People remains a
-  /// separate directory because it describes collaborators, not this device.
-  static const items = [
-    (icon: null, label: 'Home'),
-    (icon: Icons.person_outline, label: 'User'),
-    (icon: Icons.people_outline, label: 'People'),
-    (icon: Icons.tune, label: 'Settings'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceDeep,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-          child: Row(
-            children: [
-              for (var i = 0; i < items.length; i++)
-                Expanded(
-                  child: InkWell(
-                    key: Key('navTab$i'),
-                    borderRadius: BorderRadius.circular(AppRadius.inner),
-                    // Home doesn't just select a tab: it unwinds anything
-                    // pushed on top as well, so one tap always lands you at
-                    // the start rather than one screen shallower.
-                    onTap: () =>
-                        i == 0 ? AppNavigation.goHome() : onSelected(i),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (items[i].icon == null)
-                            Opacity(
-                              // The mark is full colour; dimming it is what
-                              // makes an unselected tab read as unselected,
-                              // the same as the glyphs beside it.
-                              opacity: i == index ? 1 : 0.45,
-                              child: ClipRRect(
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.tight),
-                                child: Image.asset(
-                                  'assets/PortalisNature.png',
-                                  width: 24,
-                                  height: 24,
-                                  // Decoded at 3× its slot, not the source's
-                                  // 1254² — permanent chrome must not park a
-                                  // full-resolution bitmap in the cache.
-                                  cacheWidth: 72,
-                                  cacheHeight: 72,
-                                  filterQuality: FilterQuality.medium,
-                                ),
-                              ),
-                            )
-                          else
-                            Icon(
-                              items[i].icon,
-                              size: 24,
-                              // Selection is plain white, not mint — mint is
-                              // reserved for data actually moving.
-                              color: i == index
-                                  ? AppColors.text
-                                  : AppColors.textGhost,
-                            ),
-                          const SizedBox(height: 6),
-                          Text(
-                            items[i].label,
-                            style: AppText.caption(
-                              color: i == index
-                                  ? AppColors.text
-                                  : AppColors.textGhost,
-                              weight: i == index
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+  Widget buildWideLayout(BuildContext context) => DesktopShellLayout(
+        pane: pane,
+        onPane: selectPane,
+        liveRate: AppControllers.collections.liveRate,
+        home: Home(
+          embedded: true,
+          openId: openId,
+          onOpen: (id) => openCollection(id, inline: true),
+          onShare: ([files]) => openShare(files, true),
+          onJoin: openJoinInline,
         ),
-      ),
-    );
-  }
+        content: _desktopContent(),
+      );
+
+  void openJoinInline(String code) => openJoin(code, inline: true);
+
+  Widget _desktopContent() => switch (pane) {
+        DesktopPane.people => const PeopleScreen(embedded: true),
+        DesktopPane.user => const UserScreen(embedded: true),
+        DesktopPane.settings => const SettingsScreen(embedded: true),
+        DesktopPane.share => ShareScreen(
+            key: ValueKey(pendingShareFiles),
+            initialFiles: pendingShareFiles,
+            onClose: closeShare,
+          ),
+        DesktopPane.join => JoinCollectionScreen(
+            key: ValueKey(pendingInvite),
+            initialCode: pendingInvite,
+            onClose: closeJoin,
+          ),
+        DesktopPane.home => const SizedBox.shrink(),
+      };
 }

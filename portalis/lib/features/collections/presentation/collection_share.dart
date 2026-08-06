@@ -9,6 +9,7 @@ import '../../../app/app_controllers.dart';
 import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../../media/application/media_formats.dart';
+import '../domain/share_payload_limits.dart';
 
 /// One locally selected file, ready to become a shared manifest entry.
 typedef PickedFile = ({String name, Uint8List bytes});
@@ -48,7 +49,14 @@ class _ShareScreenState extends State<ShareScreen> {
   void initState() {
     super.initState();
     final initial = widget.initialFiles;
-    if (initial != null && initial.isNotEmpty) _files = initial;
+    if (initial != null && initial.isNotEmpty) {
+      final error = _payloadError(initial);
+      if (error == null) {
+        _files = initial;
+      } else {
+        _error = error;
+      }
+    }
   }
 
   @override
@@ -58,13 +66,36 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 
   void _add(Iterable<PickedFile> picked) {
+    final existing = _files.map((f) => f.name).toSet();
+    final additions = picked.where((f) => !existing.contains(f.name)).toList();
+    final candidate = [..._files, ...additions];
+    final error = _payloadError(candidate);
+    if (error != null) {
+      _toast(error, severity: ToastSeverity.error);
+      return;
+    }
     setState(() {
-      final existing = _files.map((f) => f.name).toSet();
-      _files = [
-        ..._files,
-        ...picked.where((f) => !existing.contains(f.name)),
-      ];
+      _error = null;
+      _files = candidate;
     });
+  }
+
+  String? _payloadError(Iterable<PickedFile> files) {
+    var totalBytes = 0;
+    var largestFileBytes = 0;
+    var fileCount = 0;
+    for (final file in files) {
+      fileCount++;
+      totalBytes += file.bytes.length;
+      if (file.bytes.length > largestFileBytes) {
+        largestFileBytes = file.bytes.length;
+      }
+    }
+    return SharePayloadLimits.error(
+      fileCount: fileCount,
+      totalBytes: totalBytes,
+      largestFileBytes: largestFileBytes,
+    );
   }
 
   Future<void> _pickPhotos() async {
@@ -125,7 +156,15 @@ class _ShareScreenState extends State<ShareScreen> {
 
   Future<void> _createShare() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty || _files.isEmpty) return;
+    if (name.isEmpty) {
+      setState(() => _error = 'Name the collection before creating it');
+      return;
+    }
+    final payloadError = _payloadError(_files);
+    if (payloadError != null) {
+      setState(() => _error = payloadError);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;

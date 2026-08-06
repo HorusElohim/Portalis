@@ -98,7 +98,9 @@ class _CollectionRowState extends State<CollectionRow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _row(),
-          if (widget.onCommand != null && showsExtras) ...[
+          if (widget.onCommand != null &&
+              widget.detail == null &&
+              showsExtras) ...[
             const SizedBox(height: 12),
             CollectionCommandBar(
               onCommand: widget.onCommand!,
