@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_info_hash_with_peers`, `add_torrent_from_file_bytes`, `advance`, `bt_listen_port_cached`, `bt_listen_port`, `cancel`, `delete_torrent_files`, `ensure_active`, `fail`, `forget_torrent`, `inspect_source_files`, `new`, `pause_torrent`, `publish`, `restart_torrent`, `session_started`, `set_rate_limits`, `set_stage`, `snapshot`, `storage_breakdown`, `validate_source_files`
+// These functions are ignored because they are not marked as `pub`: `add_info_hash_with_peers`, `advance`, `bt_listen_port_cached`, `bt_listen_port`, `cancel`, `delete_torrent_files`, `ensure_active`, `fail`, `forget_torrent`, `inspect_source_files`, `new`, `pause_torrent`, `publish`, `restart_torrent`, `session_started`, `set_rate_limits`, `set_stage`, `snapshot`, `storage_breakdown`, `validate_source_files`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PublishProgressState`, `PublishProgress`, `RawStorageEntry`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 

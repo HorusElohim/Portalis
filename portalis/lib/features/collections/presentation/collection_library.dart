@@ -14,6 +14,7 @@ import 'empty_collections_call_to_action.dart';
 import 'empty_collections_welcome.dart';
 import 'home_header.dart';
 import 'home_library_toolbar.dart';
+import 'share_collection_action.dart';
 
 /// Adaptive collection library layout. It renders supplied state only; route
 /// selection, native lifecycle, and file-drop handling remain outside it.
@@ -65,7 +66,6 @@ class CollectionLibrary extends StatelessWidget {
         filter: filter,
         onSearch: onSearch,
         onFilterChanged: onFilterChanged,
-        onShare: onShare,
         onJoin: onJoin,
       );
 
@@ -113,6 +113,7 @@ class CollectionLibrary extends StatelessWidget {
         openId: openId,
         onOpen: onOpen,
         onCommand: onCommand,
+        footer: ShareCollectionAction(onTap: onShare),
         detailFor: (collection, level) => CollectionDetail(
           key: ValueKey(collection.id),
           collection: collection,
@@ -131,7 +132,7 @@ class CollectionLibrary extends StatelessWidget {
             : 'Nothing is being received right now.',
       );
     }
-    return const EmptyCollectionsWelcome();
+    return EmptyCollectionsWelcome(onShare: onShare);
   }
 
   Widget _compact() {
@@ -194,6 +195,13 @@ class CollectionLibrary extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(34, 26, 34, 0),
                 child: EmptyCollectionsCallToAction(onShare: onShare),
+              ),
+            ),
+          if (collections.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
+                child: ShareCollectionAction(onTap: onShare),
               ),
             ),
           SliverToBoxAdapter(

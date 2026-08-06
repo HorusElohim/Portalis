@@ -248,7 +248,7 @@ group('shell', () {
       await tester.tap(find.byKey(const Key('commandBarField')));
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await pumpTransition(tester);
-      await tester.tap(find.byKey(const Key('addShareAction')));
+      await tester.tap(find.byKey(const Key('shareCollectionAction')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.byType(ShareScreen), findsOneWidget);

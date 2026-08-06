@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../theme.dart';
 import '../domain/collection_filter.dart';
 import 'collection_filter_action.dart';
 import 'command_bar.dart';
@@ -14,7 +13,6 @@ class HomeLibraryToolbar extends StatelessWidget {
     required this.filter,
     required this.onSearch,
     required this.onFilterChanged,
-    required this.onShare,
     required this.onJoin,
   });
 
@@ -23,7 +21,6 @@ class HomeLibraryToolbar extends StatelessWidget {
   final CollectionFilter filter;
   final ValueChanged<String> onSearch;
   final ValueChanged<CollectionFilter> onFilterChanged;
-  final VoidCallback onShare;
   final ValueChanged<String> onJoin;
 
   @override
@@ -31,7 +28,6 @@ class HomeLibraryToolbar extends StatelessWidget {
     final commandBar = PortalisCommandBar(
       onSearch: onSearch,
       onInvite: onJoin,
-      onEmptySubmit: () => _showAddSheet(context),
     );
     if (wide) {
       return commandBar;
@@ -51,35 +47,4 @@ class HomeLibraryToolbar extends StatelessWidget {
     );
   }
 
-  Future<void> _showAddSheet(BuildContext context) => showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: AppColors.surface,
-        builder: (sheetContext) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                key: const Key('addShareAction'),
-                leading: const Icon(Icons.add_photo_alternate_outlined),
-                title: const Text('Share files'),
-                subtitle: const Text('Create a collection from this device'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onShare();
-                },
-              ),
-              ListTile(
-                key: const Key('addJoinAction'),
-                leading: const Icon(Icons.group_add_outlined),
-                title: const Text('Join collection'),
-                subtitle: const Text('Enter an invite code'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onJoin('');
-                },
-              ),
-            ],
-          ),
-        ),
-      );
 }

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme.dart';
+import '../../../design/identity.dart';
 import '../../../design/indicators.dart';
 import '../../../design/primitives.dart';
 
@@ -15,38 +16,42 @@ import '../../../design/primitives.dart';
 /// drifted (a comma here, a line-break there) but never identical — this is
 /// the one copy, so the two can no longer disagree about what the welcome
 /// says. Anything a call site needs beyond this — a footer line, a set of
-/// action buttons — is its own content placed around this widget, not a
-/// parameter added to it: this stays exactly the fact both screens share.
+/// The optional logo action keeps the shared welcome visual reusable while
+/// allowing an empty library to make the mark its primary share affordance.
 class Welcome extends StatelessWidget {
-  const Welcome({super.key, this.titleSize = 32});
+  const Welcome({super.key, this.titleSize = 32, this.onLogoTap});
 
   /// The window decides most type scale in this app (see [ScreenHeader]),
   /// but this headline sits outside that frame on both call sites, so each
   /// states its own.
   final double titleSize;
+  final VoidCallback? onLogoTap;
 
   @override
   Widget build(BuildContext context) {
+    final logo = const PulseRings(
+      size: 168,
+      child: PortalisLogo(size: 72),
+    );
+    final shareLogo = onLogoTap == null
+        ? logo
+        : Tooltip(
+            message: 'Share files',
+            child: Semantics(
+              button: true,
+              label: 'Share files',
+              child: GestureDetector(
+                key: const Key('shareCollectionAction'),
+                onTap: onLogoTap,
+                child: logo,
+              ),
+            ),
+          );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        PulseRings(
-          size: 168,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            child: Image.asset(
-              'assets/PortalisNature.png',
-              width: 72,
-              height: 72,
-              // Decoded near the size it is drawn, not the source's 1254² —
-              // so the full-resolution bitmap never enters the image cache
-              // for a 72pt slot.
-              cacheWidth: 216,
-              cacheHeight: 216,
-              filterQuality: FilterQuality.medium,
-            ),
-          ),
-        ),
+        shareLogo,
         const SizedBox(height: 22),
         CanvasTitle(
           'Send anything,\nstraight to a friend',

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../theme.dart';
 import 'welcome.dart';
 
-/// The wide-layout empty state. Compact Home adds its contextual action.
+/// The wide-layout empty state with the same logo share action as compact Home.
 class EmptyCollectionsWelcome extends StatelessWidget {
-  const EmptyCollectionsWelcome({super.key});
+  const EmptyCollectionsWelcome({super.key, required this.onShare});
+
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -14,7 +16,7 @@ class EmptyCollectionsWelcome extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Welcome(titleSize: 34),
+              Welcome(titleSize: 34, onLogoTap: onShare),
               const SizedBox(height: 26),
               Text(
                 'NO ACCOUNT · NOTHING LEAVES THIS DEVICE UNASKED',

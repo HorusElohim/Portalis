@@ -152,7 +152,7 @@ group('how long is left', () {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('opens the add flow from an empty command submission',
+    testWidgets('empty command submission does not open an add flow',
         (tester) async {
       await pumpApp(tester);
 
@@ -161,10 +161,11 @@ group('how long is left', () {
       await tester.tap(find.byKey(const Key('commandBarField')));
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await pumpTransition(tester);
-      expect(find.byKey(const Key('addShareAction')), findsOneWidget);
-      expect(find.byKey(const Key('addJoinAction')), findsOneWidget);
+      expect(find.byKey(const Key('addShareAction')), findsNothing);
+      expect(find.byKey(const Key('addJoinAction')), findsNothing);
       expect(find.byKey(const Key('addTorrentAction')), findsNothing);
-      await tester.tap(find.byKey(const Key('addShareAction')));
+      expect(find.text('PRESS ENTER'), findsNothing);
+      await tester.tap(find.byKey(const Key('shareCollectionAction')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.byType(ShareScreen), findsOneWidget);

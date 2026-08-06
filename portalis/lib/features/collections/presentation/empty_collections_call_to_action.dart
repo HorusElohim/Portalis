@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../design/design.dart';
 import 'welcome.dart';
 
-/// Empty compact library state with a single promoted action.
+/// Empty compact library state with the Portalis mark as its share action.
 class EmptyCollectionsCallToAction extends StatelessWidget {
   const EmptyCollectionsCallToAction({super.key, required this.onShare});
 
@@ -12,14 +11,7 @@ class EmptyCollectionsCallToAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
         children: [
-          const Welcome(titleSize: 30),
-          const SizedBox(height: 24),
-          PrimaryActionButton(
-            label: 'Share files',
-            icon: Icons.add,
-            trailingChevron: false,
-            onTap: onShare,
-          ),
+          Welcome(titleSize: 30, onLogoTap: onShare),
         ],
       );
 }

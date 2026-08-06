@@ -6,30 +6,19 @@ import '../features/collections/domain/collection.dart';
 import '../theme.dart';
 
 /// Distinct collaborators across every collection, and where they appear.
-/// Derived — there is no peer directory in the backend.
 ///
-/// A first-class destination on both layouts — a bottom tab on mobile, a
-/// header button in the wide layout — after
-/// two rounds of being reached only indirectly. The User tab still carries the
-/// same collaborator count as a shortcut, but selects this same screen rather
-/// than pushing a second copy of it. Same content and the same grid either
-/// way — on a phone-width window it simply resolves to one column.
+/// The transfer figures on a collaborator card are pooled from the
+/// collections that collaborator belongs to. The native engine reports
+/// transfer activity per collection, not per signed identity, so the card
+/// deliberately describes the aggregate rather than pretending to know which
+/// individual connection consumed which bytes.
 class PeopleScreen extends StatelessWidget {
   const PeopleScreen({super.key, this.embedded = false});
 
-  /// Set whenever a parent already supplies a Scaffold, SafeArea and back
-  /// button — a desktop shell pane, or this screen's own mobile tab of
-  /// [RootShell] — so this doesn't draw a second set, or a back button with
-  /// nowhere to go.
   final bool embedded;
 
   @override
   Widget build(BuildContext context) {
-    // Home and Settings both read Collections through a ListenableBuilder;
-    // this screen sat under a const [...] tab list in RootShell without one,
-    // so a background poll landing while People wasn't the visible tab could
-    // leave it showing whatever was true the first time it built, right up
-    // until something else forced this position in the tree to rebuild.
     return ListenableBuilder(
       listenable: AppControllers.collections,
       builder: (context, _) => _build(context),
@@ -37,42 +26,84 @@ class PeopleScreen extends StatelessWidget {
   }
 
   Widget _build(BuildContext context) {
-    final byDevice = <String, ({Collaborator who, List<String> collections})>{};
-    for (final c in AppControllers.collections.collections) {
-      for (final p in c.collaborators) {
-        final entry = byDevice[p.deviceId];
+    final byDevice = <String,
+        ({
+          Collaborator who,
+          List<String> collections,
+          int totalBytes,
+          double downloadMbps,
+          double uploadMbps,
+          bool isSharing,
+        })>{};
+    for (final collection in AppControllers.collections.collections) {
+      for (final collaborator in collection.collaborators) {
+        final entry = byDevice[collaborator.deviceId];
         if (entry == null) {
-          byDevice[p.deviceId] = (who: p, collections: [c.name]);
+          byDevice[collaborator.deviceId] = (
+            who: collaborator,
+            collections: [collection.name],
+            totalBytes: collection.totalBytes,
+            downloadMbps: collection.downloadMbps,
+            uploadMbps: collection.uploadMbps,
+            isSharing: collection.isSharing,
+          );
         } else {
-          entry.collections.add(c.name);
+          entry.collections.add(collection.name);
+          byDevice[collaborator.deviceId] = (
+            who: entry.who,
+            collections: entry.collections,
+            totalBytes: entry.totalBytes + collection.totalBytes,
+            downloadMbps: entry.downloadMbps + collection.downloadMbps,
+            uploadMbps: entry.uploadMbps + collection.uploadMbps,
+            isSharing: entry.isSharing || collection.isSharing,
+          );
         }
       }
     }
     final people = byDevice.values.toList();
 
-    // Anonymous swarm peers across every collection. They remain separate
-    // from signed collaborators: an address is a connection, not an identity.
+    // Anonymous swarm peers across every collection. An address is a
+    // connection, not a signed identity, but its collection-level telemetry
+    // can still be pooled for the same summary card.
+    final collectionByName = <String, Collection>{
+      for (final collection in AppControllers.collections.collections)
+        collection.name: collection,
+    };
     final byAddress = <String,
-        ({String address, List<String> collections, DateTime lastSeen})>{};
+        ({
+          String address,
+          List<String> collections,
+          DateTime lastSeen,
+          int totalBytes,
+          double downloadMbps,
+          double uploadMbps,
+        })>{};
     for (final peer in AppControllers.collections.peerHistory) {
+      final collection = collectionByName[peer.collectionName];
       final entry = byAddress[peer.address];
       if (entry == null) {
         byAddress[peer.address] = (
           address: peer.address,
           collections: [peer.collectionName],
           lastSeen: peer.lastSeen,
+          totalBytes: collection?.totalBytes ?? 0,
+          downloadMbps: collection?.downloadMbps ?? 0,
+          uploadMbps: collection?.uploadMbps ?? 0,
         );
       } else {
         if (!entry.collections.contains(peer.collectionName)) {
           entry.collections.add(peer.collectionName);
         }
-        if (peer.lastSeen.isAfter(entry.lastSeen)) {
-          byAddress[peer.address] = (
-            address: entry.address,
-            collections: entry.collections,
-            lastSeen: peer.lastSeen,
-          );
-        }
+        byAddress[peer.address] = (
+          address: entry.address,
+          collections: entry.collections,
+          lastSeen: peer.lastSeen.isAfter(entry.lastSeen)
+              ? peer.lastSeen
+              : entry.lastSeen,
+          totalBytes: entry.totalBytes + (collection?.totalBytes ?? 0),
+          downloadMbps: entry.downloadMbps + (collection?.downloadMbps ?? 0),
+          uploadMbps: entry.uploadMbps + (collection?.uploadMbps ?? 0),
+        );
       }
     }
     final torrentPeople = byAddress.values.toList();
@@ -84,7 +115,9 @@ class PeopleScreen extends StatelessWidget {
 
     return AppScreen(
       title: 'People',
-      subtitle: cards.isEmpty ? null : Text(_subtitle(people.length, torrentPeople.length)),
+      subtitle: cards.isEmpty
+          ? null
+          : Text(_subtitle(people.length, torrentPeople.length)),
       embedded: embedded,
       width: ScreenWidth.full,
       body: cards.isEmpty
@@ -99,9 +132,6 @@ class PeopleScreen extends StatelessWidget {
                 ),
               ),
             )
-          // A grid, not a single stretched column: on desktop the centre
-          // pane is wide enough for several across, and on a phone-width
-          // window this resolves to one anyway.
           : WindowBuilder(
               builder: (context, window) => GridView.builder(
                 padding: const EdgeInsets.fromLTRB(
@@ -110,7 +140,7 @@ class PeopleScreen extends StatelessWidget {
                   crossAxisCount: window.columns(340),
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  mainAxisExtent: 76,
+                  mainAxisExtent: 180,
                 ),
                 itemCount: cards.length,
                 itemBuilder: (context, i) => cards[i],
@@ -121,99 +151,209 @@ class PeopleScreen extends StatelessWidget {
 
   String _subtitle(int collaborators, int torrentPeers) {
     final parts = [
-      if (collaborators > 0) '$collaborators collaborator${collaborators == 1 ? '' : 's'}',
-      if (torrentPeers > 0) '$torrentPeers torrent peer${torrentPeers == 1 ? '' : 's'}',
+      if (collaborators > 0)
+        '$collaborators collaborator${collaborators == 1 ? '' : 's'}',
+      if (torrentPeers > 0)
+        '$torrentPeers torrent peer${torrentPeers == 1 ? '' : 's'}',
     ];
     return '${parts.join(', ')} across your collections';
   }
 }
 
-/// One row of a person's identity: an avatar, a title, a subtitle, and an
-/// optional trailing action. A named collaborator ([PersonCard]'s own
-/// factory) and an anonymous swarm peer ([TorrentPeerCard]) are both this
-/// same row, just filled in differently — so the row itself lives here once
-/// instead of being redrawn per kind.
+/// A collaborator summary card. Named collaborators and anonymous swarm
+/// peers share the same visual language while their identity colors remain
+/// distinct.
 class PersonCard extends StatelessWidget {
   const PersonCard._({
     super.key,
     required this.avatar,
     required this.title,
     required this.subtitle,
+    this.totalBytes = 0,
+    this.sharedCount = 0,
+    this.rateMbps = 0,
+    this.status = 'IDLE',
+    this.statusColor = AppColors.textFaint,
+    this.active = false,
+    this.metricColor = AppColors.signal,
     this.subtitleColor = AppColors.textFaint,
     this.trailing,
   });
 
-  /// One collaborator's card — avatar, name and role, and which collections
-  /// they share with this device.
   factory PersonCard({
     Key? key,
-    required ({Collaborator who, List<String> collections}) entry,
+    required ({
+      Collaborator who,
+      List<String> collections,
+      int totalBytes,
+      double downloadMbps,
+      double uploadMbps,
+      bool isSharing,
+    }) entry,
   }) {
-    final who = entry.who;
+    final rateMbps = entry.uploadMbps > 0
+        ? entry.uploadMbps
+        : entry.downloadMbps;
     return PersonCard._(
       key: key,
-      avatar: Avatar(initials: who.initials, size: 34),
-      title: who.isAdmin ? '${who.name} · admin' : who.name,
+      avatar: Avatar(initials: entry.who.initials, size: 44),
+      title: entry.who.isAdmin ? '${entry.who.name} · admin' : entry.who.name,
       subtitle: entry.collections.join(' · '),
+      totalBytes: entry.totalBytes,
+      sharedCount: entry.collections.length,
+      rateMbps: rateMbps,
+      status: _statusLabel(
+        uploadMbps: entry.uploadMbps,
+        downloadMbps: entry.downloadMbps,
+        isSharing: entry.isSharing,
+      ),
+      statusColor: rateMbps > 0 ? AppColors.signal : AppColors.textFaint,
+      active: rateMbps > 0,
     );
   }
 
   final Widget avatar;
   final String title;
   final String subtitle;
+  final int totalBytes;
+  final int sharedCount;
+  final double rateMbps;
+  final String status;
+  final Color statusColor;
+  final bool active;
+  final Color metricColor;
   final Color subtitleColor;
   final Widget? trailing;
 
   @override
-  Widget build(BuildContext context) => SurfaceCard(
-        child: Row(
-          children: [
-            avatar,
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title, overflow: TextOverflow.ellipsis, style: AppText.cardTitle()),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: monoLabel(size: 10.5, color: subtitleColor, letterSpacing: 0.2),
-                  ),
-                ],
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      glow: active ? GlowLevel.active : GlowLevel.none,
+      glowIntensity: Glow.intensityForRate(rateMbps),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              avatar,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.cardTitle(),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (active) ...[
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppColors.signal,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Text(
+                            status,
+                            overflow: TextOverflow.ellipsis,
+                            style: monoLabel(
+                              size: 9.5,
+                              color: statusColor,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (trailing != null) trailing!,
-          ],
-        ),
-      );
+              const SizedBox(width: 8),
+              _RateValue(rateMbps: rateMbps, color: metricColor),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _Metric(
+                  value: rateMbps.toStringAsFixed(1),
+                  label: 'MB/S',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _Metric(value: '$sharedCount', label: 'SHARED'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _Metric(
+                  value: _gigabytes(totalBytes),
+                  label: 'GB TOTAL',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.secondary(color: subtitleColor),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-/// One anonymous swarm peer's card — an `ip:port`, not a name, when it was
-/// last seen, and the torrent(s) it was seen on. Ember, matching every other
-/// torrent-owned surface in the app, so it never reads as a signed-in
-/// collaborator.
+/// One anonymous swarm peer's card. Ember marks it as network-only: the
+/// address has no signed identity behind it.
 class TorrentPeerCard extends PersonCard {
   TorrentPeerCard({
     super.key,
-    required ({String address, List<String> collections, DateTime lastSeen}) entry,
+    required ({
+      String address,
+      List<String> collections,
+      DateTime lastSeen,
+      int totalBytes,
+      double downloadMbps,
+      double uploadMbps,
+    }) entry,
   }) : super._(
           avatar: Container(
-            width: 34,
-            height: 34,
+            width: 44,
+            height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppColors.emberWash,
-              borderRadius: BorderRadius.circular(34 * 0.34),
+              borderRadius: BorderRadius.circular(44 * 0.34),
             ),
-            child: const Icon(Icons.hub_outlined, size: 18, color: AppColors.ember),
+            child: const Icon(Icons.hub_outlined,
+                size: 20, color: AppColors.ember),
           ),
           title: entry.address,
-          subtitle: 'Torrent peer · ${formatLastSeen(entry.lastSeen)} · '
-              '${entry.collections.join(' · ')}',
+          subtitle: '${entry.collections.join(' · ')} · '
+              '${formatLastSeen(entry.lastSeen)}',
+          totalBytes: entry.totalBytes,
+          sharedCount: entry.collections.length,
+          rateMbps: entry.uploadMbps > 0
+              ? entry.uploadMbps
+              : entry.downloadMbps,
+          status: 'Torrent peer',
+          statusColor: AppColors.ember,
+          metricColor: AppColors.ember,
           subtitleColor: AppColors.ember,
           trailing: IconButton(
             tooltip: 'Forget peer',
@@ -222,4 +362,86 @@ class TorrentPeerCard extends PersonCard {
             onPressed: () => AppControllers.collections.forgetPeer(entry.address),
           ),
         );
+}
+
+class _RateValue extends StatelessWidget {
+  const _RateValue({required this.rateMbps, required this.color});
+
+  final double rateMbps;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            rateMbps.toStringAsFixed(1),
+            style: TextStyle(
+              fontFamily: AppFonts.display,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+          Text(
+            'MB/S',
+            style: monoLabel(size: 9, color: AppColors.signalMuted),
+          ),
+        ],
+      );
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 50,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.inner),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontFamily: AppFonts.display,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.signal,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: monoLabel(
+                size: 9,
+                color: AppColors.signalMuted,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+String _gigabytes(int bytes) => (bytes / 1000000000).toStringAsFixed(1);
+
+String _statusLabel({
+  required double uploadMbps,
+  required double downloadMbps,
+  required bool isSharing,
+}) {
+  if (uploadMbps > 0 && downloadMbps > 0) return 'SENDING · RECEIVING';
+  if (uploadMbps > 0) return 'SENDING';
+  if (downloadMbps > 0) return 'RECEIVING';
+  if (isSharing) return 'SHARING';
+  return 'IDLE';
 }

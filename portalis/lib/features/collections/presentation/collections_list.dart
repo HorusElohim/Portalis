@@ -15,6 +15,7 @@ class CollectionsList extends StatelessWidget {
     required this.onOpen,
     required this.detailFor,
     required this.onCommand,
+    this.footer,
   });
 
   final List<Collection> collections;
@@ -22,6 +23,7 @@ class CollectionsList extends StatelessWidget {
   final ValueChanged<Collection> onOpen;
   final Widget Function(Collection collection, CollectionDetailLevel level) detailFor;
   final ValueChanged<(Collection, CollectionCommand)> onCommand;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) => ListView.separated(
@@ -31,9 +33,15 @@ class CollectionsList extends StatelessWidget {
           kScreenGutter + 8,
           28,
         ),
-        itemCount: collections.length,
+        itemCount: collections.length + (footer == null ? 0 : 1),
         separatorBuilder: (_, __) => const SizedBox(height: 14),
         itemBuilder: (context, index) {
+          if (index == collections.length) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 12),
+              child: footer,
+            );
+          }
           final collection = collections[index];
           final isOpen = collection.id == openId;
           return CollectionRow(

@@ -9,8 +9,7 @@ import '../../../design/toast.dart';
 import '../domain/paste.dart';
 
 /// One field for magnets, invites, collection search, and the `.torrent`
-/// picker. The input kind decides what Enter does, so the home screen needs
-/// no separate creation buttons.
+/// picker. Recognised input is dispatched; empty input simply does nothing.
 ///
 /// Replaces the sidebar's magnet field, its Paste and Add buttons, its
 /// .torrent picker and its "Join with a key" action — five controls, three of
@@ -27,7 +26,6 @@ class PortalisCommandBar extends StatefulWidget {
     super.key,
     required this.onSearch,
     required this.onInvite,
-    this.onEmptySubmit,
     this.autofocus = false,
   });
 
@@ -39,8 +37,6 @@ class PortalisCommandBar extends StatefulWidget {
   /// from here — joining names you to strangers, so it keeps its confirmation
   /// step.
   final ValueChanged<String> onInvite;
-  final VoidCallback? onEmptySubmit;
-
   final bool autofocus;
 
   @override
@@ -76,7 +72,6 @@ class _CommandBarState extends State<PortalisCommandBar> {
     switch (PasteKind.of(text)) {
       case PasteKind.empty:
         _focus.unfocus();
-        widget.onEmptySubmit?.call();
         return;
       case PasteKind.search:
         return;
@@ -184,7 +179,7 @@ class _CommandBarState extends State<PortalisCommandBar> {
                     isDense: true,
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    hintText: 'Magnet, invite, or search…  Press Enter',
+                    hintText: 'Magnet, invite, or search…',
                     hintStyle: monoLabel(size: 12.5, letterSpacing: 0),
                   ),
                   onChanged: _onChanged,
@@ -198,8 +193,7 @@ class _CommandBarState extends State<PortalisCommandBar> {
                 kind: kind,
                 busy: _busy,
                 onSubmit: _submit,
-                enabled: kind != PasteKind.search &&
-                    (kind != PasteKind.empty || widget.onEmptySubmit != null),
+                enabled: kind != PasteKind.search && kind != PasteKind.empty,
               ),
               const SizedBox(width: 4),
               _IconAction(
@@ -225,7 +219,7 @@ class _CommandBarState extends State<PortalisCommandBar> {
   }
 }
 
-/// The right-hand end of the bar: what will happen if you press enter.
+/// The right-hand end of the bar: what will happen for recognised input.
 class _Hint extends StatelessWidget {
   const _Hint({
     required this.kind,
@@ -249,11 +243,12 @@ class _Hint extends StatelessWidget {
             strokeWidth: 1.6, color: AppColors.signal),
       );
     }
+    if (kind == PasteKind.empty) return const SizedBox.shrink();
     final label = switch (kind) {
       PasteKind.magnet => 'ADD TORRENT',
       PasteKind.invite => 'JOIN',
       PasteKind.search => 'FILTERING',
-      PasteKind.empty => 'PRESS ENTER',
+      PasteKind.empty => '',
     };
     final actionable = enabled;
     if (!actionable) {

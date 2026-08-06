@@ -44,6 +44,37 @@ group('people and settings', () {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('pools collaborator transfer facts into the People card',
+        (tester) async {
+      const ana = Collaborator(deviceId: 'dev-ana', name: 'Ana');
+      await pumpApp(tester, collections: [
+        buildCollection(
+          id: 'photos',
+          name: 'Iceland trip',
+          collaborators: [ana],
+          totalBytes: 1200000000,
+          uploadMbps: 8.1,
+        ),
+        buildCollection(
+          id: 'music',
+          name: 'Band demos',
+          collaborators: [ana],
+          totalBytes: 2200000000,
+          uploadMbps: 3.3,
+        ),
+      ]);
+
+      await tester.tap(find.byKey(const Key('navTab2')));
+      await tester.pump();
+
+      expect(find.text('Ana'), findsOneWidget);
+      expect(find.text('11.4'), findsNWidgets(2));
+      expect(find.text('2'), findsWidgets);
+      expect(find.text('3.4'), findsNWidgets(1));
+      expect(find.text('Iceland trip · Band demos'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     // People has gone missing on a platform twice: first it existed only as
     // a desktop sidebar pane, then as a row so far down the old You screen
     // that it was past the address, the identity notice and File formats.

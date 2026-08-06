@@ -6,9 +6,14 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+- Added pooled collaborator transfer summaries to People cards, including
+  current rate, shared collection count, and total shared bytes.
+
 ### Changed
 
-<!-- User-visible behavior, UX, or architecture changes go here. -->
+- Removed the redundant empty-search action and centered Share files button;
+  the Portalis logo is now the single share affordance and remains below the
+  collection content.
 
 ### Fixed
 
