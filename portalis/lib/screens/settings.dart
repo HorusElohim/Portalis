@@ -39,6 +39,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _settings = AppControllers.settings;
+  final _scrollController = ScrollController();
   static const _benchmark = EfficiencyBenchmark();
   Timer? _storagePoll;
   bool _restartPending = false;
@@ -74,6 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     AppNavigation.tab.removeListener(_onDestinationChanged);
     _storagePoll?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -106,7 +108,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _openAdvanced() => openNestedScreen(
         context,
         embedded: widget.embedded,
-        showInPlace: () => setState(() => _advanced = true),
+        showInPlace: () {
+          setState(() => _advanced = true);
+          _resetScrollPosition();
+        },
         push: (_) => const SettingsScreen(advanced: true),
       );
 
@@ -125,9 +130,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _handleBack() {
     if (widget.embedded) {
       setState(() => _advanced = false);
+      _resetScrollPosition();
     } else {
       Navigator.of(context).pop();
     }
+  }
+
+  void _resetScrollPosition() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+    });
   }
 
   Future<void> _apply(EngineSettings next) async {
@@ -263,14 +277,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Wider than the shared reading cap once there's room: this is the one
       // screen with something to do with it (see SettingsSectionsLayout).
       wideMaxWidth: 1100,
-      body: ListenableBuilder(
-        listenable: Listenable.merge(
-          [_settings, AppControllers.collections],
-        ),
-        builder: (context, _) {
-          final s = _settings.settings;
-          return SingleChildScrollView(
-            child: Column(
+      body: _SettingsScrollSurface(
+        controller: _scrollController,
+        child: ListenableBuilder(
+          listenable: _settings,
+          builder: (context, _) {
+            final s = _settings.settings;
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (!_advanced)
@@ -304,9 +317,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SettingsSectionsLayout(sections: _sections(s)),
                 const SizedBox(height: 24),
               ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -640,8 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (raw == null) return;
               await _apply(
                 s.copyWith(
-                  peerReadWriteTimeoutSecs:
-                      raw.isEmpty ? null : _parseInt(raw),
+                  peerReadWriteTimeoutSecs: raw.isEmpty ? null : _parseInt(raw),
                 ),
               );
             },
@@ -685,5 +697,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final v = int.tryParse(raw.trim());
     return (v == null || v <= 0) ? null : v;
   }
+}
 
+class _SettingsScrollSurface extends StatelessWidget {
+  const _SettingsScrollSurface({
+    required this.controller,
+    required this.child,
+  });
+
+  final ScrollController controller;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return WindowBuilder(
+      builder: (context, window) {
+        final scrollable = RawScrollbar(
+          controller: controller,
+          thumbVisibility: window.isSpacious,
+          interactive: window.isSpacious,
+          trackVisibility: false,
+          thickness: window.isSpacious ? 5 : 3,
+          radius: const Radius.circular(AppRadius.pill),
+          minThumbLength: 48,
+          thumbColor: AppColors.textGhost.withValues(alpha: 0.62),
+          child: SingleChildScrollView(
+            controller: controller,
+            physics: window.isSpacious
+                ? const ClampingScrollPhysics()
+                : const BouncingScrollPhysics(),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: child,
+          ),
+        );
+
+        if (!window.isSpacious) return scrollable;
+
+        final radius = BorderRadius.circular(AppRadius.card);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.surface.withValues(alpha: 0.52),
+              borderRadius: radius,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: radius,
+              child: scrollable,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

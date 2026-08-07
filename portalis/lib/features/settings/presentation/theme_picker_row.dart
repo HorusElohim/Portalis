@@ -16,7 +16,7 @@ class ThemePickerRow extends StatelessWidget {
     return ListenableBuilder(
       listenable: ThemeController.instance,
       builder: (context, _) => Row(
-        children: const [
+        children: [
           Expanded(
             child: _ThemeSwatch(
               id: AppThemeId.nature,
@@ -24,7 +24,7 @@ class ThemePickerRow extends StatelessWidget {
               palette: AppPalette.nature,
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Expanded(
             child: _ThemeSwatch(
               id: AppThemeId.future,

@@ -43,54 +43,60 @@ class SettingsHealthCard extends StatelessWidget {
   final CollectionsController collections;
 
   @override
-  Widget build(BuildContext context) {
-    final peers = collections.collections.fold<int>(
-      0,
-      (sum, collection) => sum + collection.livePeers,
-    );
-    final facts = [
-      'PORT ${settings.listenPortStart}–${settings.listenPortEnd}',
-      settings.disableDht ? 'DHT OFF' : 'DHT ON',
-      plural(peers, 'PEER').toUpperCase(),
-    ];
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: collections,
+        builder: (context, _) {
+          final peers = collections.collections.fold<int>(
+            0,
+            (sum, collection) => sum + collection.livePeers,
+          );
+          final facts = [
+            'PORT ${settings.listenPortStart}–${settings.listenPortEnd}',
+            settings.disableDht ? 'DHT OFF' : 'DHT ON',
+            plural(peers, 'PEER').toUpperCase(),
+          ];
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(kScreenGutter, 14, kScreenGutter, 0),
-      child: SurfaceCard(
-        padding: const EdgeInsets.all(16),
-        glow: peers > 0 ? GlowLevel.calm : GlowLevel.none,
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          return Padding(
+            padding:
+                const EdgeInsets.fromLTRB(kScreenGutter, 14, kScreenGutter, 0),
+            child: SurfaceCard(
+              padding: const EdgeInsets.all(16),
+              glow: peers > 0 ? GlowLevel.calm : GlowLevel.none,
+              child: Row(
                 children: [
-                  Text(
-                    peers > 0 ? 'Connected' : 'Idle',
-                    style: AppText.cardTitle(),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    facts.join(' · '),
-                    style: monoLabel(
-                      size: 10.5,
-                      color: peers > 0
-                          ? AppColors.signalMuted
-                          : AppColors.textFaint,
-                      letterSpacing: 0.4,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          peers > 0 ? 'Connected' : 'Idle',
+                          style: AppText.cardTitle(),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          facts.join(' · '),
+                          style: monoLabel(
+                            size: 10.5,
+                            color: peers > 0
+                                ? AppColors.signalMuted
+                                : AppColors.textFaint,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  Icon(
+                    peers > 0
+                        ? Icons.check_circle_outline
+                        : Icons.circle_outlined,
+                    size: 20,
+                    color: peers > 0 ? AppColors.signal : AppColors.textGhost,
                   ),
                 ],
               ),
             ),
-            Icon(
-              peers > 0 ? Icons.check_circle_outline : Icons.circle_outlined,
-              size: 20,
-              color: peers > 0 ? AppColors.signal : AppColors.textGhost,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+          );
+        },
+      );
 }
