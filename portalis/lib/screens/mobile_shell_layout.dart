@@ -114,18 +114,7 @@ class AppBottomNav extends StatelessWidget {
                             if (items[i].icon == null)
                               Opacity(
                                 opacity: i == index ? 1 : 0.45,
-                                child: ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.circular(AppRadius.tight),
-                                  child: Image.asset(
-                                    'assets/PortalisNature.png',
-                                    width: 24,
-                                    height: 24,
-                                    cacheWidth: 72,
-                                    cacheHeight: 72,
-                                    filterQuality: FilterQuality.medium,
-                                  ),
-                                ),
+                                child: const PortalisLogo(size: 24),
                               )
                             else
                               Icon(
