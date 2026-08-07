@@ -13,6 +13,7 @@ import '../../media/presentation/media_viewer_screen.dart';
 import '../domain/collection.dart';
 import '../domain/picked_file.dart';
 import '../platform/no_copy_source_picker.dart';
+import '../platform/photo_library_picker.dart';
 import '../platform/source_access.dart';
 import 'collection_contents.dart';
 import 'collection_commands.dart';
@@ -79,7 +80,8 @@ class _CollectionDetailState extends State<CollectionDetail> {
   bool _busy = false;
 
   Collection get _collection =>
-      AppControllers.collections.byId(widget.collection.id) ?? widget.collection;
+      AppControllers.collections.byId(widget.collection.id) ??
+      widget.collection;
 
   void _toast(String message, {ToastSeverity severity = ToastSeverity.info}) {
     if (mounted) showToast(context, message, severity: severity);
@@ -140,7 +142,8 @@ class _CollectionDetailState extends State<CollectionDetail> {
                 ),
               ),
               const SizedBox(height: 14),
-              SelectableText(code, style: monoLabel(size: 12, letterSpacing: 0)),
+              SelectableText(code,
+                  style: monoLabel(size: 12, letterSpacing: 0)),
             ],
           ),
         ),
@@ -166,23 +169,11 @@ class _CollectionDetailState extends State<CollectionDetail> {
   }
 
   Future<void> _addMedia() async {
-    if (supportsNativeFilesSources) {
-      try {
-        final picked = await NoCopySourcePicker.pickFiles();
-        if (picked.isEmpty || !mounted) return;
-        await _run(() async {
-          final label = 'Added ${DateTime.now().toIso8601String().split('T').first}';
-          await AppControllers.collections.addMedia(_collection.id, label, picked);
-          _toast('Preparing ${picked.length} item${picked.length == 1 ? '' : 's'}');
-        });
-      } catch (error) {
-        _toast('Couldn\'t access those files: $error');
-      }
-      return;
-    }
     if (!supportsDirectPathSources) {
-      _toast(noCopySourceUnavailableMessage);
-      return;
+      if (!supportsNativeFilesSources && !supportsMobileGallerySources) {
+        _toast(noCopySourceUnavailableMessage);
+        return;
+      }
     }
     final source = await showModalBottomSheet<String>(
       context: context,
@@ -191,16 +182,18 @@ class _CollectionDetailState extends State<CollectionDetail> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Photos & videos'),
-              onTap: () => Navigator.of(sheetContext).pop('photos'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.folder_outlined),
-              title: const Text('Files'),
-              onTap: () => Navigator.of(sheetContext).pop('files'),
-            ),
+            if (supportsMobileGallerySources)
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Photos & videos'),
+                onTap: () => Navigator.of(sheetContext).pop('photos'),
+              ),
+            if (supportsDirectPathSources || supportsNativeFilesSources)
+              ListTile(
+                leading: const Icon(Icons.folder_outlined),
+                title: const Text('Files'),
+                onTap: () => Navigator.of(sheetContext).pop('files'),
+              ),
           ],
         ),
       ),
@@ -209,7 +202,11 @@ class _CollectionDetailState extends State<CollectionDetail> {
 
     List<PickedFile> picked = [];
     try {
-      if (source == 'photos') {
+      if (source == 'photos' && supportsMobileGallerySources) {
+        picked = await PhotoLibraryPicker.pickMedia();
+      } else if (source == 'files' && supportsNativeFilesSources) {
+        picked = await NoCopySourcePicker.pickFiles();
+      } else if (source == 'photos') {
         final files = await ImagePicker().pickMultipleMedia();
         picked = await Future.wait(
           files.map((file) => pickedFileFrom(
@@ -237,14 +234,16 @@ class _CollectionDetailState extends State<CollectionDetail> {
     if (picked.isEmpty || !mounted) return;
 
     await _run(() async {
-      final label = 'Added ${DateTime.now().toIso8601String().split('T').first}';
+      final label =
+          'Added ${DateTime.now().toIso8601String().split('T').first}';
       await AppControllers.collections.addMedia(_collection.id, label, picked);
       _toast('Preparing ${picked.length} item${picked.length == 1 ? '' : 's'}');
     });
   }
 
   Future<void> _fetchPending() => _run(() async {
-        final started = await AppControllers.collections.fetchMedia(_collection.id);
+        final started =
+            await AppControllers.collections.fetchMedia(_collection.id);
         _toast('Fetching $started item${started == 1 ? '' : 's'}');
       });
 
@@ -264,7 +263,16 @@ class _CollectionDetailState extends State<CollectionDetail> {
         },
       );
 
-  void _openMedia(Collection collection, MediaItem media) {
+  Future<void> _openMedia(Collection collection, MediaItem media) async {
+    final sourcePath = media.localPath;
+    if (sourcePath?.startsWith('phasset://') ?? false) {
+      try {
+        await PhotoLibraryPicker.previewMedia(sourcePath!);
+      } catch (error) {
+        if (mounted) _toast('Couldn\'t preview ${media.label}: $error');
+      }
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MediaViewerScreen(collection: collection, media: media),
@@ -395,8 +403,8 @@ class _ResizableMediaPreviewState extends State<_ResizableMediaPreview> {
             behavior: HitTestBehavior.opaque,
             onVerticalDragUpdate: (details) {
               setState(() {
-                _height = (_height + details.delta.dy)
-                    .clamp(_minHeight, _maxHeight);
+                _height =
+                    (_height + details.delta.dy).clamp(_minHeight, _maxHeight);
               });
             },
             child: Padding(

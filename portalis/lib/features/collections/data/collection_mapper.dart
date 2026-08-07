@@ -35,6 +35,8 @@ abstract final class CollectionMapper {
                 progress: info.ingestion!.progress,
                 processedBytes: info.ingestion!.processedBytes.toInt(),
                 totalBytes: info.ingestion!.totalBytes.toInt(),
+                completedPieces: info.ingestion!.completedPieces.toInt(),
+                totalPieces: info.ingestion!.totalPieces.toInt(),
                 error: info.ingestion!.error,
               ),
       );

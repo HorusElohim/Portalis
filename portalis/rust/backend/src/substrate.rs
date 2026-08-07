@@ -126,7 +126,13 @@ impl Substrate for Recorded {
     }
 
     async fn holdings(&self) -> Vec<TorrentInfo> {
-        self.held.lock().unwrap().iter().map(String::as_str).map(held_torrent).collect()
+        self.held
+            .lock()
+            .unwrap()
+            .iter()
+            .map(String::as_str)
+            .map(held_torrent)
+            .collect()
     }
 
     fn ready(&self) -> bool {

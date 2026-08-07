@@ -57,6 +57,30 @@ pub struct TorrentFile {
 pub struct SourceFile {
     pub name: String,
     pub path: String,
+    pub length_bytes: Option<u64>,
+}
+
+pub(crate) fn make_source_names_unique(files: &mut [SourceFile]) {
+    let mut names = std::collections::HashSet::new();
+    for file in files {
+        let original = native::sanitize_component(&file.name);
+        let mut candidate = original.clone();
+        let mut suffix = 2;
+        while !names.insert(candidate.to_lowercase()) {
+            candidate = numbered_source_name(&original, suffix);
+            suffix += 1;
+        }
+        file.name = candidate;
+    }
+}
+
+fn numbered_source_name(name: &str, suffix: u32) -> String {
+    match name.rsplit_once('.') {
+        Some((stem, extension)) if !stem.is_empty() && !extension.is_empty() => {
+            format!("{stem} ({suffix}).{extension}")
+        }
+        _ => format!("{name} ({suffix})"),
+    }
 }
 
 pub(crate) fn validate_source_files(files: &[SourceFile]) -> anyhow::Result<u64> {
@@ -71,10 +95,9 @@ pub(crate) fn validate_source_files(files: &[SourceFile]) -> anyhow::Result<u64>
             file.name
         );
         let location = crate::content_location::ContentLocation::from_source_path(&file.path)?;
-        let metadata = location.metadata()?;
-        anyhow::ensure!(metadata.is_file(), "source {:?} is not a file", file.path);
+        let length = location.length(file.length_bytes)?;
         total_bytes = total_bytes
-            .checked_add(metadata.len())
+            .checked_add(length)
             .ok_or_else(|| anyhow::anyhow!("source size overflow"))?;
     }
     Ok(total_bytes)
@@ -87,6 +110,8 @@ pub(crate) async fn inspect_source_files(files: &[SourceFile]) -> anyhow::Result
         .map_err(|error| anyhow::anyhow!("source inspection task failed: {error}"))?
 }
 
+pub(crate) const TORRENT_PIECE_LENGTH: u64 = 2 * 1024 * 1024;
+
 #[derive(Debug, Clone)]
 pub(crate) struct PublishProgress {
     inner: std::sync::Arc<std::sync::Mutex<PublishProgressState>>,
@@ -98,6 +123,8 @@ pub(crate) struct PublishProgressState {
     pub(crate) stage: String,
     pub(crate) processed_bytes: u64,
     pub(crate) total_bytes: u64,
+    pub(crate) completed_pieces: u64,
+    pub(crate) total_pieces: u64,
     pub(crate) error: Option<String>,
 }
 
@@ -108,6 +135,8 @@ impl PublishProgress {
                 stage: "preparing".into(),
                 processed_bytes: 0,
                 total_bytes,
+                completed_pieces: 0,
+                total_pieces: total_bytes.div_ceil(TORRENT_PIECE_LENGTH),
                 error: None,
             })),
             cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -119,12 +148,42 @@ impl PublishProgress {
     }
 
     pub(crate) fn set_stage(&self, stage: &str) {
-        self.inner.lock().unwrap().stage = stage.into();
+        let mut state = self.inner.lock().unwrap();
+        if stage == "hashing" && state.stage != "hashing" {
+            state.processed_bytes = 0;
+            state.completed_pieces = 0;
+        }
+        state.stage = stage.into();
     }
 
     fn advance(&self, bytes: u64) {
         let mut state = self.inner.lock().unwrap();
-        state.processed_bytes = state.processed_bytes.saturating_add(bytes).min(state.total_bytes);
+        state.processed_bytes = state
+            .processed_bytes
+            .saturating_add(bytes)
+            .min(state.total_bytes);
+    }
+
+    fn advance_hashing(&self, bytes: u64, completed_piece: bool) {
+        let mut state = self.inner.lock().unwrap();
+        state.processed_bytes = state
+            .processed_bytes
+            .saturating_add(bytes)
+            .min(state.total_bytes);
+        if completed_piece {
+            state.completed_pieces = state
+                .completed_pieces
+                .saturating_add(1)
+                .min(state.total_pieces);
+        }
+    }
+
+    fn complete_final_piece(&self) {
+        let mut state = self.inner.lock().unwrap();
+        state.completed_pieces = state
+            .completed_pieces
+            .saturating_add(1)
+            .min(state.total_pieces);
     }
 
     pub(crate) fn fail(&self, error: String) {
@@ -149,7 +208,9 @@ impl PublishProgress {
 
 #[cfg(test)]
 mod validation_tests {
-    use super::{native::sanitize_component, validate_source_files, SourceFile};
+    use super::{
+        make_source_names_unique, native::sanitize_component, validate_source_files, SourceFile,
+    };
     use std::io::Write;
 
     #[test]
@@ -157,16 +218,48 @@ mod validation_tests {
         let path = std::env::temp_dir().join(format!("portalis-source-{}", uuid::Uuid::new_v4()));
         let mut file = std::fs::File::create(&path).unwrap();
         file.write_all(&[0; 1024]).unwrap();
-        assert_eq!(validate_source_files(&[SourceFile {
-            name: "photo.jpg".into(),
-            path: path.to_string_lossy().into_owned(),
-        }]).unwrap(), 1024);
+        assert_eq!(
+            validate_source_files(&[SourceFile {
+                name: "photo.jpg".into(),
+                path: path.to_string_lossy().into_owned(),
+                length_bytes: None,
+            }])
+            .unwrap(),
+            1024
+        );
         let _ = std::fs::remove_file(path);
     }
 
     #[test]
     fn rejects_an_empty_share() {
         assert!(validate_source_files(&[]).is_err());
+    }
+
+    #[test]
+    fn duplicate_source_names_get_stable_suffixes() {
+        let mut files = vec![
+            SourceFile {
+                name: "photo.jpg".into(),
+                path: "one".into(),
+                length_bytes: None,
+            },
+            SourceFile {
+                name: "photo.jpg".into(),
+                path: "two".into(),
+                length_bytes: None,
+            },
+            SourceFile {
+                name: "Photo.jpg".into(),
+                path: "three".into(),
+                length_bytes: None,
+            },
+        ];
+
+        make_source_names_unique(&mut files);
+
+        assert_eq!(files[0].name, "photo.jpg");
+        assert_eq!(files[1].name, "photo (2).jpg");
+        assert_eq!(files[2].name, "Photo (3).jpg");
     }
 
     #[test]
@@ -186,7 +279,10 @@ mod validation_tests {
 /// the "join a swarm" side — both produce the exact same `TorrentInfo`
 /// shape either way (see the backend README on why: it's the same
 /// protocol regardless of which side of the swarm you started on).
-pub async fn create_collection(name: String, files: Vec<SourceFile>) -> anyhow::Result<TorrentInfo> {
+pub async fn create_collection(
+    name: String,
+    files: Vec<SourceFile>,
+) -> anyhow::Result<TorrentInfo> {
     let total = inspect_source_files(&files).await?;
     native::create_collection(name, files, PublishProgress::new(total)).await
 }
@@ -315,7 +411,9 @@ pub(crate) async fn add_info_hash_with_peers(
 /// Backs deleting a plain-torrent collection — see
 /// `collections::delete_collection`.
 pub(crate) async fn forget_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
-    native::forget_torrent(info_hash_hex).await
+    native::forget_torrent(info_hash_hex).await?;
+    crate::linked_source_store::remove(info_hash_hex)?;
+    Ok(())
 }
 
 pub(crate) async fn pause_torrent(info_hash_hex: &str) -> anyhow::Result<()> {
@@ -330,18 +428,42 @@ pub(crate) async fn delete_torrent_files(info_hash_hex: &str) -> anyhow::Result<
     native::delete_torrent_files(info_hash_hex).await
 }
 
+/// Rebuilds no-copy source storage after a process restart. Session persistence
+/// cannot serialize a custom storage factory, so Portalis restores it itself.
+pub(crate) async fn restore_linked_sources() -> anyhow::Result<()> {
+    native::restore_linked_sources().await
+}
+
+/// Pauses a linked torrent as soon as its original source disappears.
+pub(crate) async fn verify_linked_sources() {
+    native::verify_linked_sources().await;
+}
+
 mod native {
+    use std::io::Write;
     use std::path::PathBuf;
     use std::sync::Arc;
 
     use anyhow::Context;
+    use bencode::bencode_serialize_to_writer;
+    use buffers::ByteBufOwned;
     use librqbit::api::TorrentIdOrHash;
+    use librqbit::storage::{StorageFactory, StorageFactoryExt, TorrentStorage};
     use librqbit::{
-        Api, AddTorrent, AddTorrentOptions, AddTorrentResponse, CreateTorrentOptions, Session,
+        AddTorrent, AddTorrentOptions, AddTorrentResponse, Api, CreateTorrentOptions,
+        ManagedTorrentShared, Session, TorrentMetadata,
     };
+    use librqbit_core::torrent_metainfo::{
+        TorrentMetaV1File, TorrentMetaV1Info, TorrentMetaV1Owned,
+    };
+    use librqbit_core::Id20;
+    use sha1w::{ISha1, Sha1};
     use tokio::sync::OnceCell;
 
-    use super::{PublishProgress, RawStorageEntry, SourceFile, TorrentFile, TorrentInfo};
+    use super::{
+        PublishProgress, RawStorageEntry, SourceFile, TorrentFile, TorrentInfo,
+        TORRENT_PIECE_LENGTH,
+    };
 
     static SESSION: OnceCell<Arc<Session>> = OnceCell::const_new();
 
@@ -354,6 +476,82 @@ mod native {
         link_directory: Option<PathBuf>,
         linked_paths: Vec<PathBuf>,
         torrent_name: Option<String>,
+    }
+
+    #[derive(Clone)]
+    struct ReferencedStorageFactory {
+        sources: Vec<crate::content_location::ContentLocation>,
+        lengths: Vec<u64>,
+    }
+
+    impl StorageFactory for ReferencedStorageFactory {
+        type Storage = ReferencedStorage;
+
+        fn create(
+            &self,
+            _shared: &ManagedTorrentShared,
+            _metadata: &TorrentMetadata,
+        ) -> anyhow::Result<Self::Storage> {
+            Ok(ReferencedStorage {
+                sources: self.sources.clone(),
+                lengths: self.lengths.clone(),
+            })
+        }
+
+        fn clone_box(&self) -> librqbit::storage::BoxStorageFactory {
+            self.clone().boxed()
+        }
+    }
+
+    #[derive(Clone)]
+    struct ReferencedStorage {
+        sources: Vec<crate::content_location::ContentLocation>,
+        lengths: Vec<u64>,
+    }
+
+    impl TorrentStorage for ReferencedStorage {
+        fn init(
+            &mut self,
+            _shared: &ManagedTorrentShared,
+            _metadata: &TorrentMetadata,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn pread_exact(
+            &self,
+            file_id: usize,
+            offset: u64,
+            buffer: &mut [u8],
+        ) -> anyhow::Result<()> {
+            self.sources
+                .get(file_id)
+                .context("no such referenced source file")?
+                .read_exact_at(offset, buffer)
+        }
+
+        fn pwrite_all(&self, _file_id: usize, _offset: u64, _buffer: &[u8]) -> anyhow::Result<()> {
+            anyhow::bail!("gallery-linked source storage is read-only")
+        }
+
+        fn remove_file(&self, _file_id: usize, _filename: &std::path::Path) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn remove_directory_if_empty(&self, _path: &std::path::Path) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn ensure_file_length(&self, file_id: usize, length: u64) -> anyhow::Result<()> {
+            anyhow::ensure!(
+                self.lengths.get(file_id) == Some(&length),
+                "referenced source length changed"
+            );
+            Ok(())
+        }
+
+        fn take(&self) -> anyhow::Result<Box<dyn TorrentStorage>> {
+            Ok(Box::new(self.clone()))
+        }
     }
 
     async fn session() -> anyhow::Result<Arc<Session>> {
@@ -399,9 +597,7 @@ mod native {
                     // enable_upnp_port_forwarding has no port to forward.
                     // settings.rs rejects an empty or zero range for exactly
                     // that reason.
-                    listen_port_range: Some(
-                        settings.listen_port_start..settings.listen_port_end,
-                    ),
+                    listen_port_range: Some(settings.listen_port_start..settings.listen_port_end),
                     enable_upnp_port_forwarding: settings.enable_upnp_port_forwarding,
                     // Without persistence librqbit starts empty every launch,
                     // so a collection you were seeding comes back with every
@@ -417,12 +613,8 @@ mod native {
                     disable_dht: settings.disable_dht,
                     disable_dht_persistence: settings.disable_dht_persistence,
                     socks_proxy_url: settings.socks_proxy_url.clone(),
-                    defer_writes_up_to: settings
-                        .defer_writes_up_to_mb
-                        .map(|mb| mb as usize),
-                    concurrent_init_limit: settings
-                        .concurrent_init_limit
-                        .map(|n| n as usize),
+                    defer_writes_up_to: settings.defer_writes_up_to_mb.map(|mb| mb as usize),
+                    concurrent_init_limit: settings.concurrent_init_limit.map(|n| n as usize),
                     peer_opts: Some(peer_opts),
                     blocklist_url: settings.blocklist_url.clone(),
                     trackers,
@@ -546,6 +738,23 @@ mod native {
     ) -> anyhow::Result<TorrentInfo> {
         let session = session().await?;
         let collection_name = sanitize_component(&name);
+        let sources = files
+            .iter()
+            .map(|file| crate::content_location::ContentLocation::from_source_path(&file.path))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        if sources
+            .iter()
+            .any(crate::content_location::ContentLocation::requires_native_storage)
+        {
+            return create_referenced_collection(
+                session,
+                collection_name,
+                files,
+                sources,
+                progress,
+            )
+            .await;
+        }
         let layout = if let [file] = files.as_slice() {
             let hash_path = crate::content_location::ContentLocation::from_source_path(&file.path)?
                 .filesystem_path()
@@ -643,8 +852,12 @@ mod native {
         let response = match session
             .add_torrent(AddTorrent::from_bytes(torrent_bytes), Some(opts))
             .await
-            .with_context(|| format!("adding created torrent, output_folder={:?}", layout.output_folder))
-        {
+            .with_context(|| {
+                format!(
+                    "adding created torrent, output_folder={:?}",
+                    layout.output_folder
+                )
+            }) {
             Ok(response) => response,
             Err(error) => {
                 discard_seed_layout(&layout);
@@ -652,6 +865,232 @@ mod native {
             }
         };
         response_to_info(&api(session), response)
+    }
+
+    async fn create_referenced_collection(
+        session: Arc<Session>,
+        collection_name: String,
+        files: Vec<SourceFile>,
+        sources: Vec<crate::content_location::ContentLocation>,
+        progress: PublishProgress,
+    ) -> anyhow::Result<TorrentInfo> {
+        let lengths = files
+            .iter()
+            .zip(&sources)
+            .map(|(file, source)| source.length(file.length_bytes))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        progress.set_stage("hashing");
+        let hash_lengths = lengths.clone();
+        let torrent_bytes = tokio::task::spawn_blocking({
+            let files = files.clone();
+            let sources = sources.clone();
+            let progress = progress.clone();
+            let collection_name = collection_name.clone();
+            move || {
+                create_referenced_metainfo(
+                    &collection_name,
+                    &files,
+                    &sources,
+                    &hash_lengths,
+                    &progress,
+                )
+            }
+        })
+        .await
+        .context("referenced source hashing task failed")??;
+
+        progress.ensure_active()?;
+        progress.set_stage("seeding");
+        let metadata_dir = source_link_dir(&collection_name);
+        std::fs::create_dir_all(&metadata_dir)?;
+        let options = AddTorrentOptions {
+            overwrite: true,
+            output_folder: Some(metadata_dir.to_string_lossy().into_owned()),
+            storage_factory: Some(ReferencedStorageFactory { sources, lengths }.boxed()),
+            ..Default::default()
+        };
+        let persisted_bytes = torrent_bytes.to_vec();
+        let response = session
+            .add_torrent(AddTorrent::from_bytes(torrent_bytes), Some(options))
+            .await
+            .context("adding gallery-linked torrent")?;
+        let info = response_to_info(&api(session), response)?;
+        crate::linked_source_store::upsert(crate::linked_source_store::LinkedSourceRecord {
+            info_hash: info.info_hash.clone(),
+            torrent_bytes: persisted_bytes,
+            sources: files,
+        })?;
+        Ok(info)
+    }
+
+    pub(super) async fn restore_linked_sources() -> anyhow::Result<()> {
+        let session = session().await?;
+        for record in crate::linked_source_store::load()? {
+            if crate::torrent::inspect_source_files(&record.sources)
+                .await
+                .is_err()
+            {
+                crate::log::clog!(
+                    "torrent",
+                    "linked source unavailable after restart: {}",
+                    record.info_hash
+                );
+                continue;
+            }
+            let id = TorrentIdOrHash::try_from(record.info_hash.as_str())?;
+            if session.get(id).is_some() {
+                session.delete(id, false).await?;
+            }
+            let sources = record
+                .sources
+                .iter()
+                .map(|source| {
+                    crate::content_location::ContentLocation::from_source_path(&source.path)
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let lengths = record
+                .sources
+                .iter()
+                .zip(&sources)
+                .map(|(source, location)| location.length(source.length_bytes))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let metadata_dir = source_link_dir(&record.info_hash);
+            std::fs::create_dir_all(&metadata_dir)?;
+            session
+                .add_torrent(
+                    AddTorrent::from_bytes(record.torrent_bytes),
+                    Some(AddTorrentOptions {
+                        overwrite: true,
+                        output_folder: Some(metadata_dir.to_string_lossy().into_owned()),
+                        storage_factory: Some(
+                            ReferencedStorageFactory { sources, lengths }.boxed(),
+                        ),
+                        ..Default::default()
+                    }),
+                )
+                .await
+                .with_context(|| format!("restoring linked source {}", record.info_hash))?;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn verify_linked_sources() {
+        let Ok(records) = crate::linked_source_store::load() else {
+            return;
+        };
+        for record in records {
+            if crate::torrent::inspect_source_files(&record.sources)
+                .await
+                .is_ok()
+            {
+                continue;
+            }
+            crate::log::clog!("torrent", "linked source unavailable: {}", record.info_hash);
+            let _ = pause_torrent(&record.info_hash).await;
+        }
+    }
+
+    fn create_referenced_metainfo(
+        collection_name: &str,
+        files: &[SourceFile],
+        sources: &[crate::content_location::ContentLocation],
+        lengths: &[u64],
+        progress: &PublishProgress,
+    ) -> anyhow::Result<bytes::Bytes> {
+        const PIECE_LENGTH: u32 = TORRENT_PIECE_LENGTH as u32;
+        const READ_SIZE: usize = 64 * 1024;
+        anyhow::ensure!(
+            files.len() == sources.len() && files.len() == lengths.len(),
+            "source descriptor mismatch"
+        );
+        let mut remaining = PIECE_LENGTH as usize;
+        let mut checksum = Sha1::new();
+        let mut pieces = Vec::new();
+        let mut output_files = Vec::with_capacity(files.len());
+        let mut buffer = vec![0; READ_SIZE];
+        for ((file, source), length) in files.iter().zip(sources).zip(lengths) {
+            let mut offset = 0;
+            while offset < *length {
+                progress.ensure_active()?;
+                let size = ((*length - offset) as usize)
+                    .min(remaining)
+                    .min(buffer.len());
+                source.read_exact_at(offset, &mut buffer[..size])?;
+                checksum.update(&buffer[..size]);
+                offset += size as u64;
+                remaining -= size;
+                progress.advance_hashing(size as u64, remaining == 0);
+                if remaining == 0 {
+                    pieces.extend_from_slice(&checksum.finish());
+                    checksum = Sha1::new();
+                    remaining = PIECE_LENGTH as usize;
+                }
+            }
+            output_files.push(TorrentMetaV1File {
+                length: *length,
+                path: vec![sanitize_component(&file.name).into_bytes().into()],
+                attr: None,
+                sha1: None,
+                symlink_path: None,
+            });
+        }
+        if remaining < PIECE_LENGTH as usize {
+            pieces.extend_from_slice(&checksum.finish());
+            progress.complete_final_piece();
+        }
+        let single = files.len() == 1;
+        let info = TorrentMetaV1Info::<ByteBufOwned> {
+            name: Some(
+                (if single {
+                    sanitize_component(&files[0].name)
+                } else {
+                    collection_name.into()
+                })
+                .into_bytes()
+                .into(),
+            ),
+            pieces: pieces.into(),
+            piece_length: PIECE_LENGTH,
+            length: single.then_some(lengths[0]),
+            md5sum: None,
+            files: (!single).then_some(output_files),
+            attr: None,
+            sha1: None,
+            symlink_path: None,
+            private: false,
+        };
+        let info_hash = hash_metainfo(&info)?;
+        let metainfo = TorrentMetaV1Owned {
+            announce: None,
+            announce_list: Vec::new(),
+            info,
+            comment: None,
+            created_by: None,
+            encoding: Some(b"utf-8".as_slice().into()),
+            publisher: None,
+            publisher_url: None,
+            creation_date: None,
+            info_hash,
+        };
+        let mut bytes = Vec::new();
+        bencode_serialize_to_writer(&metainfo, &mut bytes)?;
+        Ok(bytes.into())
+    }
+
+    fn hash_metainfo(info: &TorrentMetaV1Info<ByteBufOwned>) -> anyhow::Result<Id20> {
+        struct DigestWriter(Sha1);
+        impl Write for DigestWriter {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.update(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut writer = DigestWriter(Sha1::new());
+        bencode_serialize_to_writer(info, &mut writer)?;
+        Ok(Id20::new(writer.0.finish()))
     }
 
     /// Only paths created by this publication may be removed on failure. The
@@ -665,7 +1104,10 @@ mod native {
     fn discard_linked_sources(dir: &std::path::Path, created: &[PathBuf]) {
         for path in created.iter().rev() {
             if let Err(error) = std::fs::remove_file(path) {
-                crate::log::clog!("torrent", "could not remove linked source {path:?}: {error}");
+                crate::log::clog!(
+                    "torrent",
+                    "could not remove linked source {path:?}: {error}"
+                );
             }
         }
         let _ = std::fs::remove_dir(dir);
@@ -825,7 +1267,11 @@ mod native {
             info_hash: handle.info_hash().as_string(),
             name: handle.name().unwrap_or_else(|| "(unnamed)".to_string()),
             state,
-            progress_bytes: if initializing { 0 } else { stats.progress_bytes },
+            progress_bytes: if initializing {
+                0
+            } else {
+                stats.progress_bytes
+            },
             total_bytes: stats.total_bytes,
             uploaded_bytes: stats.uploaded_bytes,
             download_mbps,
@@ -864,9 +1310,7 @@ mod native {
         response_to_info(&api(session), response)
     }
 
-    pub(super) async fn add_torrent_from_file_bytes(
-        bytes: Vec<u8>,
-    ) -> anyhow::Result<TorrentInfo> {
+    pub(super) async fn add_torrent_from_file_bytes(bytes: Vec<u8>) -> anyhow::Result<TorrentInfo> {
         let session = session().await?;
         let response = session
             .add_torrent(AddTorrent::from_bytes(bytes), Some(add_opts()))
@@ -875,9 +1319,7 @@ mod native {
         response_to_info(&api(session), response)
     }
 
-    pub(super) async fn add_torrent_from_file_path(
-        path: String,
-    ) -> anyhow::Result<TorrentInfo> {
+    pub(super) async fn add_torrent_from_file_path(path: String) -> anyhow::Result<TorrentInfo> {
         let read_path = path.clone();
         let bytes = tokio::task::spawn_blocking(move || std::fs::read(&read_path))
             .await
@@ -889,9 +1331,8 @@ mod native {
     pub(super) async fn list_torrents() -> anyhow::Result<Vec<TorrentInfo>> {
         let session = session().await?;
         let api = api(session.clone());
-        Ok(session.with_torrents(|iter| {
-            iter.map(|(id, handle)| to_info(&api, id, handle)).collect()
-        }))
+        Ok(session
+            .with_torrents(|iter| iter.map(|(id, handle)| to_info(&api, id, handle)).collect()))
     }
 
     /// How long a walk stays good for. Both the Settings screen's total (this
@@ -1075,7 +1516,10 @@ mod native {
         if session.get(id).is_none() {
             return Ok(());
         }
-        session.delete(id, true).await.context("deleting torrent files")
+        session
+            .delete(id, true)
+            .await
+            .context("deleting torrent files")
     }
 
     pub(super) async fn add_info_hash_with_peers(
@@ -1107,7 +1551,8 @@ mod native {
 
         #[test]
         fn source_layout_is_a_link_not_a_second_file() {
-            let root = std::env::temp_dir().join(format!("portalis-links-{}", uuid::Uuid::new_v4()));
+            let root =
+                std::env::temp_dir().join(format!("portalis-links-{}", uuid::Uuid::new_v4()));
             let source_dir = root.join("source");
             let layout_dir = root.join("layout");
             std::fs::create_dir_all(&source_dir).unwrap();
@@ -1118,6 +1563,7 @@ mod native {
             let files = [SourceFile {
                 name: "clip.mp4".into(),
                 path: source.to_string_lossy().into_owned(),
+                length_bytes: None,
             }];
             let created = link_sources(&layout_dir, &files, &PublishProgress::new(5)).unwrap();
             assert_eq!(created, vec![layout_dir.join("clip.mp4")]);
@@ -1126,7 +1572,10 @@ mod native {
             // collection name: this proves the layout does not contain a
             // copied byte sequence.
             std::fs::write(&source, b"again").unwrap();
-            assert_eq!(std::fs::read(layout_dir.join("clip.mp4")).unwrap(), b"again");
+            assert_eq!(
+                std::fs::read(layout_dir.join("clip.mp4")).unwrap(),
+                b"again"
+            );
             std::fs::remove_dir_all(root).unwrap();
         }
     }

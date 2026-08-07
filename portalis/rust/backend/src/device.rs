@@ -34,7 +34,7 @@ pub(crate) fn current_identity() -> anyhow::Result<crate::domain::identity::Devi
 }
 
 mod native {
-        use std::sync::Mutex;
+    use std::sync::Mutex;
 
     use anyhow::Context;
     use serde::{Deserialize, Serialize};
@@ -131,7 +131,6 @@ mod native {
         Ok(info)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

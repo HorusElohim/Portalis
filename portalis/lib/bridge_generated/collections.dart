@@ -293,6 +293,10 @@ class ImportInfo {
   final double progress;
   final BigInt processedBytes;
   final BigInt totalBytes;
+
+  /// Exact completed torrent pieces, reported by the hashing worker.
+  final BigInt completedPieces;
+  final BigInt totalPieces;
   final String? error;
 
   const ImportInfo({
@@ -300,6 +304,8 @@ class ImportInfo {
     required this.progress,
     required this.processedBytes,
     required this.totalBytes,
+    required this.completedPieces,
+    required this.totalPieces,
     this.error,
   });
 
@@ -309,6 +315,8 @@ class ImportInfo {
       progress.hashCode ^
       processedBytes.hashCode ^
       totalBytes.hashCode ^
+      completedPieces.hashCode ^
+      totalPieces.hashCode ^
       error.hashCode;
 
   @override
@@ -320,6 +328,8 @@ class ImportInfo {
           progress == other.progress &&
           processedBytes == other.processedBytes &&
           totalBytes == other.totalBytes &&
+          completedPieces == other.completedPieces &&
+          totalPieces == other.totalPieces &&
           error == other.error;
 }
 

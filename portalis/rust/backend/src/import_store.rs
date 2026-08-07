@@ -49,6 +49,7 @@ mod tests {
             files: vec![SourceFile {
                 name: "movie.mkv".into(),
                 path: "D:\\Media\\movie.mkv".into(),
+                length_bytes: Some(8_000_000_000),
             }],
             total_bytes: 8_000_000_000,
             error: None,

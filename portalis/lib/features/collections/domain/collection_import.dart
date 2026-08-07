@@ -5,6 +5,8 @@ class CollectionImport {
     required this.progress,
     required this.processedBytes,
     required this.totalBytes,
+    this.completedPieces = 0,
+    this.totalPieces = 0,
     this.error,
   });
 
@@ -12,6 +14,8 @@ class CollectionImport {
   final double progress;
   final int processedBytes;
   final int totalBytes;
+  final int completedPieces;
+  final int totalPieces;
   final String? error;
 
   bool get failed => error != null;

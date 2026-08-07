@@ -118,7 +118,8 @@ class _CommandBarState extends State<PortalisCommandBar> {
     final path = result?.files.single.path;
     if (result == null) return;
     if (path == null || path.isEmpty) {
-      setState(() => _error = 'This platform did not provide a readable file path');
+      setState(
+          () => _error = 'This platform did not provide a readable file path');
       return;
     }
     setState(() {

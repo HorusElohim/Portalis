@@ -1302,12 +1302,16 @@ impl SseDecode for crate::collections::ImportInfo {
         let mut var_progress = <f64>::sse_decode(deserializer);
         let mut var_processedBytes = <u64>::sse_decode(deserializer);
         let mut var_totalBytes = <u64>::sse_decode(deserializer);
+        let mut var_completedPieces = <u64>::sse_decode(deserializer);
+        let mut var_totalPieces = <u64>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
         return crate::collections::ImportInfo {
             stage: var_stage,
             progress: var_progress,
             processed_bytes: var_processedBytes,
             total_bytes: var_totalBytes,
+            completed_pieces: var_completedPieces,
+            total_pieces: var_totalPieces,
             error: var_error,
         };
     }
@@ -1500,9 +1504,11 @@ impl SseDecode for crate::torrent::SourceFile {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_path = <String>::sse_decode(deserializer);
+        let mut var_lengthBytes = <Option<u64>>::sse_decode(deserializer);
         return crate::torrent::SourceFile {
             name: var_name,
             path: var_path,
+            length_bytes: var_lengthBytes,
         };
     }
 }
@@ -1847,6 +1853,8 @@ impl flutter_rust_bridge::IntoDart for crate::collections::ImportInfo {
             self.progress.into_into_dart().into_dart(),
             self.processed_bytes.into_into_dart().into_dart(),
             self.total_bytes.into_into_dart().into_dart(),
+            self.completed_pieces.into_into_dart().into_dart(),
+            self.total_pieces.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -1894,6 +1902,7 @@ impl flutter_rust_bridge::IntoDart for crate::torrent::SourceFile {
         [
             self.name.into_into_dart().into_dart(),
             self.path.into_into_dart().into_dart(),
+            self.length_bytes.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2102,6 +2111,8 @@ impl SseEncode for crate::collections::ImportInfo {
         <f64>::sse_encode(self.progress, serializer);
         <u64>::sse_encode(self.processed_bytes, serializer);
         <u64>::sse_encode(self.total_bytes, serializer);
+        <u64>::sse_encode(self.completed_pieces, serializer);
+        <u64>::sse_encode(self.total_pieces, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
     }
 }
@@ -2256,6 +2267,7 @@ impl SseEncode for crate::torrent::SourceFile {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.path, serializer);
+        <Option<u64>>::sse_encode(self.length_bytes, serializer);
     }
 }
 

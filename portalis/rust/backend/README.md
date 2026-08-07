@@ -462,3 +462,19 @@ no real benefit). `librqbit` bundles BEP-5 DHT, mDNS, and µTP, is
 Apache-2.0, actively maintained, and exposes a clean embeddable
 `Session`/`create_torrent`/`AddTorrent` API rather than being CLI-first.
 Full research trail is in the project conversation history.
+
+## Local two-instance integration test
+
+The backend includes a process-level test that starts two isolated Portalis
+peers, publishes a small fixture from the owner, joins through the single
+encoded invite, verifies manifest sync, and verifies that the joiner fetches
+the fixture automatically over BitTorrent:
+
+```sh
+cargo test --manifest-path rust/backend/Cargo.toml \
+  --features local-integration --test two_instance_sync -- --nocapture
+```
+
+The test uses separate home directories, state files, download directories,
+and BitTorrent ports for both peers. It is intentionally opt-in because it
+starts real local network listeners and the `librqbit` session.

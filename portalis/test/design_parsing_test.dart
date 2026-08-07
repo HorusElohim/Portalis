@@ -3,7 +3,7 @@ import 'test_support.dart';
 void main() {
   tearDown(resetTestState);
 
-group('design system', () {
+  group('design system', () {
     test('the signal accent is the mint the design specifies', () {
       expect(AppColors.signal, const Color(0xFF5CE7A3));
       expect(AppColors.ember, const Color(0xFFF0B357));
@@ -17,8 +17,6 @@ group('design system', () {
       expect(AppColors.hues, isNot(contains(AppColors.ember)));
     });
   });
-
-
 
   group('what a paste turns out to be', () {
     test('a magnet link and a bare info hash are both magnets', () {
@@ -51,4 +49,3 @@ group('design system', () {
     });
   });
 }
-

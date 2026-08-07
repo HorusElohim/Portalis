@@ -150,6 +150,7 @@ class CollectionOverview extends StatelessWidget {
     );
   }
 }
+
 class _CollectionControls extends StatelessWidget {
   const _CollectionControls({required this.collection});
 
@@ -157,13 +158,15 @@ class _CollectionControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final admins = collection.collaborators.where((item) => item.isAdmin).length;
+    final admins =
+        collection.collaborators.where((item) => item.isAdmin).length;
     return Row(
       children: [
         if (admins > 0)
           Text(
             '$admins admin${admins == 1 ? '' : 's'}',
-            style: monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
+            style:
+                monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
           ),
         const Spacer(),
       ],

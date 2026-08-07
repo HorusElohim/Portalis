@@ -121,13 +121,19 @@ async fn bt_listen_port_best_effort() -> Option<u16> {
     match tokio::time::timeout(BT_PORT_TIMEOUT, crate::torrent::bt_listen_port()).await {
         Ok(Ok(port)) => port,
         Ok(Err(e)) => {
-            clog!("collab_sync", "bt_listen_port_best_effort: session error ({e:#}) — \
-                 continuing without a port, peer will fall back to DHT");
+            clog!(
+                "collab_sync",
+                "bt_listen_port_best_effort: session error ({e:#}) — \
+                 continuing without a port, peer will fall back to DHT"
+            );
             None
         }
         Err(_) => {
-            clog!("collab_sync", "bt_listen_port_best_effort: BT session still starting after \
-                 {BT_PORT_TIMEOUT:?} — continuing without a port, peer will fall back to DHT");
+            clog!(
+                "collab_sync",
+                "bt_listen_port_best_effort: BT session still starting after \
+                 {BT_PORT_TIMEOUT:?} — continuing without a port, peer will fall back to DHT"
+            );
             None
         }
     }
@@ -145,11 +151,15 @@ async fn write_frame<W: AsyncWriteExt + Unpin>(w: &mut W, frame: &WireFrame) -> 
 
 async fn read_frame<R: AsyncReadExt + Unpin>(r: &mut R) -> anyhow::Result<WireFrame> {
     let mut len_bytes = [0u8; 4];
-    r.read_exact(&mut len_bytes).await.context("reading frame length")?;
+    r.read_exact(&mut len_bytes)
+        .await
+        .context("reading frame length")?;
     let len = u32::from_le_bytes(len_bytes);
     anyhow::ensure!(len <= MAX_FRAME_BYTES, "peer sent an oversized frame");
     let mut bytes = vec![0u8; len as usize];
-    r.read_exact(&mut bytes).await.context("reading frame body")?;
+    r.read_exact(&mut bytes)
+        .await
+        .context("reading frame body")?;
     serde_json::from_slice(&bytes).context("parsing frame")
 }
 
@@ -176,7 +186,11 @@ async fn local_message_for(rendezvous_key_hex: &str) -> anyhow::Result<Option<Sy
             .find(|c| c.rendezvous_key().to_hex() == rendezvous_key_hex)
             .map(|c| SyncMessage {
                 rendezvous_key_hex: rendezvous_key_hex.to_string(),
-                collaborators: c.collaborators.iter().map(collaborator_to_persisted).collect(),
+                collaborators: c
+                    .collaborators
+                    .iter()
+                    .map(collaborator_to_persisted)
+                    .collect(),
                 entries: c.manifest().entries().map(entry_to_persisted).collect(),
                 bt_listen_port,
                 // Already bound by the time any sync happens — this path is
@@ -221,7 +235,11 @@ fn record_bt_peer(rendezvous_key_hex: &str, ip: std::net::IpAddr, msg: &SyncMess
     match msg.bt_listen_port {
         Some(port) => {
             let addr = SocketAddr::new(ip, port);
-            clog!("collab_sync", "record_bt_peer: {addr} for rendezvous_key={}…", &rendezvous_key_hex[..8.min(rendezvous_key_hex.len())]);
+            clog!(
+                "collab_sync",
+                "record_bt_peer: {addr} for rendezvous_key={}…",
+                &rendezvous_key_hex[..8.min(rendezvous_key_hex.len())]
+            );
             LEARNED_BT_PEERS
                 .lock()
                 .unwrap()
@@ -229,7 +247,10 @@ fn record_bt_peer(rendezvous_key_hex: &str, ip: std::net::IpAddr, msg: &SyncMess
                 .or_default()
                 .insert(addr);
         }
-        None => clog!("collab_sync", "record_bt_peer: peer sent no bt_listen_port, nothing to record"),
+        None => clog!(
+            "collab_sync",
+            "record_bt_peer: peer sent no bt_listen_port, nothing to record"
+        ),
     }
 }
 
@@ -267,7 +288,11 @@ fn with_peers<R>(f: impl FnOnce(&mut PeerMap) -> R) -> R {
     let mut guard = KNOWN_SYNC_PEERS.lock().unwrap();
     if guard.is_none() {
         let loaded: PeerMap = peers_vault().read().ok().flatten().unwrap_or_default();
-        clog!("collab_sync", "known sync peers: loaded {} collection(s)", loaded.len());
+        clog!(
+            "collab_sync",
+            "known sync peers: loaded {} collection(s)",
+            loaded.len()
+        );
         *guard = Some(loaded);
     }
     f(guard.as_mut().unwrap())
@@ -439,13 +464,16 @@ fn record_sync_peer(rendezvous_key_hex: &str, ip: std::net::IpAddr, msg: &SyncMe
 /// collaborators deduplicated by device id. Returns `false` if we don't
 /// hold that collection.
 fn apply_message(msg: &SyncMessage) -> anyhow::Result<bool> {
-    collab_store::with_store(|collections| {
+    let (merged, entries_changed, collection_id) = collab_store::with_store(|collections| {
         let Some(collection) = collections
             .iter_mut()
             .find(|c| c.rendezvous_key().to_hex() == msg.rendezvous_key_hex)
         else {
-            clog!("collab_sync", "apply_message: no local collection for that rendezvous key");
-            return Ok(false);
+            clog!(
+                "collab_sync",
+                "apply_message: no local collection for that rendezvous key"
+            );
+            return Ok((false, false, None));
         };
         let entries_before = collection.manifest().len();
         let collaborators_before = collection.collaborators.len();
@@ -472,14 +500,19 @@ fn apply_message(msg: &SyncMessage) -> anyhow::Result<bool> {
                 }
                 Err(err) => {
                     entries_rejected += 1;
-                    clog!("collab_sync", "apply_message: dropped an unparseable entry: {err:?}");
+                    clog!(
+                        "collab_sync",
+                        "apply_message: dropped an unparseable entry: {err:?}"
+                    );
                 }
             }
         }
         // Our own record is authoritative locally — a peer must never be able
         // to rename us in our own view, and it may well be carrying a stale
         // copy of our old name from before we renamed ourselves.
-        let own_device_id = crate::device::current_identity().ok().map(|i| i.device_id());
+        let own_device_id = crate::device::current_identity()
+            .ok()
+            .map(|i| i.device_id());
         for c in &msg.collaborators {
             let Ok(collaborator) = collaborator_from_persisted(c) else {
                 continue;
@@ -517,8 +550,20 @@ fn apply_message(msg: &SyncMessage) -> anyhow::Result<bool> {
             collection.manifest().len(),
             collection.collaborators.len(),
         );
-        Ok(true)
-    })
+        Ok((
+            true,
+            collection.manifest().len() > entries_before,
+            Some(collection.id.to_string()),
+        ))
+    })?;
+
+    if entries_changed {
+        if let Some(collection_id) = collection_id {
+            crate::collections::request_fetch_for_collection(&collection_id);
+            crate::reconciliation::request_reconciliation();
+        }
+    }
+    Ok(merged)
 }
 
 static LISTENER: OnceCell<SocketAddr> = OnceCell::const_new();
@@ -551,9 +596,12 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
             let listener = match TcpListener::bind(("0.0.0.0", PREFERRED_SYNC_PORT)).await {
                 Ok(listener) => listener,
                 Err(e) => {
-                    clog!("collab_sync", "port {PREFERRED_SYNC_PORT} is taken ({e}) — falling \
+                    clog!(
+                        "collab_sync",
+                        "port {PREFERRED_SYNC_PORT} is taken ({e}) — falling \
                          back to an ephemeral port, which means peers who saved our address \
-                         will have to be re-introduced after a restart");
+                         will have to be re-introduced after a restart"
+                    );
                     TcpListener::bind(("0.0.0.0", 0))
                         .await
                         .context("binding sync listener")?
@@ -575,7 +623,10 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
                         // accept loop, and the *initiating* side surfaces
                         // its own error to its user.
                         if let Err(e) = handle_incoming(stream, id).await {
-                            clog!("collab_sync", "[#{id}] incoming sync from {from} failed: {e:?}");
+                            clog!(
+                                "collab_sync",
+                                "[#{id}] incoming sync from {from} failed: {e:?}"
+                            );
                         }
                     });
                 }
@@ -592,16 +643,23 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
             // discarding the constructor's error with a bare `if let Ok`.
             match librqbit_upnp::UpnpPortForwarder::new(vec![addr.port()], None) {
                 Ok(forwarder) => {
-                    clog!("collab_sync", "UPnP: asking the router to forward port {} — silent \
+                    clog!(
+                        "collab_sync",
+                        "UPnP: asking the router to forward port {} — silent \
                          from here on. Note it cannot work at all while a VPN owns the default \
                          route, since SSDP discovery follows that route instead of reaching \
-                         the router.", addr.port());
+                         the router.",
+                        addr.port()
+                    );
                     tokio::spawn(async move {
                         forwarder.run_forever().await;
                     });
                 }
-                Err(e) => clog!("collab_sync", "UPnP: couldn't start port forwarding ({e:#}) — \
-                     same-network sync is unaffected"),
+                Err(e) => clog!(
+                    "collab_sync",
+                    "UPnP: couldn't start port forwarding ({e:#}) — \
+                     same-network sync is unaffected"
+                ),
             }
             // Warm the BitTorrent session *off* the sync path. Starting it
             // bootstraps the DHT and probes UPnP, which is far too slow to
@@ -610,9 +668,15 @@ pub(crate) async fn ensure_listener() -> anyhow::Result<SocketAddr> {
             // already up, and when it doesn't, sync still proceeds without.
             tokio::spawn(async move {
                 match crate::torrent::bt_listen_port().await {
-                    Ok(port) => clog!("collab_sync", "BT session warmed up, listen port = {port:?}"),
-                    Err(e) => clog!("collab_sync", "BT session warm-up failed: {e:#} — \
-                         manifest sync is unaffected, media fetches will rely on DHT"),
+                    Ok(port) => clog!(
+                        "collab_sync",
+                        "BT session warmed up, listen port = {port:?}"
+                    ),
+                    Err(e) => clog!(
+                        "collab_sync",
+                        "BT session warm-up failed: {e:#} — \
+                         manifest sync is unaffected, media fetches will rely on DHT"
+                    ),
                 }
             });
             // Keeps every joined collection in step from here on. Started
@@ -630,14 +694,19 @@ async fn handle_incoming(mut stream: TcpStream, id: u64) -> anyhow::Result<()> {
     // proves whether the frame arrived at all — the previous version's
     // first log came after the read, leaving "connected but no reply"
     // indistinguishable from "never accepted".
-    clog!("collab_sync", "[#{id}] handle_incoming: accepted from {peer_ip}, reading frame");
+    clog!(
+        "collab_sync",
+        "[#{id}] handle_incoming: accepted from {peer_ip}, reading frame"
+    );
     let frame = tokio::time::timeout(IO_TIMEOUT, read_frame(&mut stream))
         .await
         .map_err(|_| anyhow::anyhow!("[#{id}] timed out reading the initiator's frame"))??;
     let WireFrame::Sync(theirs) = frame else {
         anyhow::bail!("[#{id}] unexpected frame from initiator");
     };
-    clog!("collab_sync", "[#{id}] incoming sync for rendezvous_key={}… from {peer_ip} \
+    clog!(
+        "collab_sync",
+        "[#{id}] incoming sync for rendezvous_key={}… from {peer_ip} \
          ({} entries, {} collaborators)",
         &theirs.rendezvous_key_hex[..8.min(theirs.rendezvous_key_hex.len())],
         theirs.entries.len(),
@@ -651,7 +720,9 @@ async fn handle_incoming(mut stream: TcpStream, id: u64) -> anyhow::Result<()> {
             // step if both ends can initiate, and until now the side that
             // received the join learned nothing about the joiner.
             record_sync_peer(&theirs.rendezvous_key_hex, peer_ip, &theirs);
-            clog!("collab_sync", "[#{id}] matched a local collection — merged, replying with \
+            clog!(
+                "collab_sync",
+                "[#{id}] matched a local collection — merged, replying with \
                  {} entries, {} collaborators",
                 ours.entries.len(),
                 ours.collaborators.len(),
@@ -659,7 +730,9 @@ async fn handle_incoming(mut stream: TcpStream, id: u64) -> anyhow::Result<()> {
             WireFrame::Sync(ours)
         }
         None => {
-            clog!("collab_sync", "[#{id}] no local collection for that rendezvous key \
+            clog!(
+                "collab_sync",
+                "[#{id}] no local collection for that rendezvous key \
                  (replying Unknown)"
             );
             WireFrame::Unknown
@@ -669,7 +742,10 @@ async fn handle_incoming(mut stream: TcpStream, id: u64) -> anyhow::Result<()> {
     tokio::time::timeout(IO_TIMEOUT, write_frame(&mut stream, &reply))
         .await
         .map_err(|_| anyhow::anyhow!("[#{id}] timed out writing the reply"))??;
-    clog!("collab_sync", "[#{id}] reply sent to {peer_ip} — exchange complete");
+    clog!(
+        "collab_sync",
+        "[#{id}] reply sent to {peer_ip} — exchange complete"
+    );
     Ok(())
 }
 
@@ -690,13 +766,18 @@ pub(crate) async fn sync_with(rendezvous_key_hex: &str, peer_addr: &str) -> anyh
                 return Err(e).with_context(|| format!("connecting to {peer_addr}"));
             }
             Err(_) => {
-                clog!("collab_sync", "[#{id}] connect to {peer_addr} timed out after \
-                     {CONNECT_TIMEOUT:?} — unreachable from this network");
+                clog!(
+                    "collab_sync",
+                    "[#{id}] connect to {peer_addr} timed out after \
+                     {CONNECT_TIMEOUT:?} — unreachable from this network"
+                );
                 anyhow::bail!("connection to {peer_addr} timed out");
             }
         };
     let peer_ip = stream.peer_addr()?.ip();
-    clog!("collab_sync", "[#{id}] connected to {peer_addr} (peer_ip={peer_ip}), sending our state \
+    clog!(
+        "collab_sync",
+        "[#{id}] connected to {peer_addr} (peer_ip={peer_ip}), sending our state \
          ({} entries, {} collaborators)",
         ours.entries.len(),
         ours.collaborators.len(),
@@ -704,17 +785,25 @@ pub(crate) async fn sync_with(rendezvous_key_hex: &str, peer_addr: &str) -> anyh
     tokio::time::timeout(IO_TIMEOUT, write_frame(&mut stream, &WireFrame::Sync(ours)))
         .await
         .map_err(|_| anyhow::anyhow!("[#{id}] timed out sending our state to {peer_addr}"))??;
-    clog!("collab_sync", "[#{id}] state sent to {peer_addr}, awaiting their reply…");
+    clog!(
+        "collab_sync",
+        "[#{id}] state sent to {peer_addr}, awaiting their reply…"
+    );
     let reply = tokio::time::timeout(IO_TIMEOUT, read_frame(&mut stream))
         .await
         .map_err(|_| {
-            clog!("collab_sync", "[#{id}] {peer_addr} accepted the connection and took our frame \
-                 but never replied within {IO_TIMEOUT:?}");
+            clog!(
+                "collab_sync",
+                "[#{id}] {peer_addr} accepted the connection and took our frame \
+                 but never replied within {IO_TIMEOUT:?}"
+            );
             anyhow::anyhow!("[#{id}] timed out waiting for {peer_addr}'s reply")
         })??;
     match reply {
         WireFrame::Sync(theirs) => {
-            clog!("collab_sync", "[#{id}] {peer_addr} replied with {} entries, {} collaborators",
+            clog!(
+                "collab_sync",
+                "[#{id}] {peer_addr} replied with {} entries, {} collaborators",
                 theirs.entries.len(),
                 theirs.collaborators.len(),
             );
@@ -728,7 +817,10 @@ pub(crate) async fn sync_with(rendezvous_key_hex: &str, peer_addr: &str) -> anyh
             Ok(())
         }
         WireFrame::Unknown => {
-            clog!("collab_sync", "[#{id}] {peer_addr} doesn't know this collection (replied Unknown)");
+            clog!(
+                "collab_sync",
+                "[#{id}] {peer_addr} doesn't know this collection (replied Unknown)"
+            );
             anyhow::bail!(
                 "The other device doesn't have this collection — it needs to join \
                  with the same invite code first."
@@ -744,7 +836,11 @@ pub(crate) async fn sync_with_any(
     rendezvous_key_hex: &str,
     peer_addrs: &[String],
 ) -> anyhow::Result<()> {
-    clog!("collab_sync", "sync_with_any: trying {} address(es): {peer_addrs:?}", peer_addrs.len());
+    clog!(
+        "collab_sync",
+        "sync_with_any: trying {} address(es): {peer_addrs:?}",
+        peer_addrs.len()
+    );
     let mut last_err = anyhow::anyhow!("no peer addresses to try");
     for addr in peer_addrs {
         match sync_with(rendezvous_key_hex, addr).await {
@@ -758,7 +854,10 @@ pub(crate) async fn sync_with_any(
             }
         }
     }
-    clog!("collab_sync", "sync_with_any: exhausted all addresses, giving up");
+    clog!(
+        "collab_sync",
+        "sync_with_any: exhausted all addresses, giving up"
+    );
     Err(last_err)
 }
 
@@ -813,8 +912,11 @@ fn enumerate_lan_ips() -> Vec<String> {
     use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};
 
     let Ok(interfaces) = NetworkInterface::show() else {
-        clog!("collab_sync", "lan_ips: couldn't enumerate interfaces — falling back to \
-             127.0.0.1, which only works for syncing with yourself");
+        clog!(
+            "collab_sync",
+            "lan_ips: couldn't enumerate interfaces — falling back to \
+             127.0.0.1, which only works for syncing with yourself"
+        );
         return vec!["127.0.0.1".to_string()];
     };
 
@@ -863,9 +965,12 @@ fn enumerate_lan_ips() -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     candidates.retain(|c| seen.insert(c.ip));
 
-    if candidates.is_empty() { 
-        clog!("collab_sync", "lan_ips: no usable interface addresses — falling back to \
-             127.0.0.1, which only works for syncing with yourself");
+    if candidates.is_empty() {
+        clog!(
+            "collab_sync",
+            "lan_ips: no usable interface addresses — falling back to \
+             127.0.0.1, which only works for syncing with yourself"
+        );
         return vec!["127.0.0.1".to_string()];
     }
     clog!(
@@ -878,7 +983,11 @@ fn enumerate_lan_ips() -> Vec<String> {
                 c.interface,
                 c.ip,
                 if c.has_mac { " nic" } else { " virtual" },
-                if c.has_broadcast { " broadcast" } else { " point-to-point" },
+                if c.has_broadcast {
+                    " broadcast"
+                } else {
+                    " point-to-point"
+                },
                 if c.is_private { " private" } else { " public" }
             ))
             .collect::<Vec<_>>()
@@ -941,8 +1050,7 @@ fn default_route_ip() -> Option<std::net::IpAddr> {
 /// addresses only, and pick up the public one as soon as it lands.
 pub(crate) fn public_ip_now() -> Option<String> {
     static RESOLVED: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-    static ATTEMPTED_AT: std::sync::Mutex<Option<std::time::Instant>> =
-        std::sync::Mutex::new(None);
+    static ATTEMPTED_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
     if let Some(ip) = RESOLVED.lock().unwrap().clone() {
         return Some(ip);
@@ -954,7 +1062,9 @@ pub(crate) fn public_ip_now() -> Option<String> {
     // public address for the rest of the run.
     const RETRY_AFTER: Duration = Duration::from_secs(60);
     let mut attempted = ATTEMPTED_AT.lock().unwrap();
-    let due = attempted.map(|at| at.elapsed() >= RETRY_AFTER).unwrap_or(true);
+    let due = attempted
+        .map(|at| at.elapsed() >= RETRY_AFTER)
+        .unwrap_or(true);
     if !due {
         return None;
     }
@@ -980,10 +1090,16 @@ async fn discover_public_ip() -> Option<String> {
         if let Ok(text) = resp.text().await {
             let candidate = text.trim().to_string();
             if candidate.parse::<std::net::IpAddr>().is_ok() {
-                clog!("collab_sync", "public_ip resolved to {candidate} via {service}");
+                clog!(
+                    "collab_sync",
+                    "public_ip resolved to {candidate} via {service}"
+                );
                 return Some(candidate);
             }
-            clog!("collab_sync", "public_ip: {service} returned non-IP text: {candidate:?}");
+            clog!(
+                "collab_sync",
+                "public_ip: {service} returned non-IP text: {candidate:?}"
+            );
         }
     }
     clog!("collab_sync", "public_ip: no service reachable this round");
@@ -1076,7 +1192,10 @@ mod tests {
         let (mut a, mut b) = tokio::io::duplex(1024);
         write_frame(&mut a, &WireFrame::Unknown).await.unwrap();
 
-        assert!(matches!(read_frame(&mut b).await.unwrap(), WireFrame::Unknown));
+        assert!(matches!(
+            read_frame(&mut b).await.unwrap(),
+            WireFrame::Unknown
+        ));
     }
 
     #[test]
@@ -1116,7 +1235,10 @@ mod tests {
         remember_sync_peers(&key, ["192.168.1.9:47821".to_string()]);
         *KNOWN_SYNC_PEERS.lock().unwrap() = None; // as a relaunch would find it
 
-        assert_eq!(known_sync_peers(&key), vec!["192.168.1.9:47821".to_string()]);
+        assert_eq!(
+            known_sync_peers(&key),
+            vec!["192.168.1.9:47821".to_string()]
+        );
         forget_collection_peers(&key);
         assert!(known_sync_peers(&key).is_empty());
     }

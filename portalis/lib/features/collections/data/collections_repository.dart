@@ -139,6 +139,7 @@ class FrbCollectionsRepository implements CollectionsRepository {
       .map((file) => torrent_bridge.SourceFile(
             name: file.name,
             path: file.path,
+            lengthBytes: BigInt.from(file.lengthBytes),
           ))
       .toList();
 }

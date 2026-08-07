@@ -42,7 +42,10 @@ pub(crate) fn request_reconciliation() {
 }
 
 pub(crate) fn start_reconciliation_loop() {
-    clog!("reconciliation", "every {INTERVAL:?} while in use, and on demand");
+    clog!(
+        "reconciliation",
+        "every {INTERVAL:?} while in use, and on demand"
+    );
     tokio::spawn(async {
         loop {
             tokio::select! {
@@ -100,9 +103,12 @@ async fn reconcile_collection(name: &str, key: &str) {
 fn candidate_addresses(key: &str) -> Vec<String> {
     let known = known_sync_peers(key);
     let mut all: std::collections::BTreeSet<String> = known.iter().cloned().collect();
-    all.extend(known.iter().filter_map(|a| a.rsplit_once(':')).map(|(host, _)| {
-        format!("{host}:{PREFERRED_SYNC_PORT}")
-    }));
+    all.extend(
+        known
+            .iter()
+            .filter_map(|a| a.rsplit_once(':'))
+            .map(|(host, _)| format!("{host}:{PREFERRED_SYNC_PORT}")),
+    );
     all.into_iter().collect()
 }
 

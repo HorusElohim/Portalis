@@ -18,7 +18,12 @@ pub(crate) struct Collaborator {
 }
 
 impl Collaborator {
-    pub fn new(device_id: DeviceId, display_name: String, role: Role, joined_at_unix_ms: i64) -> Self {
+    pub fn new(
+        device_id: DeviceId,
+        display_name: String,
+        role: Role,
+        joined_at_unix_ms: i64,
+    ) -> Self {
         Self {
             device_id,
             display_name,

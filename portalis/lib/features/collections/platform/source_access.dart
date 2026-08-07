@@ -7,17 +7,25 @@ bool get supportsDirectPathSources =>
     defaultTargetPlatform != TargetPlatform.android &&
     defaultTargetPlatform != TargetPlatform.iOS;
 
+/// Gallery selection stays disabled until the native readers can seed the
+/// persistent platform reference directly. Enabling an `image_picker` cache
+/// path here would silently put a second copy in Portalis' sandbox.
+bool get supportsMobileGallerySources =>
+    defaultTargetPlatform == TargetPlatform.iOS;
+
 /// iOS uses its native Files picker, which returns a security-scoped location.
-/// Android remains unavailable until the Rust MediaStore adapter exists.
 bool get supportsNativeFilesSources =>
     defaultTargetPlatform == TargetPlatform.iOS;
 
 bool get supportsNoCopySources =>
     supportsDirectPathSources || supportsNativeFilesSources;
 
+bool get supportsMediaSources =>
+    supportsNoCopySources || supportsMobileGallerySources;
+
 String get noCopySourceUnavailableMessage =>
     defaultTargetPlatform == TargetPlatform.android
-        ? 'Portalis will not copy a gallery or picker cache file. Native '
-            'MediaStore sharing is not ready yet.'
+        ? 'Android gallery linking is being added without copying media into '
+            'Portalis. Choose a supported source for now.'
         : 'Choose files from Files. Photos assets stay in Apple Photos and '
             'cannot be seeded without making a second copy.';

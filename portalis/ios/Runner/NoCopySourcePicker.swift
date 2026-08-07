@@ -10,12 +10,14 @@ final class NoCopySourcePicker: NSObject, UIDocumentPickerDelegate {
   private static let channelName = "app.portalis/no-copy-source-picker"
   private static let bookmarksKey = "portalis.no-copy-source-bookmarks"
 
+  private var registrar: FlutterPluginRegistrar?
   private weak var presenter: UIViewController?
   private var channel: FlutterMethodChannel?
   private var pendingResult: FlutterResult?
   private var activeURLs: [String: URL] = [:]
 
   func register(with registrar: FlutterPluginRegistrar) {
+    self.registrar = registrar
     presenter = registrar.viewController
     restoreAccess()
 
@@ -174,11 +176,37 @@ final class NoCopySourcePicker: NSObject, UIDocumentPickerDelegate {
   }
 
   private func visiblePresenter() -> UIViewController? {
-    var current = presenter
-    while let presented = current?.presentedViewController {
-      current = presented
+    if let presenter = registrar?.viewController, presenter.viewIfLoaded?.window != nil {
+      return topmostPresenter(from: presenter)
     }
-    return current
+    if let presenter, presenter.viewIfLoaded?.window != nil {
+      return topmostPresenter(from: presenter)
+    }
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.sorted {
+      $0.activationState == .foregroundActive && $1.activationState != .foregroundActive
+    }
+    for scene in scenes {
+      let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first(where: { !$0.isHidden })
+      if let root = window?.rootViewController {
+        return topmostPresenter(from: root)
+      }
+    }
+    return UIApplication.shared.windows.first(where: \.isKeyWindow)?.rootViewController.map(topmostPresenter)
+  }
+
+  private func topmostPresenter(from controller: UIViewController) -> UIViewController {
+    if let presented = controller.presentedViewController {
+      return topmostPresenter(from: presented)
+    }
+    if let navigation = controller as? UINavigationController,
+       let visible = navigation.visibleViewController {
+      return topmostPresenter(from: visible)
+    }
+    if let tabs = controller as? UITabBarController,
+       let selected = tabs.selectedViewController {
+      return topmostPresenter(from: selected)
+    }
+    return controller
   }
 
   private func complete(_ value: Any?) {

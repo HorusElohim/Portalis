@@ -36,8 +36,9 @@ class CollectionsController extends ChangeNotifier {
   bool _peerHistoryLoaded = false;
   final Map<String, TransferHistory> _transferHistories = {};
   List<Collection> get collections => List.unmodifiable(_collections);
-  List<Collection> get shared =>
-      _collections.where((collection) => collection.isShared).toList(growable: false);
+  List<Collection> get shared => _collections
+      .where((collection) => collection.isShared)
+      .toList(growable: false);
 
   String? lastError;
   bool engineReady = false;
@@ -49,6 +50,7 @@ class CollectionsController extends ChangeNotifier {
   bool _paused = false;
 
   static const _activeInterval = Duration(milliseconds: 500);
+  static const _hashingInterval = Duration(milliseconds: 120);
   static const _idleInterval = Duration(seconds: 5);
   // Backgrounded still polls, just slowly and at a fixed rate — enough to
   // keep a transfer's numbers honest for whoever glances at a still-visible
@@ -154,13 +156,16 @@ class CollectionsController extends ChangeNotifier {
       _transferHistories[collectionId];
 
   List<PeerObservation> peerHistoryFor(String collectionId) =>
-      _visiblePeerHistory().where((peer) => peer.collectionId == collectionId).toList();
+      _visiblePeerHistory()
+          .where((peer) => peer.collectionId == collectionId)
+          .toList();
 
   List<PeerObservation> get peerHistory => _visiblePeerHistory();
 
   Future<void> forgetPeer(String address) async {
     _hiddenPeerAddresses.add(address);
-    _peerHistory = _peerHistory.where((peer) => peer.address != address).toList();
+    _peerHistory =
+        _peerHistory.where((peer) => peer.address != address).toList();
     await _savePeerHistory();
     notifyListeners();
   }
@@ -253,7 +258,8 @@ class CollectionsController extends ChangeNotifier {
     if (!_peerHistoryLoaded) return false;
     final now = DateTime.now();
     final ids = collections.map((collection) => collection.id).toSet();
-    final next = _peerHistory.where((peer) => ids.contains(peer.collectionId)).toList();
+    final next =
+        _peerHistory.where((peer) => ids.contains(peer.collectionId)).toList();
     final byKey = <String, PeerObservation>{
       for (final peer in next) _peerKey(peer): peer,
     };
@@ -284,7 +290,8 @@ class CollectionsController extends ChangeNotifier {
         }
       }
     }
-    _hiddenPeerAddresses.removeWhere((address) => !liveAddresses.contains(address));
+    _hiddenPeerAddresses
+        .removeWhere((address) => !liveAddresses.contains(address));
     if (!changed) return false;
     _peerHistory = byKey.values.toList();
     unawaited(_savePeerHistory());
@@ -327,11 +334,11 @@ class CollectionsController extends ChangeNotifier {
       final active = history ?? TransferHistory(startedAt: now);
       _transferHistories[collection.id] = active;
       changed = active.record(
-        at: now,
-        downloadMbps: collection.downloadMbps,
-        uploadMbps: collection.uploadMbps,
-        progress: collection.progress,
-      ) ||
+            at: now,
+            downloadMbps: collection.downloadMbps,
+            uploadMbps: collection.uploadMbps,
+            progress: collection.progress,
+          ) ||
           changed;
       if (collection.isComplete && active.completedAt == null) {
         active.completedAt = now;
@@ -355,7 +362,11 @@ class CollectionsController extends ChangeNotifier {
 
   bool _changed() {
     final seen = Object.hashAll(
-      [lastError, engineReady, ..._collections.map((collection) => collection.signature)],
+      [
+        lastError,
+        engineReady,
+        ..._collections.map((collection) => collection.signature)
+      ],
     );
     if (seen == _lastSeen) return false;
     _lastSeen = seen;
@@ -364,9 +375,15 @@ class CollectionsController extends ChangeNotifier {
 
   void _retuneInterval() {
     if (_paused || _timer == null) return;
-    final wanted = _collections.any((collection) => collection.isMoving)
-        ? _activeInterval
-        : _idleInterval;
+    final wanted = _collections.any(
+      (collection) =>
+          collection.ingestion?.stage == 'hashing' &&
+          !collection.ingestion!.failed,
+    )
+        ? _hashingInterval
+        : _collections.any((collection) => collection.isMoving)
+            ? _activeInterval
+            : _idleInterval;
     if (wanted != _interval) _schedule(wanted);
   }
 }

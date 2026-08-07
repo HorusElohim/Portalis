@@ -48,24 +48,17 @@ impl Vault {
         let staged = self.path.with_extension("tmp");
         std::fs::write(&staged, serde_json::to_vec_pretty(value)?)
             .with_context(|| format!("writing {staged:?}"))?;
-        replace_file(&staged, &self.path)
-            .with_context(|| format!("replacing {:?}", self.path))
+        replace_file(&staged, &self.path).with_context(|| format!("replacing {:?}", self.path))
     }
 }
 
 #[cfg(not(windows))]
-fn replace_file(
-    staged: &std::path::Path,
-    target: &std::path::Path,
-) -> std::io::Result<()> {
+fn replace_file(staged: &std::path::Path, target: &std::path::Path) -> std::io::Result<()> {
     std::fs::rename(staged, target)
 }
 
 #[cfg(windows)]
-fn replace_file(
-    staged: &std::path::Path,
-    target: &std::path::Path,
-) -> std::io::Result<()> {
+fn replace_file(staged: &std::path::Path, target: &std::path::Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
         MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,

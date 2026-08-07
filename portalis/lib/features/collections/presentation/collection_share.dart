@@ -12,6 +12,7 @@ import '../../../theme.dart';
 import '../../media/application/media_formats.dart';
 import '../domain/picked_file.dart';
 import '../platform/no_copy_source_picker.dart';
+import '../platform/photo_library_picker.dart';
 import '../platform/source_access.dart';
 
 /// The registry already names every type it knows, so this reads the label
@@ -70,6 +71,15 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 
   Future<void> _pickPhotos() async {
+    if (supportsMobileGallerySources) {
+      try {
+        _add(await PhotoLibraryPicker.pickMedia());
+      } catch (error) {
+        _toast('Couldn\'t access those Photos items: $error',
+            severity: ToastSeverity.error);
+      }
+      return;
+    }
     if (!supportsDirectPathSources) {
       _toast(noCopySourceUnavailableMessage);
       return;
@@ -216,7 +226,10 @@ class _ShareScreenState extends State<ShareScreen> {
       subtitle: Text(
         supportsDirectPathSources
             ? 'Files stay on this device — collaborators pull them from you.'
-            : supportsNativeFilesSources
+            : supportsMobileGallerySources
+                ? 'Choose original photos and videos from your library. '
+                    'Portalis reads them in place and does not import a copy.'
+                : supportsNativeFilesSources
                 ? 'Choose files in Files. Portalis keeps the original location '
                     'and never imports a second copy.'
                 : noCopySourceUnavailableMessage,
@@ -285,11 +298,28 @@ class _ShareScreenState extends State<ShareScreen> {
                   ),
                 ],
               )
-            else if (supportsNativeFilesSources)
-              _PickerButton(
-                label: 'Choose from Files',
-                icon: Icons.folder_open_outlined,
-                onTap: _busy ? null : _pickFiles,
+            else if (supportsNativeFilesSources || supportsMobileGallerySources)
+              Row(
+                children: [
+                  if (supportsMobileGallerySources)
+                    Expanded(
+                      child: _PickerButton(
+                        label: 'Photos & videos',
+                        icon: Icons.photo_library_outlined,
+                        onTap: _busy ? null : _pickPhotos,
+                      ),
+                    ),
+                  if (supportsMobileGallerySources && supportsNativeFilesSources)
+                    const SizedBox(width: 9),
+                  if (supportsNativeFilesSources)
+                    Expanded(
+                      child: _PickerButton(
+                        label: 'Files',
+                        icon: Icons.folder_open_outlined,
+                        onTap: _busy ? null : _pickFiles,
+                      ),
+                    ),
+                ],
               )
             else
               _NoCopySourceNotice(message: noCopySourceUnavailableMessage),

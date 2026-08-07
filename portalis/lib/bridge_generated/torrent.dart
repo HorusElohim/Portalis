@@ -6,7 +6,7 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_info_hash_with_peers`, `advance`, `bt_listen_port_cached`, `bt_listen_port`, `cancel`, `delete_torrent_files`, `ensure_active`, `fail`, `forget_torrent`, `inspect_source_files`, `new`, `pause_torrent`, `publish`, `restart_torrent`, `session_started`, `set_rate_limits`, `set_stage`, `snapshot`, `storage_breakdown`, `validate_source_files`
+// These functions are ignored because they are not marked as `pub`: `add_info_hash_with_peers`, `advance_hashing`, `advance`, `bt_listen_port_cached`, `bt_listen_port`, `cancel`, `complete_final_piece`, `delete_torrent_files`, `ensure_active`, `fail`, `forget_torrent`, `inspect_source_files`, `make_source_names_unique`, `new`, `numbered_source_name`, `pause_torrent`, `publish`, `restart_torrent`, `restore_linked_sources`, `session_started`, `set_rate_limits`, `set_stage`, `snapshot`, `storage_breakdown`, `validate_source_files`, `verify_linked_sources`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PublishProgressState`, `PublishProgress`, `RawStorageEntry`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -60,14 +60,16 @@ Future<BigInt> storageUsageBytes() =>
 class SourceFile {
   final String name;
   final String path;
+  final BigInt? lengthBytes;
 
   const SourceFile({
     required this.name,
     required this.path,
+    this.lengthBytes,
   });
 
   @override
-  int get hashCode => name.hashCode ^ path.hashCode;
+  int get hashCode => name.hashCode ^ path.hashCode ^ lengthBytes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -75,7 +77,8 @@ class SourceFile {
       other is SourceFile &&
           runtimeType == other.runtimeType &&
           name == other.name &&
-          path == other.path;
+          path == other.path &&
+          lengthBytes == other.lengthBytes;
 }
 
 /// One file inside a torrent, with its real on-disk location — resolved via

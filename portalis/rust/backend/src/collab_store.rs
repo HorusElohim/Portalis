@@ -76,9 +76,7 @@ pub(crate) fn entry_to_persisted(e: &ManifestEntry) -> PersistedManifestEntry {
 /// Rebuilds the entry as-signed. This does **not** verify it — the one
 /// place entries enter a [`Manifest`] (`Manifest::add`) does, identically
 /// for entries loaded from disk and entries received from a peer.
-pub(crate) fn entry_from_persisted(
-    e: &PersistedManifestEntry,
-) -> anyhow::Result<ManifestEntry> {
+pub(crate) fn entry_from_persisted(e: &PersistedManifestEntry) -> anyhow::Result<ManifestEntry> {
     let info_hash_bytes: [u8; 20] = hex::decode(&e.info_hash_hex)?
         .try_into()
         .map_err(|_| anyhow::anyhow!("stored info hash is not 20 bytes"))?;
@@ -119,7 +117,11 @@ pub(crate) fn collaborator_from_persisted(
     Ok(Collaborator::new(
         DeviceId::from_hex(&c.device_id_hex)?,
         c.display_name.clone(),
-        if c.is_admin { Role::Admin } else { Role::Member },
+        if c.is_admin {
+            Role::Admin
+        } else {
+            Role::Member
+        },
         c.joined_at_unix_ms,
     ))
 }
@@ -138,7 +140,11 @@ fn to_persisted(collection: &Collection) -> PersistedCollection {
             .iter()
             .map(collaborator_to_persisted)
             .collect(),
-        manifest: collection.manifest().entries().map(entry_to_persisted).collect(),
+        manifest: collection
+            .manifest()
+            .entries()
+            .map(entry_to_persisted)
+            .collect(),
     }
 }
 
@@ -165,8 +171,11 @@ fn from_persisted(persisted: &PersistedCollection) -> anyhow::Result<Collection>
 
 fn load() -> anyhow::Result<Vec<Collection>> {
     let persisted: PersistedStore = vault().read()?.unwrap_or_default();
-    let collections: Vec<Collection> =
-        persisted.collections.iter().map(from_persisted).collect::<anyhow::Result<_>>()?;
+    let collections: Vec<Collection> = persisted
+        .collections
+        .iter()
+        .map(from_persisted)
+        .collect::<anyhow::Result<_>>()?;
     clog!("collab_store", "load: {} collection(s)", collections.len());
     Ok(collections)
 }
@@ -206,9 +215,7 @@ pub(crate) fn forget_cache_for_test() {
 
 /// Lazily loads the store on first access. Callers go through
 /// [`read_store`] or [`with_store`] rather than this.
-fn lock_loaded<R>(
-    f: impl FnOnce(&mut Vec<Collection>) -> anyhow::Result<R>,
-) -> anyhow::Result<R> {
+fn lock_loaded<R>(f: impl FnOnce(&mut Vec<Collection>) -> anyhow::Result<R>) -> anyhow::Result<R> {
     let mut guard = STORE.lock().unwrap();
     if guard.is_none() {
         clog!("collab_store", "cold start, loading from disk");
@@ -245,7 +252,10 @@ pub(crate) fn with_store<R>(
         let result = f(collections)?;
         let after = collections.len();
         if before != after {
-            clog!("collab_store", "with_store: collection count {before} -> {after}");
+            clog!(
+                "collab_store",
+                "with_store: collection count {before} -> {after}"
+            );
         }
         save(collections)?;
         Ok(result)
@@ -284,7 +294,10 @@ pub(crate) fn rename_device(device_id: &DeviceId, new_name: &str) -> anyhow::Res
                 }
             }
         }
-        clog!("collab_store", "rename_device: updated {renamed} collaborator record(s) to {new_name:?}");
+        clog!(
+            "collab_store",
+            "rename_device: updated {renamed} collaborator record(s) to {new_name:?}"
+        );
         Ok(renamed)
     })
 }
@@ -326,7 +339,13 @@ mod tests {
         assert!(reloaded.collaborators[0].is_admin());
         assert_eq!(reloaded.manifest().len(), 1);
         assert_eq!(
-            reloaded.manifest().entries().next().unwrap().info_hash.to_hex(),
+            reloaded
+                .manifest()
+                .entries()
+                .next()
+                .unwrap()
+                .info_hash
+                .to_hex(),
             InfoHash::from_bytes([3; 20]).to_hex()
         );
     }
@@ -342,9 +361,14 @@ mod tests {
             Collection::new("Band".into()),
         ];
         for c in collections.iter_mut() {
-            c.collaborators.push(Collaborator::new(me, "Me".into(), Role::Admin, 0));
             c.collaborators
-                .push(Collaborator::new(someone_else, "Theo".into(), Role::Member, 0));
+                .push(Collaborator::new(me, "Me".into(), Role::Admin, 0));
+            c.collaborators.push(Collaborator::new(
+                someone_else,
+                "Theo".into(),
+                Role::Member,
+                0,
+            ));
         }
 
         let mut renamed = 0;
@@ -444,8 +468,6 @@ mod tests {
         ));
         collection
     }
-
-
 
     #[test]
     fn persisted_manifest_entries_still_verify_after_round_trip() {

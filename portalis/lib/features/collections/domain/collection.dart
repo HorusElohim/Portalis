@@ -61,6 +61,7 @@ class Collection {
   final double downloadMbps;
   final double uploadMbps;
   final int livePeers;
+
   /// `"ip:port"` of this collection's live swarm peers — `torrent` kind
   /// only. Anonymous: BitTorrent carries no identity beyond a network
   /// address, so there is no name to show, only that someone is there.
@@ -126,6 +127,8 @@ class Collection {
                 ingestion!.progress,
                 ingestion!.processedBytes,
                 ingestion!.totalBytes,
+                ingestion!.completedPieces,
+                ingestion!.totalPieces,
                 ingestion!.error,
               ),
         Object.hashAll(

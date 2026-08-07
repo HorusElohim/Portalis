@@ -106,6 +106,9 @@ pub struct ImportInfo {
     pub progress: f64,
     pub processed_bytes: u64,
     pub total_bytes: u64,
+    /// Exact completed torrent pieces, reported by the hashing worker.
+    pub completed_pieces: u64,
+    pub total_pieces: u64,
     pub error: Option<String>,
 }
 
@@ -202,6 +205,10 @@ pub async fn fetch_collection_media(collection_id: String) -> anyhow::Result<u32
     native::fetch_collection_media(collection_id).await
 }
 
+pub(crate) fn request_fetch_for_collection(collection_id: &str) {
+    native::request_fetch_for_collection(collection_id);
+}
+
 /// Re-attempts fetches the user has asked for that haven't landed yet.
 ///
 /// Driven by the reconciliation loop, since the thing that usually unblocks a
@@ -219,6 +226,7 @@ pub(crate) async fn pursue_fetches() {
 /// drew, and an invite generated before that drew carried no address for
 /// anyone to reach.
 pub async fn start_engine() -> anyhow::Result<()> {
+    crate::torrent::restore_linked_sources().await?;
     native::resume_imports();
     crate::collab_sync::ensure_listener().await.map(|_| ())
 }
@@ -300,6 +308,7 @@ pub async fn storage_breakdown() -> anyhow::Result<Vec<StorageEntry>> {
 mod native {
     use std::collections::{BTreeSet, HashMap, HashSet};
     use std::sync::{Mutex, OnceLock};
+    use std::time::Duration;
 
     use crate::collab_store::{read_store, with_store};
     use crate::domain::collaborator::{Collaborator, Role};
@@ -326,6 +335,7 @@ mod native {
 
     static IMPORTS: OnceLock<Mutex<HashMap<String, ActiveImport>>> = OnceLock::new();
     static IMPORTS_LOAD_ERROR: OnceLock<String> = OnceLock::new();
+    static SOURCE_WATCHDOG_STARTED: OnceLock<()> = OnceLock::new();
 
     fn imports() -> &'static Mutex<HashMap<String, ActiveImport>> {
         IMPORTS.get_or_init(|| Mutex::new(load_imports()))
@@ -393,12 +403,15 @@ mod native {
         let state = progress.snapshot();
         let progress = match state.stage.as_str() {
             "preparing" => 0.0,
-            "copying" if state.total_bytes > 0 => {
-                (state.processed_bytes as f64 / state.total_bytes as f64) * 0.65
+            "linking" if state.total_bytes > 0 => {
+                (state.processed_bytes as f64 / state.total_bytes as f64) * 0.1
             }
-            "copying" => 0.65,
-            "hashing" => 0.75,
-            "seeding" => 0.95,
+            "linking" => 0.1,
+            "hashing" if state.total_bytes > 0 => {
+                (state.processed_bytes as f64 / state.total_bytes as f64) * 0.9
+            }
+            "hashing" => 0.9,
+            "seeding" => 0.98,
             "failed" => 0.0,
             _ => 0.0,
         };
@@ -407,6 +420,8 @@ mod native {
             progress,
             processed_bytes: state.processed_bytes,
             total_bytes: state.total_bytes,
+            completed_pieces: state.completed_pieces,
+            total_pieces: state.total_pieces,
             error: state.error,
         })
     }
@@ -542,10 +557,12 @@ mod native {
         added_by: Option<String>,
         entry_name: &str,
     ) -> Vec<MediaInfo> {
+        let linked_paths = crate::linked_source_store::paths_for(&torrent.info_hash);
         torrent
             .files
             .iter()
-            .map(|f| {
+            .enumerate()
+            .map(|(index, f)| {
                 let progress = if f.length_bytes > 0 {
                     (f.downloaded_bytes as f64 / f.length_bytes as f64).clamp(0.0, 1.0)
                 } else {
@@ -557,7 +574,13 @@ mod native {
                     info_hash: norm(&torrent.info_hash),
                     // Only expose a path once the file is actually complete —
                     // a partially-written file will not open or decode.
-                    absolute_path: (progress >= 1.0).then(|| f.absolute_path.clone()),
+                    absolute_path: (progress >= 1.0).then(|| {
+                        linked_paths
+                            .get(index)
+                            .filter(|path| path.starts_with("phasset://"))
+                            .cloned()
+                            .unwrap_or_else(|| f.absolute_path.clone())
+                    }),
                     length_bytes: f.length_bytes,
                     downloaded_bytes: f.downloaded_bytes,
                     progress,
@@ -670,7 +693,11 @@ mod native {
         // already sitting on disk. `ensure_listener` warms the session in the
         // background, and a later poll picks it up.
         let content = crate::substrate::current();
-        let torrents = if content.ready() { content.holdings().await } else { Vec::new() };
+        let torrents = if content.ready() {
+            content.holdings().await
+        } else {
+            Vec::new()
+        };
         let addrs = current_sync_addresses();
 
         // Self-heal this device's own collaborator records. Collections
@@ -691,15 +718,16 @@ mod native {
                     me.nickname
                 ),
                 Ok(_) => {}
-                Err(e) => clog!("collections", "list_collections: couldn't reconcile this \
-                     device's collaborator name ({e:#})"),
+                Err(e) => clog!(
+                    "collections",
+                    "list_collections: couldn't reconcile this \
+                     device's collaborator name ({e:#})"
+                ),
             }
         }
 
-        let by_hash: HashMap<String, &TorrentInfo> = torrents
-            .iter()
-            .map(|t| (norm(&t.info_hash), t))
-            .collect();
+        let by_hash: HashMap<String, &TorrentInfo> =
+            torrents.iter().map(|t| (norm(&t.info_hash), t)).collect();
 
         let (mut result, claimed) = read_store(|collections| {
             let mut claimed: HashSet<String> = HashSet::new();
@@ -847,13 +875,14 @@ mod native {
 
     pub(super) async fn create_collection_with_media(
         name: String,
-        files: Vec<SourceFile>,
+        mut files: Vec<SourceFile>,
     ) -> anyhow::Result<CollectionInfo> {
         clog!(
             "collections",
             "create_collection_with_media: name={name:?} files={}",
             files.len()
         );
+        crate::torrent::make_source_names_unique(&mut files);
         let total_bytes = crate::torrent::inspect_source_files(&files).await?;
         let created = create_collection(name.clone()).await?;
         if let Err(error) = start_import(created.id.clone(), name, files, total_bytes) {
@@ -938,10 +967,13 @@ mod native {
         // those addresses turn out to be reachable; whoever is looking at the
         // collection picks up the result once/if the sync lands.
         if peer_addrs.is_empty() {
-            clog!("collections", "join_collection: invite carried no addresses — nothing to \
+            clog!(
+                "collections",
+                "join_collection: invite carried no addresses — nothing to \
                  sync with. The inviting device couldn't start its sync listener (on Android \
                  that means a build without the INTERNET permission); sync manually from the \
-                 collection screen using the address on its User screen.");
+                 collection screen using the address on its User screen."
+            );
         } else {
             // Where the peers are is the durable part; reaching them is the
             // loop's job. On iOS and macOS the very first connection to a LAN
@@ -957,7 +989,7 @@ mod native {
     pub(super) async fn add_media_to_collection(
         collection_id: String,
         label: String,
-        files: Vec<SourceFile>,
+        mut files: Vec<SourceFile>,
     ) -> anyhow::Result<CollectionInfo> {
         clog!(
             "collections",
@@ -972,6 +1004,7 @@ mod native {
             );
             Ok(())
         })?;
+        crate::torrent::make_source_names_unique(&mut files);
         let total_bytes = crate::torrent::inspect_source_files(&files).await?;
         start_import(collection_id.clone(), label, files, total_bytes)?;
         reload(&collection_id).await
@@ -1039,6 +1072,66 @@ mod native {
                 "resuming interrupted import for {collection_id}"
             );
             spawn_import(collection_id, label, batch_name, files, progress);
+        }
+        start_source_watchdog();
+    }
+
+    /// A picker cache is not a durable source. Imports deliberately retain a
+    /// reference to the original location instead, so recheck it once when
+    /// the app starts and then every ten seconds while work is pending.
+    ///
+    /// Cancelling on a failed check is intentional: publishing stale or
+    /// partially readable media would create a torrent that cannot seed.
+    fn start_source_watchdog() {
+        if SOURCE_WATCHDOG_STARTED.set(()).is_err() {
+            return;
+        }
+        tokio::spawn(async {
+            loop {
+                check_import_source_availability().await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        });
+    }
+
+    async fn check_import_source_availability() {
+        crate::torrent::verify_linked_sources().await;
+        let pending = {
+            let active = imports().lock().unwrap();
+            active
+                .iter()
+                .filter(|(_, job)| job.running)
+                .map(|(collection_id, job)| {
+                    (
+                        collection_id.clone(),
+                        job.files.clone(),
+                        job.progress.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for (collection_id, files, progress) in pending {
+            let Err(error) = crate::torrent::inspect_source_files(&files).await else {
+                continue;
+            };
+            let message = format!("source is no longer available: {error:#}");
+            progress.cancel();
+            progress.fail(message.clone());
+            let mut active = imports().lock().unwrap();
+            if let Some(job) = active.get_mut(&collection_id) {
+                job.running = false;
+            }
+            if let Err(save_error) = persist_imports(&active) {
+                clog!(
+                    "collections",
+                    "could not persist unavailable source for {collection_id}: {save_error:#}"
+                );
+            }
+            clog!(
+                "collections",
+                "import source unavailable for {collection_id}: {message}"
+            );
         }
     }
 
@@ -1133,13 +1226,8 @@ mod native {
                     // than adding the same immutable torrent twice.
                     return Ok(());
                 }
-                let entry = ManifestEntry::new_signed(
-                    info_hash,
-                    label,
-                    None,
-                    &identity,
-                    now_unix_ms(),
-                );
+                let entry =
+                    ManifestEntry::new_signed(info_hash, label, None, &identity, now_unix_ms());
                 anyhow::ensure!(
                     collection.add_manifest_entry(entry),
                     "failed to add manifest entry (should never happen for a freshly-signed entry)"
@@ -1216,8 +1304,7 @@ mod native {
     /// A fetch is better understood as a standing intent than a one-off
     /// command, so it is remembered and retried on the sync tick until every
     /// entry has actually landed.
-    static FETCH_REQUESTED: std::sync::Mutex<Option<HashSet<String>>> =
-        std::sync::Mutex::new(None);
+    static FETCH_REQUESTED: std::sync::Mutex<Option<HashSet<String>>> = std::sync::Mutex::new(None);
 
     fn note_fetch_requested(collection_id: &str) {
         FETCH_REQUESTED
@@ -1225,6 +1312,10 @@ mod native {
             .unwrap()
             .get_or_insert_with(HashSet::new)
             .insert(collection_id.to_string());
+    }
+
+    pub(super) fn request_fetch_for_collection(collection_id: &str) {
+        note_fetch_requested(collection_id);
     }
 
     fn forget_fetch_request(collection_id: &str) {
@@ -1245,11 +1336,17 @@ mod native {
         for collection_id in requested {
             match fetch_pending(&collection_id).await {
                 Ok(0) => {}
-                Ok(n) => clog!("collections", "retry: started {n} fetch(es) for {collection_id}"),
+                Ok(n) => clog!(
+                    "collections",
+                    "retry: started {n} fetch(es) for {collection_id}"
+                ),
                 // A collection deleted while a fetch was outstanding lands
                 // here; dropping the request stops it retrying forever.
                 Err(e) => {
-                    clog!("collections", "retry: {collection_id} failed ({e:#}), giving up on it");
+                    clog!(
+                        "collections",
+                        "retry: {collection_id} failed ({e:#}), giving up on it"
+                    );
                     forget_fetch_request(&collection_id);
                 }
             }
@@ -1291,7 +1388,11 @@ mod native {
                 .ok_or_else(|| anyhow::anyhow!("no such collection"))?;
             Ok((
                 collection.rendezvous_key().to_hex(),
-                collection.manifest().entries().map(|e| e.info_hash.to_hex()).collect(),
+                collection
+                    .manifest()
+                    .entries()
+                    .map(|e| e.info_hash.to_hex())
+                    .collect(),
             ))
         })
     }
@@ -1303,16 +1404,29 @@ mod native {
             .iter()
             .map(|t| norm(&t.info_hash))
             .collect();
-        wanted.iter().filter(|h| !held.contains(&norm(h))).cloned().collect()
+        wanted
+            .iter()
+            .filter(|h| !held.contains(&norm(h)))
+            .cloned()
+            .collect()
     }
 
     /// Spawned, never awaited — see FETCHING. Returns what was started.
     fn start_acquiring(rendezvous_key_hex: &str, missing: Vec<String>) -> u32 {
         let peers = crate::collab_sync::learned_bt_peers(rendezvous_key_hex);
-        clog!("collections", "fetch: {} missing, {} peer hint(s)={peers:?}", missing.len(), peers.len());
-        missing.into_iter().filter(|handle| begin_fetch(handle)).map(|handle| {
-            tokio::spawn(acquire(handle, peers.clone()));
-        }).count() as u32
+        clog!(
+            "collections",
+            "fetch: {} missing, {} peer hint(s)={peers:?}",
+            missing.len(),
+            peers.len()
+        );
+        missing
+            .into_iter()
+            .filter(|handle| begin_fetch(handle))
+            .map(|handle| {
+                tokio::spawn(acquire(handle, peers.clone()));
+            })
+            .count() as u32
     }
 
     async fn acquire(handle: String, peers: Vec<std::net::SocketAddr>) {
@@ -1325,13 +1439,23 @@ mod native {
         report(&handle, outcome);
     }
 
-    fn report(handle: &str, outcome: Result<anyhow::Result<TorrentInfo>, tokio::time::error::Elapsed>) {
+    fn report(
+        handle: &str,
+        outcome: Result<anyhow::Result<TorrentInfo>, tokio::time::error::Elapsed>,
+    ) {
         match outcome {
-            Ok(Ok(info)) => clog!("collections", "fetch: {handle} resolved, {} file(s)", info.files.len()),
+            Ok(Ok(info)) => clog!(
+                "collections",
+                "fetch: {handle} resolved, {} file(s)",
+                info.files.len()
+            ),
             Ok(Err(e)) => clog!("collections", "fetch: {handle} failed: {e:#}"),
-            Err(_) => clog!("collections", "fetch: {handle} found nobody holding it within \
+            Err(_) => clog!(
+                "collections",
+                "fetch: {handle} found nobody holding it within \
                  {METADATA_TIMEOUT:?} — is the other device running, on this network, and \
-                 showing the collection? Tapping fetch again retries."),
+                 showing the collection? Tapping fetch again retries."
+            ),
         }
     }
 
@@ -1339,7 +1463,10 @@ mod native {
         collection_id: String,
         peer_addr: String,
     ) -> anyhow::Result<CollectionInfo> {
-        clog!("collections", "sync_collection: id={collection_id} peer_addr={peer_addr:?}");
+        clog!(
+            "collections",
+            "sync_collection: id={collection_id} peer_addr={peer_addr:?}"
+        );
         let id = CollectionId::from_string(&collection_id)?;
         let rendezvous_key_hex = read_store(|collections| {
             collections
@@ -1473,10 +1600,7 @@ mod native {
                     .flat_map(|collection| collection.manifest().entries())
                     .map(|entry| norm(&entry.info_hash.to_hex()))
                     .collect();
-                Ok(own
-                    .difference(&claimed_elsewhere)
-                    .cloned()
-                    .collect())
+                Ok(own.difference(&claimed_elsewhere).cloned().collect())
             });
         }
 
@@ -1547,7 +1671,9 @@ mod native {
         let by_path: Vec<(std::path::PathBuf, &TorrentInfo)> = torrents
             .iter()
             .filter_map(|t| {
-                t.files.first().map(|f| (std::path::PathBuf::from(&f.absolute_path), t))
+                t.files
+                    .first()
+                    .map(|f| (std::path::PathBuf::from(&f.absolute_path), t))
             })
             .collect();
 
@@ -1582,10 +1708,11 @@ mod native {
         collections: &[Collection],
     ) -> (Option<String>, Option<String>) {
         let hash = norm(&torrent.info_hash);
-        if let Some(c) = collections
-            .iter()
-            .find(|c| c.manifest().entries().any(|e| norm(&e.info_hash.to_hex()) == hash))
-        {
+        if let Some(c) = collections.iter().find(|c| {
+            c.manifest()
+                .entries()
+                .any(|e| norm(&e.info_hash.to_hex()) == hash)
+        }) {
             return (Some(c.id.to_string()), Some(c.name.clone()));
         }
         (Some(hash), Some(torrent.name.clone()))
@@ -1839,7 +1966,10 @@ mod native {
         fn eta_is_remaining_bytes_over_the_current_rate() {
             let mut totals = Totals::new();
             // 100 MiB total, half done, moving at 1 MiB/s => 50s left.
-            totals.add(&torrent("aa", vec![("a", 100 * 1024 * 1024, 50 * 1024 * 1024)]));
+            totals.add(&torrent(
+                "aa",
+                vec![("a", 100 * 1024 * 1024, 50 * 1024 * 1024)],
+            ));
             totals.download_mbps = 1.0;
 
             assert_eq!(totals.eta_secs(), Some(50));
@@ -1900,7 +2030,10 @@ mod native {
                 &entry.name,
             );
 
-            assert_eq!(media[0].added_by.as_deref(), Some(identity.device_id().to_hex().as_str()));
+            assert_eq!(
+                media[0].added_by.as_deref(),
+                Some(identity.device_id().to_hex().as_str())
+            );
             // The entry's signed label survives the flattening into files —
             // the file is "x.mp4" but it belongs to the "RAW_3000" batch.
             assert_eq!(media[0].name, "x.mp4");

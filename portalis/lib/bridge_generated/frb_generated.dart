@@ -1064,14 +1064,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ImportInfo dco_decode_import_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return ImportInfo(
       stage: dco_decode_String(arr[0]),
       progress: dco_decode_f_64(arr[1]),
       processedBytes: dco_decode_u_64(arr[2]),
       totalBytes: dco_decode_u_64(arr[3]),
-      error: dco_decode_opt_String(arr[4]),
+      completedPieces: dco_decode_u_64(arr[4]),
+      totalPieces: dco_decode_u_64(arr[5]),
+      error: dco_decode_opt_String(arr[6]),
     );
   }
 
@@ -1176,11 +1178,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SourceFile dco_decode_source_file(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return SourceFile(
       name: dco_decode_String(arr[0]),
       path: dco_decode_String(arr[1]),
+      lengthBytes: dco_decode_opt_box_autoadd_u_64(arr[2]),
     );
   }
 
@@ -1452,12 +1455,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_progress = sse_decode_f_64(deserializer);
     var var_processedBytes = sse_decode_u_64(deserializer);
     var var_totalBytes = sse_decode_u_64(deserializer);
+    var var_completedPieces = sse_decode_u_64(deserializer);
+    var var_totalPieces = sse_decode_u_64(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
     return ImportInfo(
         stage: var_stage,
         progress: var_progress,
         processedBytes: var_processedBytes,
         totalBytes: var_totalBytes,
+        completedPieces: var_completedPieces,
+        totalPieces: var_totalPieces,
         error: var_error);
   }
 
@@ -1641,7 +1648,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
     var var_path = sse_decode_String(deserializer);
-    return SourceFile(name: var_name, path: var_path);
+    var var_lengthBytes = sse_decode_opt_box_autoadd_u_64(deserializer);
+    return SourceFile(
+        name: var_name, path: var_path, lengthBytes: var_lengthBytes);
   }
 
   @protected
@@ -1879,6 +1888,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.progress, serializer);
     sse_encode_u_64(self.processedBytes, serializer);
     sse_encode_u_64(self.totalBytes, serializer);
+    sse_encode_u_64(self.completedPieces, serializer);
+    sse_encode_u_64(self.totalPieces, serializer);
     sse_encode_opt_String(self.error, serializer);
   }
 
@@ -2029,6 +2040,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.path, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.lengthBytes, serializer);
   }
 
   @protected

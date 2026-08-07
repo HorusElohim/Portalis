@@ -142,7 +142,6 @@ pub async fn set_engine_settings(settings: EngineSettings) -> anyhow::Result<boo
 mod native {
     use std::{path::Path, sync::Mutex};
 
-    
     use crate::log::clog;
 
     use super::EngineSettings;
@@ -203,7 +202,10 @@ mod native {
                 !download_dir.trim().is_empty(),
                 "the download folder cannot be empty"
             );
-            anyhow::ensure!(path.is_absolute(), "the download folder must be an absolute path");
+            anyhow::ensure!(
+                path.is_absolute(),
+                "the download folder must be an absolute path"
+            );
             std::fs::create_dir_all(path)
                 .map_err(|e| anyhow::anyhow!("creating download folder {path:?}: {e}"))?;
             anyhow::ensure!(
@@ -219,11 +221,8 @@ mod native {
         *CACHE.lock().unwrap() = Some(settings.clone());
 
         // Live half: applied now, whether or not anything else changed.
-        crate::torrent::set_rate_limits(
-            settings.upload_limit_bps,
-            settings.download_limit_bps,
-        )
-        .await?;
+        crate::torrent::set_rate_limits(settings.upload_limit_bps, settings.download_limit_bps)
+            .await?;
 
         let restart_required = needs_restart(&old, &settings) && crate::torrent::session_started();
         clog!(
@@ -255,10 +254,22 @@ mod native {
             let old = EngineSettings::default();
 
             for new in [
-                EngineSettings { listen_port_start: 7000, ..EngineSettings::default() },
-                EngineSettings { disable_dht: true, ..EngineSettings::default() },
-                EngineSettings { persist_session: false, ..EngineSettings::default() },
-                EngineSettings { fastresume: false, ..EngineSettings::default() },
+                EngineSettings {
+                    listen_port_start: 7000,
+                    ..EngineSettings::default()
+                },
+                EngineSettings {
+                    disable_dht: true,
+                    ..EngineSettings::default()
+                },
+                EngineSettings {
+                    persist_session: false,
+                    ..EngineSettings::default()
+                },
+                EngineSettings {
+                    fastresume: false,
+                    ..EngineSettings::default()
+                },
                 EngineSettings {
                     download_dir: Some("/downloads".into()),
                     ..EngineSettings::default()
@@ -271,7 +282,10 @@ mod native {
                     trackers: vec!["udp://tracker.example:1337".into()],
                     ..EngineSettings::default()
                 },
-                EngineSettings { defer_writes_up_to_mb: Some(64), ..EngineSettings::default() },
+                EngineSettings {
+                    defer_writes_up_to_mb: Some(64),
+                    ..EngineSettings::default()
+                },
                 EngineSettings {
                     peer_connect_timeout_secs: Some(10),
                     ..EngineSettings::default()
