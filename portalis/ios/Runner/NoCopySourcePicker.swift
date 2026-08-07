@@ -16,7 +16,7 @@ final class NoCopySourcePicker: NSObject, UIDocumentPickerDelegate {
   private var activeURLs: [String: URL] = [:]
 
   func register(with registrar: FlutterPluginRegistrar) {
-    presenter = registrar.viewController()
+    presenter = registrar.viewController
     restoreAccess()
 
     let channel = FlutterMethodChannel(
@@ -135,7 +135,7 @@ final class NoCopySourcePicker: NSObject, UIDocumentPickerDelegate {
 
   private func saveBookmark(for url: URL, path: String) throws {
     let data = try url.bookmarkData(
-      options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+      options: [],
       includingResourceValuesForKeys: nil,
       relativeTo: nil
     )
@@ -160,7 +160,7 @@ final class NoCopySourcePicker: NSObject, UIDocumentPickerDelegate {
       var stale = false
       guard let url = try? URL(
         resolvingBookmarkData: bookmark,
-        options: [.withSecurityScope],
+        options: [],
         relativeTo: nil,
         bookmarkDataIsStale: &stale
       ), url.startAccessingSecurityScopedResource() else {

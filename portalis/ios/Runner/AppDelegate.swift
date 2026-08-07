@@ -14,8 +14,11 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    noCopySourcePicker.register(
-      with: engineBridge.pluginRegistry.registrar(forPlugin: "PortalisNoCopySourcePicker")
-    )
+    guard let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "PortalisNoCopySourcePicker"
+    ) else {
+      return
+    }
+    noCopySourcePicker.register(with: registrar)
   }
 }
