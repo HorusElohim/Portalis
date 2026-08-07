@@ -1,6 +1,7 @@
 // Collection media presentation shared by list, grid and viewer surfaces.
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -8,6 +9,7 @@ import 'package:video_player/video_player.dart';
 import '../../../theme.dart';
 import '../application/media_formats.dart';
 import '../domain/media_item.dart';
+import '../platform/heic_preview.dart';
 
 /// Placeholder tile standing in for real thumbnails/covers/media — shown
 /// for anything not downloaded yet, and for file types without an in-app
@@ -89,10 +91,17 @@ class MediaThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ask the registry what this type can do, rather than assuming every
-    // image-kind file is decodable — HEIC is image-kind but only previews
-    // because it was converted on the way in.
+    // Ask the registry what this type can do rather than assuming every
+    // image-kind file is decodable. Native image formats use a bounded
+    // platform decode and remain byte-for-byte unchanged on disk.
     final format = MediaFormats.resolve(media.label);
+    if (media.isReady && format.preview == PreviewSupport.nativeImage) {
+      return _NativeImageThumbnail(
+        media: media,
+        borderRadius: borderRadius,
+        decodeSize: decodeSize,
+      );
+    }
     if (media.isReady && format.preview == PreviewSupport.image) {
       final cacheWidth =
           (decodeSize * MediaQuery.devicePixelRatioOf(context)).round();
@@ -102,6 +111,14 @@ class MediaThumbnail extends StatelessWidget {
           File(media.localPath!),
           fit: BoxFit.cover,
           cacheWidth: cacheWidth,
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded || frame != null) return child;
+            return PlaceholderTile(
+              label: _typeLabel(media.label),
+              borderRadius: borderRadius,
+              kind: kindOf(media.label),
+            );
+          },
           errorBuilder: (context, error, stack) => PlaceholderTile(
             label: _typeLabel(media.label),
             borderRadius: borderRadius,
@@ -132,6 +149,86 @@ class MediaThumbnail extends StatelessWidget {
     final ext = extensionOf(name);
     return ext.isEmpty ? null : ext.toUpperCase();
   }
+}
+
+class _NativeImageThumbnail extends StatefulWidget {
+  const _NativeImageThumbnail({
+    required this.media,
+    required this.borderRadius,
+    required this.decodeSize,
+  });
+
+  final MediaItem media;
+  final double borderRadius;
+  final double decodeSize;
+
+  @override
+  State<_NativeImageThumbnail> createState() => _NativeImageThumbnailState();
+}
+
+class _NativeImageThumbnailState extends State<_NativeImageThumbnail> {
+  late Future<Uint8List?> _preview;
+
+  @override
+  void initState() {
+    super.initState();
+    _preview = _loadPreview();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NativeImageThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.media.localPath != widget.media.localPath ||
+        oldWidget.decodeSize != widget.decodeSize) {
+      _preview = _loadPreview();
+    }
+  }
+
+  Future<Uint8List?> _loadPreview() {
+    final path = widget.media.localPath;
+    if (path == null) return Future.value(null);
+    return HeicPreview.decode(path, widget.decodeSize.round());
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+        future: _preview,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null) {
+            return PlaceholderTile(
+              label: _previewTypeLabel(widget.media.label),
+              borderRadius: widget.borderRadius,
+              kind: kindOf(widget.media.label),
+            );
+          }
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.cover,
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded || frame != null) return child;
+                return PlaceholderTile(
+                  label: _previewTypeLabel(widget.media.label),
+                  borderRadius: widget.borderRadius,
+                  kind: kindOf(widget.media.label),
+                );
+              },
+              errorBuilder: (context, error, stack) => PlaceholderTile(
+                label: _previewTypeLabel(widget.media.label),
+                borderRadius: widget.borderRadius,
+                kind: kindOf(widget.media.label),
+              ),
+            ),
+          );
+        },
+      );
+}
+
+String? _previewTypeLabel(String name) {
+  final ext = extensionOf(name);
+  return ext.isEmpty ? null : ext.toUpperCase();
 }
 
 class _VideoThumbnail extends StatefulWidget {

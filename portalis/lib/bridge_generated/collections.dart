@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'torrent.dart';
 
-// These functions are ignored because they are not marked as `pub`: `pursue_fetches`
+// These functions are ignored because they are not marked as `pub`: `pursue_fetches`, `request_fetch_for_collection`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Every collection this device knows about, from both sources, joined.

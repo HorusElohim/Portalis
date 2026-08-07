@@ -11,6 +11,9 @@ enum PreviewSupport {
   /// Decoded and drawn inline by Flutter's own image pipeline.
   image,
 
+  /// Decoded by the platform image framework and drawn inline by Flutter.
+  nativeImage,
+
   /// Played inline with transport controls (`video_player`).
   player,
 
@@ -246,8 +249,7 @@ final List<MediaFormat> _builtIns = [
     extensions: ['heic', 'heif'],
     label: 'HEIC photo',
     kind: MediaKind.image,
-    preview: PreviewSupport.externalOnly,
-    previewNote: 'HEIC is preserved byte-for-byte and opened by your system.',
+    preview: PreviewSupport.nativeImage,
   ),
 
   // --- Video --------------------------------------------------------------

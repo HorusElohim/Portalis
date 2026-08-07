@@ -241,6 +241,7 @@ class _PreviewBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, color) = switch (support) {
       PreviewSupport.image => ('VIEW', AppColors.hues[1]),
+      PreviewSupport.nativeImage => ('VIEW', AppColors.hues[1]),
       PreviewSupport.player => ('PLAY', AppColors.hues[3]),
       PreviewSupport.text => ('READ', AppColors.hues[2]),
       // Not a failure state, so not danger-coloured — it's just where the

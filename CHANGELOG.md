@@ -18,6 +18,22 @@
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
 
+## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
+
+### Added
+
+<!-- New user-visible features go here before the next release. -->
+
+- Added native, bounded HEIC/HEIF preview decoding for iOS, macOS, and
+  Android without changing or duplicating the original media file.
+
+### Changed
+
+<!-- Behaviour and UX changes go here before the next release. -->
+
+- Restyled shared collection rows with the same visual energy as torrent rows,
+  including an accented preview tile and a clear shared-state fallback.
+
 ## Portalis 1.0.7 / backend 0.1.6 — 2026-08-07
 
 ### Added

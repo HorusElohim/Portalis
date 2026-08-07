@@ -6,6 +6,7 @@ import UIKit
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let noCopySourcePicker = NoCopySourcePicker()
   private let photoLibraryPicker = PhotoLibraryPicker()
+  private let heicPreview = HeicPreview()
   private let localNetworkAuthorization = LocalNetworkAuthorization()
 
   override func application(
@@ -24,6 +25,7 @@ import UIKit
     }
     noCopySourcePicker.register(with: registrar)
     photoLibraryPicker.register(with: registrar)
+    heicPreview.register(with: registrar)
     localNetworkAuthorization.request()
   }
 }

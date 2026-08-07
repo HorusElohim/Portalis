@@ -81,7 +81,8 @@ class _CollectionRowState extends State<CollectionRow> {
     final collection = widget.collection;
     final torrent = !collection.isShared;
     final accent = torrent ? AppColors.ember : AppColors.signal;
-    final showsExtras = widget.detail == null || _level != CollectionDetailLevel.collapsed;
+    final showsExtras =
+        widget.detail == null || _level != CollectionDetailLevel.collapsed;
 
     return SurfaceCard(
       onTap: _handleTap,
@@ -108,7 +109,8 @@ class _CollectionRowState extends State<CollectionRow> {
               busy: false,
             ),
           ],
-          if (widget.detail != null && _level != CollectionDetailLevel.collapsed) ...[
+          if (widget.detail != null &&
+              _level != CollectionDetailLevel.collapsed) ...[
             Divider(height: 26, color: AppColors.border),
             widget.detail!(_level),
           ],
@@ -132,20 +134,10 @@ class _CollectionRowState extends State<CollectionRow> {
           width: 52,
           height: 52,
           child: torrent
-              ? Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.emberWash,
-                    borderRadius: BorderRadius.circular(AppRadius.control),
-                  ),
-                  child: Icon(Icons.download_outlined,
-                      size: 20, color: AppColors.ember),
-                )
-              : ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.control),
-                  child: collection.media.isEmpty
-                      ? const PlaceholderTile(borderRadius: 14)
-                      : MediaThumbnail(
-                          media: collection.media.first, borderRadius: 14),
+              ? _TorrentCollectionTile(accent: accent)
+              : _SharedCollectionTile(
+                  collection: collection,
+                  accent: accent,
                 ),
         ),
         const SizedBox(width: 14),
@@ -205,6 +197,119 @@ class _CollectionRowState extends State<CollectionRow> {
       ],
     );
   }
+}
+
+class _TorrentCollectionTile extends StatelessWidget {
+  const _TorrentCollectionTile({required this.accent});
+
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              accent.withValues(alpha: 0.24),
+              accent.withValues(alpha: 0.08),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.control),
+          border: Border.all(color: accent.withValues(alpha: 0.28)),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.16),
+              blurRadius: 14,
+              spreadRadius: -4,
+            ),
+          ],
+        ),
+        child: Center(
+          child: Icon(Icons.download_outlined, size: 22, color: accent),
+        ),
+      );
+}
+
+class _SharedCollectionTile extends StatelessWidget {
+  const _SharedCollectionTile({
+    required this.collection,
+    required this.accent,
+  });
+
+  final Collection collection;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = collection.media.firstOrNull;
+    final hasPreview = media?.isReady ?? false;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: 0.2),
+            AppColors.surfaceRaised,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.control),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.14),
+            blurRadius: 14,
+            spreadRadius: -4,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.control - 1),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasPreview)
+              MediaThumbnail(media: media!, borderRadius: AppRadius.control)
+            else
+              _SharedCollectionPlaceholder(accent: accent),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.2),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              right: 5,
+              top: 5,
+              child: Icon(
+                Icons.people_alt_outlined,
+                size: 14,
+                color: hasPreview ? Colors.white : accent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SharedCollectionPlaceholder extends StatelessWidget {
+  const _SharedCollectionPlaceholder({required this.accent});
+
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Icon(Icons.hub_outlined, size: 23, color: accent),
+      );
 }
 
 /// Shown when the backend itself failed, so it is never mistaken for an empty

@@ -103,12 +103,12 @@ void main() {
   });
 
   group('sharing', () {
-    test('HEIC originals are preserved and delegated to the system viewer', () {
+    test('HEIC originals use the native image decoder without copying', () {
       final heic = MediaFormats.resolve('IMG_1234.HEIC');
 
       expect(heic.kind, MediaKind.image);
-      expect(heic.preview, PreviewSupport.externalOnly);
-      expect(heic.previewNote, isNotEmpty);
+      expect(heic.preview, PreviewSupport.nativeImage);
+      expect(hasInAppPreview('IMG_1234.HEIC'), isTrue);
     });
   });
 
@@ -116,8 +116,7 @@ void main() {
     test('common video containers request inline playback', () {
       expect(MediaFormats.resolve('a.mp4').preview, PreviewSupport.player);
       expect(kindOf('a.mkv'), MediaKind.video);
-      expect(MediaFormats.resolve('a.mkv').preview,
-          PreviewSupport.player);
+      expect(MediaFormats.resolve('a.mkv').preview, PreviewSupport.player);
       expect(MediaFormats.resolve('a.avi').preview, PreviewSupport.player);
     });
 
@@ -151,8 +150,7 @@ void main() {
 
       // The screen is generated from the registry, so a type registered a
       // moment ago is already on it.
-      await tester.enterText(
-          find.byKey(const Key('formatSearchField')), 'xyz');
+      await tester.enterText(find.byKey(const Key('formatSearchField')), 'xyz');
       await tester.pump();
       expect(find.text('Unit test format'), findsOneWidget);
       expect(find.text('JPEG image'), findsNothing);
