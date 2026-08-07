@@ -177,7 +177,7 @@ class _EntryRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.folder_outlined,
+              Icon(Icons.folder_outlined,
                   size: 17, color: AppColors.textDim),
               const SizedBox(width: 10),
               Expanded(
@@ -204,7 +204,7 @@ class _EntryRow extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.link,
+                            Icon(Icons.link,
                                 size: 12, color: AppColors.signal),
                             const SizedBox(width: 5),
                             Flexible(
@@ -222,7 +222,7 @@ class _EntryRow extends StatelessWidget {
                     : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.link_off,
+                          Icon(Icons.link_off,
                               size: 12, color: AppColors.textFaint),
                           const SizedBox(width: 5),
                           Text(
@@ -235,8 +235,8 @@ class _EntryRow extends StatelessWidget {
               ),
               InkWell(
                 onTap: () => _reveal(context),
-                child: const Padding(
-                  padding: EdgeInsets.only(left: 6),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6),
                   child: Icon(Icons.open_in_new,
                       size: 13, color: AppColors.textDim),
                 ),
@@ -250,7 +250,7 @@ class _EntryRow extends StatelessWidget {
               value: fraction.clamp(0.0, 1.0),
               minHeight: 4,
               backgroundColor: AppColors.borderStrong,
-              valueColor: const AlwaysStoppedAnimation(AppColors.signal),
+              valueColor: AlwaysStoppedAnimation(AppColors.signal),
             ),
           ),
         ],

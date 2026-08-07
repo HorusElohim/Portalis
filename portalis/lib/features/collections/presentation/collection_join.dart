@@ -153,18 +153,18 @@ class _JoinCollectionScreenState extends State<JoinCollectionScreen> {
                   monoLabel(size: 13, color: AppColors.text, letterSpacing: 0),
               decoration: InputDecoration(
                 hintText: 'Paste the invite code',
-                hintStyle: const TextStyle(color: AppColors.textGhost),
+                hintStyle: TextStyle(color: AppColors.textGhost),
                 filled: true,
                 fillColor: AppColors.surface,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.control),
-                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                  borderSide: BorderSide(color: AppColors.borderStrong),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.control),
-                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                  borderSide: BorderSide(color: AppColors.borderStrong),
                 ),
               ),
               onChanged: (_) => setState(() {}),

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../features/appearance/application/theme_controller.dart';
 import '../theme.dart';
 import 'indicators.dart';
 
@@ -18,10 +19,13 @@ class PortalisLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final asset = ThemeController.instance.id == AppThemeId.future
+        ? 'assets/PortalisFuture.png'
+        : 'assets/PortalisNature.png';
     final image = ClipRRect(
       borderRadius: BorderRadius.circular(size * 0.28),
       child: Image.asset(
-        'assets/PortalisNature.png',
+        asset,
         width: size,
         height: size,
         cacheWidth: (size * 3).round(),

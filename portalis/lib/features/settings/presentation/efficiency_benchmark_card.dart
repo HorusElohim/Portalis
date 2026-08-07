@@ -33,7 +33,7 @@ class EfficiencyBenchmarkCard extends StatelessWidget {
                 const SizedBox(width: 13),
                 Expanded(child: _copy()),
                 if (running)
-                  const SizedBox(
+                  SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
@@ -42,7 +42,7 @@ class EfficiencyBenchmarkCard extends StatelessWidget {
                     ),
                   )
                 else if (result != null)
-                  const Icon(
+                  Icon(
                     Icons.check_circle_outline,
                     size: 21,
                     color: AppColors.signal,

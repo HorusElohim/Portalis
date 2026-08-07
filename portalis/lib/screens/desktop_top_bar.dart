@@ -22,7 +22,7 @@ class DesktopTopBar extends StatelessWidget {
           final active = AppControllers.collections.collections
               .any((collection) => collection.isMoving);
           return Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.surfaceSunken,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),

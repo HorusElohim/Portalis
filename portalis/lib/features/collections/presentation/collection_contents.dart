@@ -160,7 +160,7 @@ class _MediaGrid extends StatelessWidget {
                               Container(
                                 color: AppColors.surfaceDeep.withValues(alpha: 0.55),
                                 alignment: Alignment.center,
-                                child: const Icon(
+                                child: Icon(
                                   Icons.cloud_download_outlined,
                                   size: 22,
                                   color: AppColors.signalSoft,

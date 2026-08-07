@@ -108,11 +108,11 @@ void main() {
 
     testWidgets('takes the accent it is given, so torrents read as ember',
         (tester) async {
-      await tester.pumpWidget(const MaterialApp(
+      await tester.pumpWidget(MaterialApp(
         home: AmbientBackground(
           intensity: 0.8,
           accent: AppColors.ember,
-          child: SizedBox(),
+          child: const SizedBox(),
         ),
       ));
       await tester.pump();

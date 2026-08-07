@@ -792,18 +792,32 @@ mod native {
         // `Api::api_peer_stats` (librqbit 8.1.1) — reachable through type
         // inference and field access without ever naming them, same as
         // librqbit's own HTTP API layer consumes it.
-        let live_peer_addrs: Vec<String> = match api
-            .api_peer_stats(TorrentIdOrHash::Id(id), Default::default())
-        {
-            Ok(snapshot) => snapshot.peers.into_keys().collect(),
-            Err(error) => {
-                crate::log::clog!(
-                    "torrent",
-                    "peer_stats unavailable for {}: {error:#}",
-                    handle.info_hash().as_string()
-                );
-                Vec::new()
+        //
+        // Gated on `stats.live` rather than called unconditionally: this is
+        // polled every 500ms per torrent (see `CollectionsController`'s
+        // active-poll interval), and `api_peer_stats` fails with exactly
+        // "not live" whenever `handle.live()` is `None` — the same thing
+        // `stats.live` already tells us. Calling it anyway for every
+        // checking/queued/peerless torrent turned "not live yet" (routine,
+        // and true for most of a torrent's life) into a log line every poll
+        // tick for as long as it stayed that way. Skipping the call when we
+        // already know it's doomed keeps the log for what it's for: a
+        // torrent `stats` calls live still failing peer stats, which would
+        // be the actual anomaly.
+        let live_peer_addrs: Vec<String> = if stats.live.is_some() {
+            match api.api_peer_stats(TorrentIdOrHash::Id(id), Default::default()) {
+                Ok(snapshot) => snapshot.peers.into_keys().collect(),
+                Err(error) => {
+                    crate::log::clog!(
+                        "torrent",
+                        "peer_stats unavailable for {}: {error:#}",
+                        handle.info_hash().as_string()
+                    );
+                    Vec::new()
+                }
             }
+        } else {
+            Vec::new()
         };
 
         TorrentInfo {

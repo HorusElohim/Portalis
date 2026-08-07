@@ -240,18 +240,18 @@ class _ShareScreenState extends State<ShareScreen> {
               cursorColor: AppColors.signal,
               decoration: InputDecoration(
                 hintText: 'Untitled collection',
-                hintStyle: const TextStyle(color: AppColors.textGhost),
+                hintStyle: TextStyle(color: AppColors.textGhost),
                 filled: true,
                 fillColor: AppColors.surface,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.control),
-                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                  borderSide: BorderSide(color: AppColors.borderStrong),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.control),
-                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                  borderSide: BorderSide(color: AppColors.borderStrong),
                 ),
               ),
               onChanged: (_) => setState(() {}),
@@ -375,7 +375,7 @@ class _ShareScreenState extends State<ShareScreen> {
         : f.name.substring(dot + 1).toUpperCase();
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -420,7 +420,7 @@ class _ShareScreenState extends State<ShareScreen> {
           IconButton(
             onPressed: () => setState(
                 () => _files = _files.where((other) => other != f).toList()),
-            icon: const Icon(Icons.close, size: 15, color: AppColors.textDim),
+            icon: Icon(Icons.close, size: 15, color: AppColors.textDim),
           ),
         ],
       ),

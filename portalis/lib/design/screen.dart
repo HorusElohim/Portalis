@@ -124,7 +124,7 @@ class AppScreen extends StatelessWidget {
           Container(
             padding:
                 const EdgeInsets.fromLTRB(kScreenGutter, 12, kScreenGutter, 16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: footer,

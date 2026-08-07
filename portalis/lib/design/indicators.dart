@@ -262,7 +262,7 @@ class _PerimeterProgressPainter extends CustomPainter {
 /// yet has no total to be a fraction of. A zero on screen reads as a
 /// measurement, not as an absence.
 class TransferFacts extends StatelessWidget {
-  const TransferFacts({
+  TransferFacts({
     super.key,
     required this.progress,
     required this.downloadedBytes,
@@ -271,9 +271,9 @@ class TransferFacts extends StatelessWidget {
     this.uploadMbps = 0,
     this.livePeers = 0,
     this.etaLabel,
-    this.color = AppColors.signal,
+    Color? color,
     this.pendingLabel,
-  });
+  }) : color = color ?? AppColors.signal;
 
   final double progress;
   final int downloadedBytes;

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'features/appearance/application/theme_controller.dart';
+import 'theme_palette.dart';
+
 /// "Signal" design tokens.
 ///
 /// The governing rule: [signal] means **data is moving**, and nothing else.
@@ -8,67 +11,75 @@ import 'package:flutter/material.dart';
 /// no longer reads at a glance. [ember] is reserved just as strictly for
 /// torrent-sourced content, so the two content types stay distinguishable
 /// without reading a label.
+///
+/// Every field below is a getter onto [ThemeController.instance]'s active
+/// [AppPalette] rather than a literal — the palette itself (Nature vs
+/// Future) lives in `theme_palette.dart`; this is just the one place the
+/// rest of the app reads it from, unchanged by the theme underneath.
 class AppColors {
   AppColors._();
 
+  static AppPalette get _p => ThemeController.instance.palette;
+
   /// App background — the darkest surface.
-  static const bg = Color(0xFF07090A);
+  static Color get bg => _p.bg;
 
   /// Screen body, one step up from [bg].
-  static const surfaceDeep = Color(0xFF0B1110);
+  static Color get surfaceDeep => _p.surfaceDeep;
 
   /// Cards and list rows.
-  static const surface = Color(0xFF121A18);
+  static Color get surface => _p.surface;
 
   /// Inputs, search fields, and anything that should read as recessed.
-  static const surfaceRaised = Color(0xFF141D1B);
+  static Color get surfaceRaised => _p.surfaceRaised;
 
   /// Sidebar / secondary panes on desktop.
-  static const surfaceSunken = Color(0xFF0A0F0E);
+  static Color get surfaceSunken => _p.surfaceSunken;
 
-  static const border = Color(0x12FFFFFF);
-  static const borderStrong = Color(0x1FFFFFFF);
+  static Color get border => _p.border;
+  static Color get borderStrong => _p.borderStrong;
 
-  static const text = Color(0xFFE6EDEA);
-  static const textDim = Color(0xFF8B9A95);
-  static const textFaint = Color(0xFF7C8B86);
-  static const textGhost = Color(0xFF63736E);
+  static Color get text => _p.text;
+  static Color get textDim => _p.textDim;
+  static Color get textFaint => _p.textFaint;
+  static Color get textGhost => _p.textGhost;
 
   /// **Data is moving.** Never decorative.
-  static const signal = Color(0xFF5CE7A3);
+  static Color get signal => _p.signal;
 
   /// Gradient partner for [signal] — the darker end of a live progress bar.
-  static const signalDim = Color(0xFF2FA97A);
+  static Color get signalDim => _p.signalDim;
 
   /// Text/icon mint that has to sit on a tinted fill.
-  static const signalSoft = Color(0xFF9FE9C6);
+  static Color get signalSoft => _p.signalSoft;
 
   /// Muted mint for supporting metrics beside a live figure.
-  static const signalMuted = Color(0xFF7F9E92);
+  static Color get signalMuted => _p.signalMuted;
 
   /// Tinted fill behind [signal] content.
-  static const signalWash = Color(0x1F5CE7A3);
+  static Color get signalWash => _p.signalWash;
 
   /// Ink for text placed *on* a solid [signal] fill.
-  static const onSignal = Color(0xFF06120D);
+  static Color get onSignal => _p.onSignal;
 
   /// Solid dark-mint fill — collaborator avatars, badges. Distinct from
   /// [signalWash], which is translucent and sits over arbitrary backgrounds.
-  static const signalDeep = Color(0xFF2E4A41);
+  static Color get signalDeep => _p.signalDeep;
 
   /// **Torrent-sourced.** Reserved as strictly as [signal].
-  static const ember = Color(0xFFF0B357);
-  static const emberWash = Color(0x1FF0B357);
-  static const onEmber = Color(0xFF1A1206);
+  static Color get ember => _p.ember;
+  static Color get emberWash => _p.emberWash;
+  static Color get onEmber => _p.onEmber;
 
-  static const danger = Color(0xFFEB5757);
+  static Color get danger => _p.danger;
 
   /// Full-bleed media viewer backdrop.
-  static const viewerBg = Color(0xFF07090A);
+  static Color get viewerBg => _p.viewerBg;
 
   /// Per-collection accents, cycled by index. Deliberately excludes [signal]
   /// and [ember]: a collection's identity colour must never be mistakable for
-  /// "transferring" or "torrent".
+  /// "transferring" or "torrent". Shared by every theme — this cycle is an
+  /// arbitrary identity set, not part of a theme's mood.
   static const hues = <Color>[
     Color(0xFF6FCF97),
     Color(0xFF56CCF2),
@@ -114,38 +125,38 @@ class AppText {
 
   /// The label on a button that completes something — see `ScreenAction`,
   /// and the one line of a preview that names what you are about to add.
-  static TextStyle action({Color color = AppColors.text, double? height}) =>
-      _body(16, color, FontWeight.w500, height);
+  static TextStyle action({Color? color, double? height}) =>
+      _body(16, color ?? AppColors.text, FontWeight.w500, height);
 
   /// The heading inside a card or a row: "File formats", "People".
-  static TextStyle cardTitle({Color color = AppColors.text}) =>
-      _body(14.5, color, FontWeight.w600);
+  static TextStyle cardTitle({Color? color}) =>
+      _body(14.5, color ?? AppColors.text, FontWeight.w600);
 
   /// Default reading text, and the label half of a settings row.
   static TextStyle body({
-    Color color = AppColors.text,
+    Color? color,
     double? height,
     FontWeight weight = FontWeight.w400,
   }) =>
-      _body(13.5, color, weight, height);
+      _body(13.5, color ?? AppColors.text, weight, height);
 
   /// Supporting copy under a title — the explanation, not the thing.
   static TextStyle secondary({
-    Color color = AppColors.textFaint,
+    Color? color,
     double? height,
   }) =>
-      _body(12.5, color, FontWeight.w400, height);
+      _body(12.5, color ?? AppColors.textFaint, FontWeight.w400, height);
 
   /// The smallest step: hints under an action, helper text under a field,
   /// and asides. [weight] because a caption occasionally has to carry a
   /// name — a linked collection, a selected tab — and emphasis is the only
   /// thing left to say it with at this size.
   static TextStyle caption({
-    Color color = AppColors.textGhost,
+    Color? color,
     double? height,
     FontWeight weight = FontWeight.w400,
   }) =>
-      _body(11.5, color, weight, height);
+      _body(11.5, color ?? AppColors.textGhost, weight, height);
 
   static TextStyle _body(
     double size,
@@ -192,14 +203,14 @@ class AppRadius {
 /// its callers vary letter-spacing and size far more than body text does.
 TextStyle monoLabel({
   double size = 10,
-  Color color = AppColors.textFaint,
+  Color? color,
   double letterSpacing = 1.2,
   FontWeight weight = FontWeight.w400,
 }) =>
     TextStyle(
       fontFamily: AppFonts.mono,
       fontSize: size,
-      color: color,
+      color: color ?? AppColors.textFaint,
       letterSpacing: letterSpacing,
       fontWeight: weight,
     );
@@ -207,7 +218,7 @@ TextStyle monoLabel({
 /// Shorthand for display/heading text.
 TextStyle displayText({
   double size = 20,
-  Color color = AppColors.text,
+  Color? color,
   FontWeight weight = FontWeight.w600,
   double letterSpacing = -0.4,
   double? height,
@@ -215,7 +226,7 @@ TextStyle displayText({
     TextStyle(
       fontFamily: AppFonts.display,
       fontSize: size,
-      color: color,
+      color: color ?? AppColors.text,
       fontWeight: weight,
       letterSpacing: letterSpacing,
       height: height,
@@ -234,13 +245,13 @@ TextStyle displayText({
 /// point at it.
 TextStyle canvasTitle({
   double size = 30,
-  Color color = AppColors.text,
+  Color? color,
   double? height,
 }) =>
     TextStyle(
       fontFamily: AppFonts.display,
       fontSize: size,
-      color: color,
+      color: color ?? AppColors.text,
       fontWeight: FontWeight.w700,
       // Proportional, not fixed: the same visual tightness at 20pt and 40pt.
       letterSpacing: size * -0.025,
@@ -254,25 +265,32 @@ TextStyle canvasTitle({
 /// out at the same 700 [canvasTitle] already uses.
 TextStyle impactTitle({
   double size = 46,
-  Color color = AppColors.text,
-  Color glow = AppColors.signal,
+  Color? color,
+  Color? glow,
 }) =>
     TextStyle(
       fontFamily: AppFonts.display,
       fontSize: size,
-      color: color,
+      color: color ?? AppColors.text,
       fontWeight: FontWeight.w700,
       letterSpacing: size * -0.035,
       height: 0.92,
       shadows: [
-        Shadow(color: glow.withValues(alpha: 0.4), blurRadius: size * 0.5),
+        Shadow(
+          color: (glow ?? AppColors.signal).withValues(alpha: 0.4),
+          blurRadius: size * 0.5,
+        ),
       ],
     );
 
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get dark {
+  /// Built fresh from the live [AppColors] on every read — cheap, and the
+  /// only way a theme switch reaches Flutter's own [ThemeData]-driven
+  /// widgets (e.g. [Switch], [SnackBar]) alongside the direct [AppColors]
+  /// reads everywhere else.
+  static ThemeData get current {
     final base = ThemeData(
       brightness: Brightness.dark,
       useMaterial3: true,
@@ -297,7 +315,7 @@ class AppTheme {
         backgroundColor: AppColors.surface,
         contentTextStyle: AppText.body(),
       ),
-      dialogTheme: const DialogThemeData(backgroundColor: AppColors.surface),
+      dialogTheme: DialogThemeData(backgroundColor: AppColors.surface),
     );
   }
 }
@@ -415,13 +433,14 @@ class Glow {
   /// app's energy is a single edit.
   static Glow of(
     GlowLevel level, {
-    Color color = AppColors.signal,
+    Color? color,
     double intensity = 0,
-  }) =>
-      switch (level) {
+  }) {
+    final resolvedColor = color ?? AppColors.signal;
+    return switch (level) {
         GlowLevel.none => Glow(
             level: level,
-            color: color,
+            color: resolvedColor,
             borderOpacity: 0,
             blur: 0,
             spread: 0,
@@ -430,7 +449,7 @@ class Glow {
           ),
         GlowLevel.calm => Glow(
             level: level,
-            color: color,
+            color: resolvedColor,
             intensity: intensity,
             borderOpacity: 0.12,
             blur: 6,
@@ -440,7 +459,7 @@ class Glow {
           ),
         GlowLevel.active => Glow(
             level: level,
-            color: color,
+            color: resolvedColor,
             intensity: intensity,
             borderOpacity: 0.18,
             blur: 8,
@@ -450,7 +469,7 @@ class Glow {
           ),
         GlowLevel.vivid => Glow(
             level: level,
-            color: color,
+            color: resolvedColor,
             intensity: intensity,
             borderOpacity: 0.24,
             blur: 10,
@@ -459,15 +478,18 @@ class Glow {
             washOpacity: 0.04,
           ),
       };
+  }
 }
 
 /// The one opaque mint fill — avatars, primary badges, anything that is the
 /// signal rather than merely lit by it.
 ///
-/// A constant and not a [Glow]: those describe a surface's *energy*, which is
-/// earned and varies. This is identity, and never varies.
-const signalFill = LinearGradient(
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-  colors: [AppColors.signal, AppColors.signalDim],
-);
+/// Unlike a [Glow], which describes a surface's *energy* and is earned and
+/// varies, this is identity, and never varies — except with the active
+/// theme, which is why it's a getter rather than the top-level constant it
+/// once was.
+Gradient get signalFill => LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [AppColors.signal, AppColors.signalDim],
+    );

@@ -99,13 +99,13 @@ class _AnonymousPeer extends StatelessWidget {
 }
 
 class _PeerLabel extends StatelessWidget {
-  const _PeerLabel({
+  _PeerLabel({
     required this.label,
     this.leading,
     this.detail,
-    this.color = AppColors.textDim,
+    Color? color,
     this.onForget,
-  });
+  }) : color = color ?? AppColors.textDim;
 
   final String label;
   final Widget? leading;

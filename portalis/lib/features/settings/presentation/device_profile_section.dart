@@ -108,7 +108,7 @@ class DeviceProfileSection extends StatelessWidget {
               kScreenGutter,
               0,
             ),
-            child: const DestinationRow(
+            child: DestinationRow(
               icon: Icons.shield_outlined,
               iconColor: AppColors.signal,
               title: 'Identity lives on this device',
@@ -169,8 +169,8 @@ class _SyncAddressCard extends StatelessWidget {
                       Clipboard.setData(ClipboardData(text: address));
                       showToast(context, 'Address copied');
                     },
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
                       child: Icon(Icons.copy, size: 15, color: AppColors.textDim),
                     ),
                   ),
@@ -218,7 +218,7 @@ class _ProfileStat extends StatelessWidget {
                   Text(label, style: monoLabel(size: 9.5)),
                   if (onTap != null) ...[
                     const SizedBox(width: 4),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right,
                       size: 13,
                       color: AppColors.textGhost,

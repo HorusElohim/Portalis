@@ -45,14 +45,14 @@ class SettingsSection extends StatelessWidget {
 /// [onTap]) the plain identity notice — five copies of the same Row before
 /// this existed.
 class DestinationRow extends StatelessWidget {
-  const DestinationRow({
+  DestinationRow({
     super.key,
     required this.icon,
     required this.title,
     this.subtitle,
-    this.iconColor = AppColors.textDim,
+    Color? iconColor,
     this.onTap,
-  });
+  }) : iconColor = iconColor ?? AppColors.textDim;
 
   final IconData icon;
   final String title;
@@ -85,8 +85,7 @@ class DestinationRow extends StatelessWidget {
             ),
           ),
           if (onTap != null)
-            const Icon(Icons.chevron_right,
-                size: 16, color: AppColors.textGhost),
+            Icon(Icons.chevron_right, size: 16, color: AppColors.textGhost),
         ],
       ),
     );
@@ -121,7 +120,7 @@ class ValueRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final row = Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -166,14 +165,14 @@ class ValueRow extends StatelessWidget {
                 showToast(context, '$label copied',
                     severity: ToastSeverity.success);
               },
-              child: const Padding(
-                padding: EdgeInsets.only(left: 6),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 6),
                 child: Icon(Icons.copy, size: 13, color: AppColors.textDim),
               ),
             ),
           if (onTap != null)
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
               child: Icon(Icons.chevron_right,
                   size: 15, color: AppColors.textGhost),
             ),
@@ -204,7 +203,7 @@ class SwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 9),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -292,8 +291,8 @@ class InfoRow extends StatelessWidget {
                 showToast(context, '$label copied',
                     severity: ToastSeverity.success);
               },
-              child: const Padding(
-                padding: EdgeInsets.only(left: 6),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 6),
                 child: Icon(Icons.copy, size: 13, color: AppColors.textDim),
               ),
             ),

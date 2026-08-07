@@ -40,11 +40,11 @@ Future<String?> promptForText(
           style: monoLabel(size: 13, color: AppColors.text, letterSpacing: 0),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: AppColors.textGhost),
+            hintStyle: TextStyle(color: AppColors.textGhost),
             helperText: helper,
             helperMaxLines: 3,
             helperStyle: AppText.caption(color: AppColors.textDim),
-            focusedBorder: const UnderlineInputBorder(
+            focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: AppColors.signal),
             ),
           ),

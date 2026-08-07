@@ -236,7 +236,7 @@ class _Hint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (busy) {
-      return const SizedBox(
+      return SizedBox(
         width: 14,
         height: 14,
         child: CircularProgressIndicator(

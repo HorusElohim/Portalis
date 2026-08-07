@@ -19,7 +19,7 @@ class TransferPoint {
 
 /// A real download/upload history sampled by the collections controller.
 class TransferGraph extends StatelessWidget {
-  const TransferGraph({
+  TransferGraph({
     super.key,
     required this.progress,
     required this.downloadMbps,
@@ -27,8 +27,8 @@ class TransferGraph extends StatelessWidget {
     this.history = const [],
     this.startedAt,
     this.completedAt,
-    this.color = AppColors.signal,
-  });
+    Color? color,
+  }) : color = color ?? AppColors.signal;
 
   final double progress;
   final double downloadMbps;

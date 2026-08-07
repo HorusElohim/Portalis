@@ -167,7 +167,7 @@ class MediaPreview extends StatelessWidget {
         children: [
           MediaThumbnail(media: media, borderRadius: 8, decodeSize: 720),
           if (isPlayableVideo && !videoFailed)
-            const SizedBox(
+            SizedBox(
               width: 32,
               height: 32,
               child: CircularProgressIndicator(
@@ -303,7 +303,7 @@ class _VideoPlayerViewState extends State<_VideoPlayerView> {
                 color: AppColors.surfaceDeep.withValues(alpha: 0.75),
                 border: Border.all(color: AppColors.signalDim),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.play_arrow_rounded,
                 color: AppColors.signalSoft,
                 size: 32,
@@ -317,7 +317,7 @@ class _VideoPlayerViewState extends State<_VideoPlayerView> {
               controller,
               allowScrubbing: true,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              colors: const VideoProgressColors(
+              colors: VideoProgressColors(
                 playedColor: AppColors.signal,
                 bufferedColor: AppColors.borderStrong,
                 backgroundColor: Colors.black26,

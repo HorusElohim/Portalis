@@ -114,7 +114,7 @@ class CollectionOverview extends StatelessWidget {
               if (collection.isShared)
                 PillButton(
                   label: 'Invite',
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.people_alt_outlined,
                     size: 16,
                     color: AppColors.signalSoft,

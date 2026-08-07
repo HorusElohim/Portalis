@@ -109,6 +109,7 @@ flutter:
   assets:
     - assets/PortalisNature.png
     - assets/PortalisTorrentNature.png
+    - assets/PortalisFuture.png
 
   fonts:
     # Bundled, not fetched: the app must render identically offline, and the

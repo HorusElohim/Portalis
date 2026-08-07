@@ -150,7 +150,7 @@ class PeopleScreen extends StatelessWidget {
 /// peers share the same visual language while their identity colors remain
 /// distinct.
 class PersonCard extends StatelessWidget {
-  const PersonCard._({
+  PersonCard._({
     super.key,
     required this.avatar,
     required this.title,
@@ -159,12 +159,14 @@ class PersonCard extends StatelessWidget {
     this.sharedCount = 0,
     this.rateMbps = 0,
     this.status = 'IDLE',
-    this.statusColor = AppColors.textFaint,
+    Color? statusColor,
     this.active = false,
-    this.metricColor = AppColors.signal,
-    this.subtitleColor = AppColors.textFaint,
+    Color? metricColor,
+    Color? subtitleColor,
     this.trailing,
-  });
+  })  : statusColor = statusColor ?? AppColors.textFaint,
+        metricColor = metricColor ?? AppColors.signal,
+        subtitleColor = subtitleColor ?? AppColors.textFaint;
 
   factory PersonCard({
     Key? key,
@@ -241,7 +243,7 @@ class PersonCard extends StatelessWidget {
                           Container(
                             width: 6,
                             height: 6,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AppColors.signal,
                               shape: BoxShape.circle,
                             ),
@@ -328,7 +330,7 @@ class TorrentPeerCard extends PersonCard {
               color: AppColors.emberWash,
               borderRadius: BorderRadius.circular(44 * 0.34),
             ),
-            child: const Icon(Icons.hub_outlined,
+            child: Icon(Icons.hub_outlined,
                 size: 20, color: AppColors.ember),
           ),
           title: entry.address,
@@ -379,11 +381,11 @@ class _RateValue extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({
+  _Metric({
     required this.value,
     required this.label,
-    this.color = AppColors.signal,
-  });
+    Color? color,
+  }) : color = color ?? AppColors.signal;
 
   final String value;
   final String label;

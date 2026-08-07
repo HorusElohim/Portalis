@@ -6,6 +6,10 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+- Added a Future theme — an electric cyan/violet palette drawn from the new
+  app icon — as an alternative to the original mint-green Nature theme.
+  Switch between them from Settings → Appearance; the choice persists across
+  restarts.
 - Added iOS Files open-in-place sharing: selected sources retain security-
   scoped, read-only access across restarts while Rust seeds the original file.
 
@@ -20,6 +24,10 @@
 
 <!-- Bug fixes and regressions go here. -->
 
+- Silenced repetitive "peer stats unavailable" logging for torrents that
+  simply aren't live yet (checking, queued, or peerless) — it was firing on
+  every 500ms poll instead of only when a live torrent's peer stats
+  genuinely failed.
 - Silenced repetitive background collection, sync-address, and identity
   restoration logs.
 - Fixed near-complete transfers displaying 100% before their final bytes, and

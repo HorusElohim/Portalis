@@ -109,7 +109,7 @@ class _CollectionRowState extends State<CollectionRow> {
             ),
           ],
           if (widget.detail != null && _level != CollectionDetailLevel.collapsed) ...[
-            const Divider(height: 26, color: AppColors.border),
+            Divider(height: 26, color: AppColors.border),
             widget.detail!(_level),
           ],
         ],
@@ -137,7 +137,7 @@ class _CollectionRowState extends State<CollectionRow> {
                     color: AppColors.emberWash,
                     borderRadius: BorderRadius.circular(AppRadius.control),
                   ),
-                  child: const Icon(Icons.download_outlined,
+                  child: Icon(Icons.download_outlined,
                       size: 20, color: AppColors.ember),
                 )
               : ClipRRect(
@@ -223,7 +223,7 @@ class CollectionsErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 40, color: AppColors.danger),
+            Icon(Icons.error_outline, size: 40, color: AppColors.danger),
             const SizedBox(height: 14),
             Text(
               'Couldn\'t load your collections.',
@@ -260,7 +260,7 @@ class EngineStartingNotice extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(
           children: [
-            const SizedBox(
+            SizedBox(
               width: 13,
               height: 13,
               child: CircularProgressIndicator(

@@ -26,7 +26,7 @@ class AmbientBackground extends StatefulWidget {
     super.key,
     required this.child,
     this.intensity = 0,
-    this.accent = AppColors.signal,
+    this.accent,
   });
 
   final Widget child;
@@ -36,8 +36,9 @@ class AmbientBackground extends StatefulWidget {
   final double intensity;
 
   /// Which colour the wash takes. Ember when the activity is a torrent, so
-  /// the background agrees with the row that caused it.
-  final Color accent;
+  /// the background agrees with the row that caused it. Defaults to
+  /// [AppColors.signal].
+  final Color? accent;
 
   @override
   State<AmbientBackground> createState() => _AmbientBackgroundState();
@@ -49,6 +50,8 @@ class _AmbientBackgroundState extends State<AmbientBackground>
 
   bool get _shouldAnimate =>
       widget.intensity > 0 && !MediaQuery.disableAnimationsOf(context);
+
+  Color get _accent => widget.accent ?? AppColors.signal;
 
   @override
   void didChangeDependencies() {
@@ -94,14 +97,13 @@ class _AmbientBackgroundState extends State<AmbientBackground>
           // never mark the widget tree above as dirty.
           child: RepaintBoundary(
             child: controller == null
-                ? _Wash(
-                    t: 0, intensity: widget.intensity, accent: widget.accent)
+                ? _Wash(t: 0, intensity: widget.intensity, accent: _accent)
                 : AnimatedBuilder(
                     animation: controller,
                     builder: (context, _) => _Wash(
                       t: controller.value,
                       intensity: widget.intensity,
-                      accent: widget.accent,
+                      accent: _accent,
                     ),
                   ),
           ),

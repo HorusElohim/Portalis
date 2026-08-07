@@ -9,7 +9,7 @@ import 'transfer_graph.dart';
 /// It gives the percentage, byte totals, transfer history, peers, and ETA one
 /// visual priority so the user does not have to scan several small labels.
 class TransferPanel extends StatelessWidget {
-  const TransferPanel({
+  TransferPanel({
     super.key,
     required this.progress,
     required this.downloadedBytes,
@@ -21,9 +21,9 @@ class TransferPanel extends StatelessWidget {
     this.history = const [],
     this.startedAt,
     this.completedAt,
-    this.color = AppColors.signal,
+    Color? color,
     this.pendingLabel,
-  });
+  }) : color = color ?? AppColors.signal;
 
   final double progress;
   final int downloadedBytes;

@@ -276,7 +276,7 @@ class ScreenAction extends StatelessWidget {
               ),
             ),
             child: busy
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(

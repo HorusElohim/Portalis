@@ -10,6 +10,7 @@ import '../features/settings/domain/listen_port_range.dart';
 import '../features/settings/application/efficiency_benchmark.dart';
 import '../features/settings/presentation/efficiency_benchmark_card.dart';
 import '../features/settings/presentation/settings_sections.dart';
+import '../features/settings/presentation/theme_picker_row.dart';
 import '../services/navigation.dart';
 import '../theme.dart';
 import 'settings/storage.dart';
@@ -189,7 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: monoLabel(size: 13, color: AppColors.text, letterSpacing: 0),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: AppColors.textGhost),
+              hintStyle: TextStyle(color: AppColors.textGhost),
               helperText: helper,
               helperMaxLines: 3,
               helperStyle: AppText.caption(color: AppColors.textDim),
@@ -284,7 +285,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     text: _settings.lastError!,
                   ),
                 if (_restartPending)
-                  const InfoBanner(
+                  InfoBanner(
                     color: AppColors.signalSoft,
                     icon: Icons.restart_alt,
                     text: 'Some changes apply the next time Portalis '
@@ -317,6 +318,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _basicSections(EngineSettings s) {
     return [
       SettingsHealthCard(settings: s, collections: AppControllers.collections),
+      SettingsSection(
+        label: 'APPEARANCE',
+        children: const [ThemePickerRow()],
+      ),
       SettingsSection(
         label: 'SPEED · APPLIES IMMEDIATELY',
         children: [

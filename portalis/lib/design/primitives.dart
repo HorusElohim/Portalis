@@ -88,7 +88,7 @@ class PageBody extends StatelessWidget {
 
 /// Card surface used for rows and panels throughout.
 class SurfaceCard extends StatelessWidget {
-  const SurfaceCard({
+  SurfaceCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(14),
@@ -97,9 +97,9 @@ class SurfaceCard extends StatelessWidget {
     this.borderColor,
     this.gradient,
     this.glow = GlowLevel.none,
-    this.glowColor = AppColors.signal,
+    Color? glowColor,
     this.glowIntensity = 0,
-  });
+  }) : glowColor = glowColor ?? AppColors.signal;
 
   final Widget child;
   final EdgeInsets padding;
@@ -204,15 +204,15 @@ class StatusBadge extends StatelessWidget {
 /// casing is a property of the style and not something each screen has to
 /// remember — and so a single edit takes it back if it ever stops earning it.
 class CanvasTitle extends StatelessWidget {
-  const CanvasTitle(
+  CanvasTitle(
     this.text, {
     super.key,
     this.size = 30,
-    this.color = AppColors.text,
+    Color? color,
     this.height,
     this.textAlign,
     this.maxLines,
-  });
+  }) : color = color ?? AppColors.text;
 
   final String text;
   final double size;
@@ -237,12 +237,12 @@ class CanvasTitle extends StatelessWidget {
 /// see [impactTitle]. Reserved for [CanvasTitle]'s bigger sibling: a pane
 /// that's a destination in its own right rather than one of several peers.
 class ImpactTitle extends StatelessWidget {
-  const ImpactTitle(
+  ImpactTitle(
     this.text, {
     super.key,
     this.size = 46,
-    this.accent = AppColors.signal,
-  });
+    Color? accent,
+  }) : accent = accent ?? AppColors.signal;
 
   final String text;
   final double size;

@@ -156,7 +156,7 @@ class _SearchField extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.search, size: 16, color: AppColors.textGhost),
+          Icon(Icons.search, size: 16, color: AppColors.textGhost),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -259,7 +259,7 @@ class _Note extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const color = AppColors.textFaint;
+    final color = AppColors.textFaint;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
