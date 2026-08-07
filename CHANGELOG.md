@@ -42,6 +42,10 @@
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
 
+- Added CocoaPods integration for the media plugins on iOS and macOS, and
+  updated the iOS Flutter bridge and Files picker for current Flutter/Xcode
+  APIs so unsigned release builds compile on both Apple platforms.
+
 ## Portalis 1.0.6 / backend 0.1.5 — 2026-08-06
 
 ### Added
