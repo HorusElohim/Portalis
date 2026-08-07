@@ -6,12 +6,32 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+### Changed
+
+<!-- Behaviour and UX changes go here before the next release. -->
+
+### Fixed
+
+<!-- Bug fixes and regressions go here. -->
+
+### Engineering
+
+<!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+## Portalis 1.0.7 / backend 0.1.6 — 2026-08-07
+
+### Added
+
+<!-- New user-visible features go here before the next release. -->
+
 - Added a Future theme — an electric cyan/violet palette drawn from the new
   app icon — as an alternative to the original mint-green Nature theme.
   Switch between them from Settings → Appearance; the choice persists across
   restarts.
 - Added iOS Files open-in-place sharing: selected sources retain security-
   scoped, read-only access across restarts while Rust seeds the original file.
+- Added no-copy iOS Photos & Videos selection backed by Rust-owned linked
+  gallery sources.
 
 ### Changed
 
@@ -19,6 +39,9 @@
 
 - Removed the misleading iOS Photos import promise. iOS now offers Files as
   the no-copy source and never stages picker content in the app cache.
+- Made collection synchronization automatically request and retry BitTorrent
+  fetches when new manifest entries arrive, using direct peer hints when
+  available.
 
 ### Fixed
 
@@ -45,6 +68,9 @@
 - Added CocoaPods integration for the media plugins on iOS and macOS, and
   updated the iOS Flutter bridge and Files picker for current Flutter/Xcode
   APIs so unsigned release builds compile on both Apple platforms.
+- Added an opt-in two-process integration test that verifies encoded invites,
+  manifest synchronization, automatic fetching, torrent hashes, and file
+  contents.
 
 ## Portalis 1.0.6 / backend 0.1.5 — 2026-08-06
 
