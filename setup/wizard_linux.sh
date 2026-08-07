@@ -94,16 +94,16 @@ info "Detected architecture: $ARCH"
 
 case "$PKG_MANAGER" in
     apt)
-        install_packages git curl unzip zip xz-utils file build-essential libglu1-mesa clang ninja-build libgtk-3-dev pkg-config cmake mesa-utils
+        install_packages git curl unzip zip xz-utils file build-essential libglu1-mesa clang ninja-build libgtk-3-dev pkg-config cmake mesa-utils libmpv-dev libepoxy-dev
         ;;
     dnf)
-        install_packages git curl unzip zip xz mesa-libGLU file gcc-c++ make clang ninja-build gtk3-devel pkgconfig cmake mesa-demos
+        install_packages git curl unzip zip xz mesa-libGLU file gcc-c++ make clang ninja-build gtk3-devel pkgconfig cmake mesa-demos mpv-libs-devel libepoxy-devel
         ;;
     pacman)
-        install_packages git curl unzip zip xz glu base-devel clang ninja gtk3 pkgconf cmake mesa-demos
+        install_packages git curl unzip zip xz glu base-devel clang ninja gtk3 pkgconf cmake mesa-demos mpv libepoxy
         ;;
     *)
-        warn "Install git, curl, unzip, zip, xz, build tools, clang, ninja, GTK dev libs, and mesa-utils manually."
+        warn "Install git, curl, unzip, zip, xz, build tools, clang, ninja, GTK, libmpv, libepoxy, and mesa-utils development packages manually."
         ;;
 esac
 

@@ -84,8 +84,9 @@ Notes
 ## Linux (Desktop)
 
 Prerequisites
-- Run `setup/wizard_linux.sh` (shell) to install Flutter, Android SDK bits, Rust, clang, ninja, GTK dev libs, etc.
+- Run `setup/wizard_linux.sh` (shell) to install Flutter, Android SDK bits, Rust, clang, ninja, GTK, libmpv, and libepoxy development libraries.
 - Ensure `flutter doctor` is green, especially the Linux desktop toolchain checks.
+- `media_kit_video` requires the host development packages for `libmpv` and `libepoxy`; on Debian/Ubuntu install them with `sudo apt-get install libmpv-dev libepoxy-dev`.
 
 Dev run (recommended)
 - From repo root `portalis/` in a shell:
@@ -135,4 +136,3 @@ Quick references
   - `macos/Runner/build_backend.sh` – macOS dylib build + copy
   - `ios/Runner/build_rust_ios.sh` – iOS XCFramework builder (device + simulator)
   - `android/build_rust_android.sh` – Android `.so` builder (cargo-ndk)
-
