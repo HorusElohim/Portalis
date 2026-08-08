@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package portalis.protocol.v1;
+
+// Claims a new user and enrols the signing device as its first authorized one.
+//
+// The signature covers the domain-separated registration payload built from
+// the ServerHello context and the requested username, so it cannot be replayed
+// onto a different connection, server, or name.
+message RegisterUser {
+  string requested_username = 1;
+  bytes device_public_key = 2;
+  bytes signature = 3;
+}
+
+// Proves possession of an already-authorized device key.
+//
+// The signature covers the domain-separated authentication payload built from
+// the ServerHello context.
+message AuthenticateDevice {
+  bytes device_public_key = 1;
+  bytes signature = 2;
+}
+
+// The identity a connection is bound to once its device is verified.
+message Authenticated {
+  bytes user_id = 1;
+  bytes device_id = 2;
+  string username = 3;
+  string discriminator = 4;
+  uint32 protocol_version = 5;
+}

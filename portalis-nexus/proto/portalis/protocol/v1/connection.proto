@@ -3,6 +3,7 @@ syntax = "proto3";
 package portalis.protocol.v1;
 
 import "portalis/protocol/v1/common.proto";
+import "portalis/protocol/v1/identity.proto";
 
 message ServerHello {
   bytes connection_id = 1;
@@ -26,6 +27,9 @@ message Envelope {
 
   oneof payload {
     ServerHello server_hello = 10;
+    RegisterUser register_user = 11;
+    AuthenticateDevice authenticate_device = 12;
+    Authenticated authenticated = 13;
     Ping ping = 14;
     Pong pong = 15;
     Ack ack = 16;

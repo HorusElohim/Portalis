@@ -2,7 +2,22 @@
 
 use uuid::Uuid;
 
-use crate::limits::CHALLENGE_BYTES;
+use crate::limits::{CHALLENGE_BYTES, DEVICE_ID_BYTES};
+
+/// Domain separator for device identifiers, so the digest of a public key can
+/// never collide with a digest computed for any other purpose.
+const DEVICE_ID_CONTEXT: &str = "portalis.protocol.v1 device-id";
+
+/// Derives a device's stable identifier from its Ed25519 public key.
+///
+/// Derivation is deterministic, so a device that already has a Portalis
+/// keypair keeps the same Nexus identity without storing anything new.
+#[must_use]
+pub fn derive_device_id(device_public_key: &[u8]) -> [u8; DEVICE_ID_BYTES] {
+    let mut hasher = blake3::Hasher::new_derive_key(DEVICE_ID_CONTEXT);
+    hasher.update(device_public_key);
+    *hasher.finalize().as_bytes()
+}
 
 #[must_use]
 pub fn new_message_id() -> Vec<u8> {
@@ -34,6 +49,18 @@ mod tests {
     fn builds_fixed_length_identifiers() {
         assert_eq!(new_message_id().len(), crate::limits::MESSAGE_ID_BYTES);
         assert_eq!(new_challenge().len(), CHALLENGE_BYTES);
+    }
+
+    #[test]
+    fn derives_a_stable_device_id_from_a_public_key() {
+        let key = [7_u8; 32];
+
+        let id = derive_device_id(&key);
+
+        assert_eq!(id.len(), DEVICE_ID_BYTES);
+        assert_eq!(id, derive_device_id(&key), "derivation must be stable");
+        assert_ne!(id, key, "the identifier is derived, not the key itself");
+        assert_ne!(id, derive_device_id(&[8_u8; 32]));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Portalis Nexus Specification
 
-Status: M1 connection lifecycle complete; M2 identity next
+Status: M2 identity in progress
 
 Protocol: `portalis.protocol.v1`
 
@@ -588,6 +588,25 @@ unsupported version, push unsolicited envelopes, or close mid-request.
 
 Gate: valid existing Portalis identities authenticate; replay, wrong-key,
 expired, and revoked-device tests fail safely.
+
+Current slice: the identity contract and its cryptography. `identity.proto`
+adds `RegisterUser`, `AuthenticateDevice`, and `Authenticated` at the reserved
+envelope numbers. Signed payloads are domain-separated by operation and built
+from length-prefixed fields, so a signature covers exactly one operation, on
+one connection, against one server, for one challenge; concatenation ambiguity
+cannot reinterpret a username. `derive_device_id` turns an existing Portalis
+Ed25519 public key into a stable `DeviceId` with BLAKE3, so a device keeps its
+keypair and needs no new secret. `Handle` carries display casing beside the
+normalized form used for uniqueness, and discriminators render from injected
+entropy over Crockford Base32.
+
+Note: the Flutter app currently treats the raw Ed25519 public key as its own
+device identifier, so Nexus labels the same key differently. The derivation is
+deterministic, making the mapping trivial, but the two identifiers should be
+reconciled before M6 integration.
+
+Next: the registration and authentication state machines over repository,
+clock, and random-source traits, then the MongoDB adapters behind them.
 
 ### M3: Friends and presence
 

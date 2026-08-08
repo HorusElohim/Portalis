@@ -36,6 +36,10 @@
   handle that correlates concurrent requests, times them out, reconnects on its
   own, and exposes server-initiated envelopes as an event stream.
 - Split the Nexus crates into focused modules, each covered by its own tests.
+- Added the Nexus identity contract: registration and device-authentication
+  messages, domain-separated signing payloads that bind a signature to one
+  operation, connection, server, and challenge, BLAKE3 device identifiers
+  derived from existing Ed25519 keys, and user handle rules.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket

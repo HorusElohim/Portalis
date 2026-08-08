@@ -12,12 +12,19 @@ pub mod v1 {
 mod frame;
 mod ids;
 mod limits;
+mod signing;
 mod validate;
 
 pub use frame::{FrameError, decode_frame, encode_frame, validate_frame_size};
-pub use ids::{format_id, new_challenge, new_message_id};
+pub use ids::{derive_device_id, format_id, new_challenge, new_message_id};
 pub use limits::{
-    CHALLENGE_BYTES, CONNECTION_ID_BYTES, CURRENT_PROTOCOL_VERSION, MAX_FRAME_BYTES,
-    MAX_OUTBOUND_QUEUE, MAX_PENDING_REQUESTS, MESSAGE_ID_BYTES, WEBSOCKET_SUBPROTOCOL,
+    CHALLENGE_BYTES, CHALLENGE_LIFETIME_MS, CONNECTION_ID_BYTES, CURRENT_PROTOCOL_VERSION,
+    DEVICE_ID_BYTES, DEVICE_KEY_BYTES, DISCRIMINATOR_CHARS, MAX_FRAME_BYTES, MAX_OUTBOUND_QUEUE,
+    MAX_PENDING_REQUESTS, MAX_USERNAME_CHARS, MESSAGE_ID_BYTES, MIN_USERNAME_CHARS,
+    SIGNATURE_BYTES, USER_ID_BYTES, WEBSOCKET_SUBPROTOCOL,
+};
+pub use signing::{
+    AUTHENTICATION_CONTEXT, REGISTRATION_CONTEXT, SessionBinding, SignatureError,
+    authentication_payload, registration_payload, verify_signature,
 };
 pub use validate::{ServerHelloValidationError, ValidationError, validate_server_hello};

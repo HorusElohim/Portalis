@@ -31,8 +31,12 @@ If Buf is installed:
 
 ```sh
 buf lint
-buf breaking --against '.git#branch=main,subdir=portalis-nexus'
+# `.git` lives in the repository root, one level above this workspace.
+buf breaking --against '../.git#subdir=portalis-nexus,ref=main'
 ```
+
+Until the schema is released on `main`, compare against the previous commit
+instead: `buf breaking --against '../.git#subdir=portalis-nexus,ref=HEAD~1'`.
 
 Run the server:
 
