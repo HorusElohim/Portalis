@@ -26,6 +26,8 @@
 - Added the first Nexus WebSocket transport slice: bounded protobuf frames,
   subprotocol negotiation, validated server hello, and correlated ping/pong
   with a real client/server integration test.
+- Added bounded exponential reconnect with randomized jitter to the portable
+  Nexus client, verified by two clients reconnecting after a forced restart.
 
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 

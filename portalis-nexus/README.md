@@ -41,3 +41,9 @@ Then request `http://127.0.0.1:8080/health/live` or
 The local server also exposes `ws://127.0.0.1:8080/v1/socket`. Clients must
 request the `portalis.protobuf.v1` subprotocol, receive a binary protobuf
 `ServerHello`, and can then exchange correlated `Ping`/`Pong` envelopes.
+
+Use `NexusClient::connect_with_retry(endpoint, &ReconnectPolicy::default())`
+when a caller needs a bounded retry loop. The policy doubles its delay per
+failure, spreads it across 80%-120% with randomized jitter, caps the result at
+its maximum delay, and returns the final transport error once its configured
+maximum attempts are spent.

@@ -567,6 +567,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-tungstenite",
+ "uuid",
 ]
 
 [[package]]

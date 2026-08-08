@@ -556,9 +556,11 @@ Gate: multiple clients reconnect after forced server restart without leaks.
 Current slice: the `/v1/socket` endpoint enforces the protobuf subprotocol and
 8 MiB frame limit, sends a validated `ServerHello`, and replies to binary
 `Ping` envelopes with correlated `Pong`s. The portable client validates the
-upgrade, hello, frame limit, correlation ID, and nonce. Reconnect supervision,
-bounded outbound queues, timeout policy, and graceful connection draining are
-the next M1 slice.
+upgrade, hello, frame limit, correlation ID, and nonce. `ReconnectPolicy`
+provides bounded exponential retry with randomized jitter, and two real clients
+reconnect after a forced server restart. Bounded outbound queues, request
+timeouts, continuous connection supervision, and graceful connection draining
+are the next M1 slice.
 
 ### M2: Identity
 

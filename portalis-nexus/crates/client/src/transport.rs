@@ -3,13 +3,15 @@ use portalis_nexus_protocol::v1::{Envelope, ServerHello};
 use portalis_nexus_protocol::{MAX_FRAME_BYTES, WEBSOCKET_SUBPROTOCOL, decode_frame, encode_frame};
 use thiserror::Error;
 use tokio::net::TcpStream;
+use tokio::time::sleep;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderValue, SEC_WEBSOCKET_PROTOCOL};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::{Error as WebSocketError, Message};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_with_config};
+use uuid::Uuid;
 
-use crate::{ClientError, ClientProtocol, validate_hello, validate_pong};
+use crate::{ClientError, ClientProtocol, ReconnectPolicy, validate_hello, validate_pong};
 
 #[derive(Debug, Error)]
 pub enum TransportError {
@@ -25,6 +27,12 @@ pub enum TransportError {
     ConnectionClosed,
     #[error("expected a binary protobuf response")]
     UnexpectedWebSocketMessage,
+    #[error("failed to connect after {attempts} attempts")]
+    ReconnectExhausted {
+        attempts: u32,
+        #[source]
+        source: Box<TransportError>,
+    },
 }
 
 pub struct NexusClient {
@@ -67,6 +75,32 @@ impl NexusClient {
         })
     }
 
+    /// Connects with bounded exponential backoff and randomized jitter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::ReconnectExhausted`] after the policy's final
+    /// failed attempt, preserving the final transport error as its source.
+    pub async fn connect_with_retry(
+        endpoint: &str,
+        policy: &ReconnectPolicy,
+    ) -> Result<Self, TransportError> {
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            match Self::connect(endpoint).await {
+                Ok(client) => return Ok(client),
+                Err(error) if !policy.can_retry_after(attempts) => {
+                    return Err(TransportError::ReconnectExhausted {
+                        attempts,
+                        source: Box::new(error),
+                    });
+                }
+                Err(_) => sleep(policy.delay_after_failure(attempts, random_entropy())).await,
+            }
+        }
+    }
+
     #[must_use]
     pub fn hello(&self) -> &ServerHello {
         &self.hello
@@ -102,4 +136,13 @@ async fn receive_envelope(
         Message::Close(_) => Err(TransportError::ConnectionClosed),
         _ => Err(TransportError::UnexpectedWebSocketMessage),
     }
+}
+
+fn random_entropy() -> u64 {
+    let bytes = *Uuid::new_v4().as_bytes();
+    u64::from_le_bytes(
+        bytes[..8]
+            .try_into()
+            .expect("a UUID always contains eight leading bytes"),
+    )
 }
