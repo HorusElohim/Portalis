@@ -44,6 +44,10 @@
   storage, time, and randomness: single-use expiring challenges, handle
   allocation that retries random discriminators against the unique index, and
   device revocation, writing each user and its first device atomically.
+- Wired Nexus registration and device authentication end to end over the socket,
+  with per-connection challenge state, typed refusal codes, and client commands
+  that sign through a caller-supplied device signer. Storage remains in-memory
+  until the durable adapter lands.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket

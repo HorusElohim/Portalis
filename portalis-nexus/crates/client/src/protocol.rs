@@ -1,10 +1,17 @@
 //! Deterministic client-side protocol rules, with no sockets involved.
 
 use portalis_nexus_protocol::v1::envelope::Payload;
-use portalis_nexus_protocol::v1::{Envelope, Ping, Pong, ServerHello};
-use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, new_message_id, validate_server_hello};
+use portalis_nexus_protocol::v1::{
+    AuthenticateDevice, Authenticated, Envelope, Ping, Pong, ProtocolErrorCode, RegisterUser,
+    ServerHello,
+};
+use portalis_nexus_protocol::{
+    CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, new_message_id,
+    registration_payload, validate_server_hello,
+};
 
 use crate::error::ClientError;
+use crate::signer::DeviceSigner;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientProtocol {
@@ -23,6 +30,50 @@ impl ClientProtocol {
     #[must_use]
     pub const fn version(&self) -> u32 {
         self.version
+    }
+
+    /// Builds a signed request to claim `username`.
+    #[must_use]
+    pub fn register<S: DeviceSigner + ?Sized>(
+        &self,
+        binding: &SessionBinding<'_>,
+        username: &str,
+        signer: &S,
+        sent_at_unix_ms: u64,
+    ) -> Envelope {
+        let public_key = signer.public_key();
+        let payload = registration_payload(binding, username, &public_key);
+        Envelope {
+            message_id: new_message_id(),
+            correlation_id: Vec::new(),
+            sent_at_unix_ms,
+            payload: Some(Payload::RegisterUser(RegisterUser {
+                requested_username: username.to_owned(),
+                device_public_key: public_key.to_vec(),
+                signature: signer.sign(&payload).to_vec(),
+            })),
+        }
+    }
+
+    /// Builds a signed request to prove this device is enrolled.
+    #[must_use]
+    pub fn authenticate<S: DeviceSigner + ?Sized>(
+        &self,
+        binding: &SessionBinding<'_>,
+        signer: &S,
+        sent_at_unix_ms: u64,
+    ) -> Envelope {
+        let public_key = signer.public_key();
+        let payload = authentication_payload(binding, &public_key);
+        Envelope {
+            message_id: new_message_id(),
+            correlation_id: Vec::new(),
+            sent_at_unix_ms,
+            payload: Some(Payload::AuthenticateDevice(AuthenticateDevice {
+                device_public_key: public_key.to_vec(),
+                signature: signer.sign(&payload).to_vec(),
+            })),
+        }
     }
 
     #[must_use]
@@ -75,7 +126,7 @@ pub fn validate_pong(request: &Envelope, response: &Envelope) -> Result<(), Clie
         return Err(ClientError::UnexpectedEnvelope { expected: "Pong" });
     };
     if response.correlation_id != request.message_id {
-        return Err(ClientError::InvalidPongCorrelation);
+        return Err(ClientError::InvalidCorrelation);
     }
     let Some(Payload::Ping(Ping {
         nonce: request_nonce,
@@ -87,6 +138,38 @@ pub fn validate_pong(request: &Envelope, response: &Envelope) -> Result<(), Clie
         return Err(ClientError::InvalidPongNonce);
     }
     Ok(())
+}
+
+/// Reads the identity a server confirmed.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not an `Authenticated`, is not
+/// correlated to the request, or names a protocol version this client does not
+/// speak.
+pub fn validate_authenticated(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<Authenticated, ClientError> {
+    if response.correlation_id != request.message_id {
+        return Err(ClientError::InvalidCorrelation);
+    }
+    match &response.payload {
+        Some(Payload::Authenticated(identity)) => {
+            if identity.protocol_version != CURRENT_PROTOCOL_VERSION {
+                return Err(ClientError::UnsupportedProtocolVersion);
+            }
+            Ok(identity.clone())
+        }
+        Some(Payload::ProtocolError(refusal)) => Err(ClientError::Refused {
+            code: ProtocolErrorCode::try_from(refusal.code)
+                .unwrap_or(ProtocolErrorCode::Unspecified),
+            message: refusal.message.clone(),
+        }),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "Authenticated",
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -195,7 +278,7 @@ mod tests {
         invalid_correlation.correlation_id = new_message_id();
         assert_eq!(
             validate_pong(&request, &invalid_correlation),
-            Err(ClientError::InvalidPongCorrelation)
+            Err(ClientError::InvalidCorrelation)
         );
         assert_eq!(
             validate_pong(&request, &pong_envelope(&request, 7)),
@@ -209,6 +292,158 @@ mod tests {
         assert_eq!(
             validate_pong(&non_ping_request, &pong_envelope(&non_ping_request, 42)),
             Err(ClientError::UnexpectedEnvelope { expected: "Ping" })
+        );
+    }
+
+    fn authenticated_envelope(request: &Envelope, protocol_version: u32) -> Envelope {
+        Envelope {
+            message_id: new_message_id(),
+            correlation_id: request.message_id.clone(),
+            sent_at_unix_ms: 1,
+            payload: Some(Payload::Authenticated(Authenticated {
+                user_id: vec![1; 16],
+                device_id: vec![2; 32],
+                username: "Ada".to_owned(),
+                discriminator: "7Q2XZ".to_owned(),
+                protocol_version,
+            })),
+        }
+    }
+
+    fn claim_of(envelope: &Envelope) -> Option<RegisterUser> {
+        match &envelope.payload {
+            Some(Payload::RegisterUser(claim)) => Some(claim.clone()),
+            _ => None,
+        }
+    }
+
+    fn proof_of(envelope: &Envelope) -> Option<AuthenticateDevice> {
+        match &envelope.payload {
+            Some(Payload::AuthenticateDevice(proof)) => Some(proof.clone()),
+            _ => None,
+        }
+    }
+
+    struct FixedSigner;
+
+    impl DeviceSigner for FixedSigner {
+        fn public_key(&self) -> [u8; 32] {
+            [7; 32]
+        }
+
+        fn sign(&self, payload: &[u8]) -> [u8; 64] {
+            let mut signature = [0_u8; 64];
+            signature[0] = u8::try_from(payload.len() % 251).unwrap_or_default();
+            signature
+        }
+    }
+
+    fn binding<'a>(challenge: &'a [u8], connection_id: &'a [u8]) -> SessionBinding<'a> {
+        SessionBinding {
+            protocol_version: CURRENT_PROTOCOL_VERSION,
+            server_authority: "nexus.portalis.test",
+            connection_id,
+            challenge,
+            server_time_unix_ms: 1,
+        }
+    }
+
+    #[test]
+    fn builds_signed_identity_commands() {
+        let client = ClientProtocol::default();
+        let session = binding(&[1; 32], &[2; 16]);
+
+        let register = client.register(&session, "Ada", &FixedSigner, 5);
+        let claim = claim_of(&register).expect("a registration");
+        assert_eq!(claim.requested_username, "Ada");
+        assert_eq!(claim.device_public_key, vec![7; 32]);
+        assert_eq!(register.sent_at_unix_ms, 5);
+        assert_eq!(register.validate(), Ok(()));
+
+        let authenticate = client.authenticate(&session, &FixedSigner, 6);
+        let proof = proof_of(&authenticate).expect("a proof");
+        assert_eq!(proof.device_public_key, vec![7; 32]);
+        assert_eq!(authenticate.validate(), Ok(()));
+        // Distinct operations must not produce interchangeable signatures.
+        assert_ne!(claim.signature, proof.signature);
+        assert!(claim_of(&authenticate).is_none());
+        assert!(proof_of(&register).is_none());
+    }
+
+    #[test]
+    fn reads_a_confirmed_identity() {
+        let request = ping_envelope(1);
+
+        let identity = validate_authenticated(&request, &authenticated_envelope(&request, 1))
+            .expect("a correlated confirmation");
+
+        assert_eq!(identity.username, "Ada");
+        assert_eq!(identity.discriminator, "7Q2XZ");
+    }
+
+    #[test]
+    fn rejects_uncorrelated_unexpected_or_mismatched_confirmations() {
+        let request = ping_envelope(1);
+
+        let mut stray = authenticated_envelope(&request, 1);
+        stray.correlation_id = new_message_id();
+        assert_eq!(
+            validate_authenticated(&request, &stray),
+            Err(ClientError::InvalidCorrelation)
+        );
+
+        assert_eq!(
+            validate_authenticated(&request, &authenticated_envelope(&request, 99)),
+            Err(ClientError::UnsupportedProtocolVersion)
+        );
+
+        let mut wrong_payload = authenticated_envelope(&request, 1);
+        wrong_payload.payload = Some(Payload::Pong(Pong { nonce: 1 }));
+        assert_eq!(
+            validate_authenticated(&request, &wrong_payload),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "Authenticated"
+            })
+        );
+    }
+
+    #[test]
+    fn surfaces_a_typed_refusal_from_the_server() {
+        let request = ping_envelope(1);
+        let mut refused = authenticated_envelope(&request, 1);
+        refused.payload = Some(Payload::ProtocolError(
+            portalis_nexus_protocol::v1::ProtocolError {
+                code: ProtocolErrorCode::Unauthorized as i32,
+                message: "this device was revoked".to_owned(),
+                retry_after_ms: None,
+                retryable: false,
+            },
+        ));
+
+        assert_eq!(
+            validate_authenticated(&request, &refused),
+            Err(ClientError::Refused {
+                code: ProtocolErrorCode::Unauthorized,
+                message: "this device was revoked".to_owned(),
+            })
+        );
+
+        // An unknown code degrades to unspecified rather than failing to parse.
+        let mut unknown = refused.clone();
+        unknown.payload = Some(Payload::ProtocolError(
+            portalis_nexus_protocol::v1::ProtocolError {
+                code: 9_999,
+                message: "from a newer server".to_owned(),
+                retry_after_ms: None,
+                retryable: false,
+            },
+        ));
+        assert_eq!(
+            validate_authenticated(&request, &unknown),
+            Err(ClientError::Refused {
+                code: ProtocolErrorCode::Unspecified,
+                message: "from a newer server".to_owned(),
+            })
         );
     }
 }

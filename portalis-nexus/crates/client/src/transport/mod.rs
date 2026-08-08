@@ -3,8 +3,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use portalis_nexus_protocol::encode_frame;
-use portalis_nexus_protocol::v1::{Envelope, ServerHello};
+use portalis_nexus_protocol::v1::{Authenticated, Envelope, ServerHello};
+use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -13,7 +13,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::config::ClientConfig;
-use crate::protocol::validate_pong;
+use crate::protocol::{validate_authenticated, validate_pong};
+use crate::signer::DeviceSigner;
 use crate::transport::connection::{Shared, start_connection, supervise};
 use crate::transport::handshake::{handshake, handshake_with_retry};
 
@@ -73,7 +74,11 @@ impl NexusClient {
     /// command immediately without racing the supervisor's first iteration.
     fn supervised(endpoint: &str, connection: (Socket, ServerHello), config: ClientConfig) -> Self {
         let (events, inbox) = mpsc::channel(MAX_OUTBOUND_QUEUE);
-        let shared = Arc::new(Shared::new(events, config.request_timeout));
+        let shared = Arc::new(Shared::new(
+            events,
+            config.request_timeout,
+            authority_of(endpoint),
+        ));
         // Subscribed here, not inside the task: a caller may shut down before
         // the supervisor has run for the first time.
         let shutdown = shared.shutdown.subscribe();
@@ -158,6 +163,54 @@ impl NexusClient {
         }
     }
 
+    /// Claims `username` and enrols the signing device as its first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the client is disconnected or the
+    /// server refuses the request.
+    pub async fn register<S: DeviceSigner + ?Sized>(
+        &self,
+        username: &str,
+        signer: &S,
+    ) -> Result<Authenticated, TransportError> {
+        let hello = self.hello().ok_or(TransportError::Disconnected)?;
+        let request = self.shared.protocol.register(
+            &binding(&hello, self.authority()),
+            username,
+            signer,
+            now_unix_ms(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_authenticated(&request, &response)?)
+    }
+
+    /// Proves this device is enrolled, binding the connection to its identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the client is disconnected or the
+    /// server refuses the request.
+    pub async fn authenticate<S: DeviceSigner + ?Sized>(
+        &self,
+        signer: &S,
+    ) -> Result<Authenticated, TransportError> {
+        let hello = self.hello().ok_or(TransportError::Disconnected)?;
+        let request = self.shared.protocol.authenticate(
+            &binding(&hello, self.authority()),
+            signer,
+            now_unix_ms(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_authenticated(&request, &response)?)
+    }
+
+    /// The authority signatures are bound to, taken from the endpoint dialled.
+    #[must_use]
+    pub fn authority(&self) -> &str {
+        &self.shared.server_authority
+    }
+
     /// Sends a ping and verifies the correlated pong response.
     ///
     /// # Errors
@@ -208,4 +261,31 @@ fn now_unix_ms() -> u64 {
             .as_millis(),
     )
     .expect("milliseconds since the Unix epoch fit in u64")
+}
+
+/// Builds the session binding a signature is scoped to, from the hello the
+/// server sent and the authority this client dialled.
+fn binding<'a>(hello: &'a ServerHello, server_authority: &'a str) -> SessionBinding<'a> {
+    SessionBinding {
+        protocol_version: CURRENT_PROTOCOL_VERSION,
+        server_authority,
+        connection_id: &hello.connection_id,
+        challenge: &hello.challenge,
+        server_time_unix_ms: hello.server_time_unix_ms,
+    }
+}
+
+/// The `host:port` a WebSocket endpoint addresses.
+///
+/// Signatures are bound to it, so what the client signs is the server it meant
+/// to reach rather than whatever a relay claims to be.
+#[must_use]
+pub fn authority_of(endpoint: &str) -> String {
+    endpoint
+        .split_once("://")
+        .map_or(endpoint, |(_, rest)| rest)
+        .split('/')
+        .next()
+        .unwrap_or_default()
+        .to_owned()
 }

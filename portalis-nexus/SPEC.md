@@ -621,9 +621,24 @@ can never authenticate with. Expressing the pair as one operation is what lets
 the MongoDB adapter wrap it in a transaction, and lets handle allocation retry
 the whole write on a collision without stranding a device.
 
-Next: the MongoDB adapter behind that port, with unique indexes on
-`(normalized_username, discriminator)` and device ID, then wiring registration
-and authentication into the socket and the portable client.
+Registration and authentication now run end to end over a real socket. Each
+connection owns a `Session` holding the one challenge it was greeted with;
+spending it binds the connection to an identity. The client signs through a
+`DeviceSigner` the caller implements, so key material never enters the client
+crate. Both peers name the server the same way: the client derives the
+authority from the endpoint it dialled and the server carries its configured
+one, so a signature only verifies against the deployment it was meant for.
+
+Failures come back as typed `ProtocolError` codes the caller can act on:
+unauthenticated for a bad signature, unknown device, or spent challenge;
+unauthorized for a revoked device; invalid message for a rejected username.
+Storage failures report a generic internal error, keeping database detail in
+the logs rather than on the wire.
+
+Storage is still the in-memory adapter. The MongoDB adapter slots in behind
+`IdentityRepository` with unique indexes on `(normalized_username,
+discriminator)` and device ID, and a transaction around `insert_registration`.
+It needs a real database to verify, so it waits on Docker or a local `mongod`.
 
 ### M3: Friends and presence
 

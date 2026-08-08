@@ -3,6 +3,8 @@
 use std::net::{AddrParseError, SocketAddr};
 
 pub const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
+/// The authority used when none is configured, matching local development.
+pub const DEFAULT_SERVER_AUTHORITY: &str = "127.0.0.1:8080";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServerConfig {

@@ -45,8 +45,11 @@ pub async fn serve(address: SocketAddr, router: Router) -> JoinHandle<()> {
 }
 
 /// Starts the real Nexus server, ready to serve.
+///
+/// The authority is bound to the address the test dials, because signatures
+/// only verify when both sides name the same server.
 pub async fn start_server(address: SocketAddr) -> (AppState, JoinHandle<()>) {
-    let state = AppState::default();
+    let state = AppState::default().with_server_authority(&address.to_string());
     state.mark_ready();
     let handle = serve(address, portalis_nexus_server::app(&state)).await;
     (state, handle)

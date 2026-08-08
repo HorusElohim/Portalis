@@ -28,6 +28,7 @@ pub(crate) struct Shared {
     pub(crate) protocol: ClientProtocol,
     pub(crate) request_timeout: Duration,
     pub(crate) shutdown: watch::Sender<bool>,
+    pub(crate) server_authority: String,
     live: Mutex<Option<Live>>,
 }
 
@@ -40,13 +41,18 @@ struct Live {
 type Message = tokio_tungstenite::tungstenite::Message;
 
 impl Shared {
-    pub(crate) fn new(events: mpsc::Sender<Envelope>, request_timeout: Duration) -> Self {
+    pub(crate) fn new(
+        events: mpsc::Sender<Envelope>,
+        request_timeout: Duration,
+        server_authority: String,
+    ) -> Self {
         Self {
             pending: PendingRequests::default(),
             events,
             protocol: ClientProtocol::default(),
             request_timeout,
             shutdown: watch::Sender::new(false),
+            server_authority,
             live: Mutex::new(None),
         }
     }

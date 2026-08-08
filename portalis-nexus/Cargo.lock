@@ -691,6 +691,7 @@ name = "portalis-nexus-client"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "ed25519-dalek",
  "futures-util",
  "portalis-nexus-protocol",
  "portalis-nexus-server",
@@ -719,7 +720,9 @@ name = "portalis-nexus-server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "ed25519-dalek",
  "futures-util",
+ "getrandom 0.3.4",
  "portalis-nexus-protocol",
  "portalis-nexus-server-core",
  "serde",

@@ -6,13 +6,17 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::{extract::State, response::IntoResponse};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
+use portalis_nexus_protocol::v1::ProtocolErrorCode;
 use portalis_nexus_protocol::{
-    MAX_FRAME_BYTES, MAX_OUTBOUND_QUEUE, WEBSOCKET_SUBPROTOCOL, format_id,
+    MAX_FRAME_BYTES, MAX_OUTBOUND_QUEUE, WEBSOCKET_SUBPROTOCOL, decode_frame, format_id,
 };
 use tokio::sync::{mpsc, watch};
 use tracing::{Instrument, debug, info_span, warn};
 
-use crate::messages::{SocketReply, binary_frame, hello_envelope, hello_payload, reply_to};
+use crate::messages::{
+    SocketReply, binary_frame, hello_envelope, hello_payload, protocol_error, reply_to,
+};
+use crate::session::Session;
 use crate::state::AppState;
 
 pub(crate) async fn upgrade(
@@ -44,10 +48,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         let (outbound, inbox) = mpsc::channel(MAX_OUTBOUND_QUEUE);
         let writer = tokio::spawn(write_outbound(sink, inbox));
 
-        let greeting = binary_frame(&hello_envelope(hello, now_unix_ms()));
+        let issued_at = now_unix_ms();
+        let mut session = Session::new(&hello, issued_at);
+        let greeting = binary_frame(&hello_envelope(hello, issued_at));
         if outbound.send(greeting).await.is_ok() {
             debug!("socket established");
-            read_inbound(&mut stream, &outbound, &mut draining).await;
+            read_inbound(&mut stream, &outbound, &mut draining, &mut session, &state).await;
         }
 
         drop(outbound);
@@ -63,6 +69,8 @@ async fn read_inbound(
     stream: &mut SplitStream<WebSocket>,
     outbound: &mpsc::Sender<Message>,
     draining: &mut watch::Receiver<bool>,
+    session: &mut Session,
+    state: &AppState,
 ) {
     loop {
         let message = tokio::select! {
@@ -75,7 +83,30 @@ async fn read_inbound(
         let Some(Ok(message)) = message else {
             return;
         };
-        match reply_to(&message, now_unix_ms()) {
+        let reply = match message {
+            // Identity commands need the connection's own challenge state, so
+            // they are answered here rather than by the stateless mapping.
+            Message::Binary(ref frame) => match decode_frame(frame) {
+                Ok(request) => SocketReply::Send(binary_frame(
+                    &session
+                        .respond(
+                            state.identities(),
+                            state.server_authority(),
+                            &request,
+                            now_unix_ms(),
+                        )
+                        .await,
+                )),
+                Err(error) => SocketReply::Send(binary_frame(&protocol_error(
+                    ProtocolErrorCode::InvalidMessage,
+                    Vec::new(),
+                    error.to_string(),
+                    now_unix_ms(),
+                ))),
+            },
+            other => reply_to(&other, now_unix_ms()),
+        };
+        match reply {
             SocketReply::Send(reply) => {
                 if outbound.try_send(reply).is_err() {
                     warn!("peer is not draining its outbound queue");

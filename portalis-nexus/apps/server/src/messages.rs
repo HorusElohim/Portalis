@@ -6,10 +6,12 @@
 use axum::extract::ws::Message;
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
-    Envelope, Ping, Pong, ProtocolError, ProtocolErrorCode, ServerHello,
+    Authenticated, Envelope, Ping, Pong, ProtocolError, ProtocolErrorCode, ServerHello,
 };
-use portalis_nexus_protocol::{decode_frame, encode_frame, new_challenge, new_message_id};
-use portalis_nexus_server_core::ProtocolPolicy;
+use portalis_nexus_protocol::{
+    CURRENT_PROTOCOL_VERSION, decode_frame, encode_frame, new_challenge, new_message_id,
+};
+use portalis_nexus_server_core::{Identity, ProtocolPolicy};
 
 /// What a socket owes its peer after one inbound WebSocket message.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,6 +60,7 @@ pub fn response_for(envelope: &Envelope, sent_at_unix_ms: u64) -> Envelope {
             payload: Some(Payload::Pong(Pong { nonce: *nonce })),
         },
         _ => protocol_error(
+            ProtocolErrorCode::InvalidMessage,
             envelope.message_id.clone(),
             "only Ping is accepted before authentication".to_owned(),
             sent_at_unix_ms,
@@ -66,16 +69,42 @@ pub fn response_for(envelope: &Envelope, sent_at_unix_ms: u64) -> Envelope {
 }
 
 #[must_use]
-pub fn protocol_error(correlation_id: Vec<u8>, message: String, sent_at_unix_ms: u64) -> Envelope {
+pub fn protocol_error(
+    code: ProtocolErrorCode,
+    correlation_id: Vec<u8>,
+    message: String,
+    sent_at_unix_ms: u64,
+) -> Envelope {
     Envelope {
         message_id: new_message_id(),
         correlation_id,
         sent_at_unix_ms,
         payload: Some(Payload::ProtocolError(ProtocolError {
-            code: ProtocolErrorCode::InvalidMessage as i32,
+            code: code as i32,
             message,
             retry_after_ms: None,
             retryable: false,
+        })),
+    }
+}
+
+/// Confirms which identity a connection is now bound to.
+#[must_use]
+pub fn authenticated_reply(
+    request: &Envelope,
+    identity: &Identity,
+    sent_at_unix_ms: u64,
+) -> Envelope {
+    Envelope {
+        message_id: new_message_id(),
+        correlation_id: request.message_id.clone(),
+        sent_at_unix_ms,
+        payload: Some(Payload::Authenticated(Authenticated {
+            user_id: identity.user.user_id.to_vec(),
+            device_id: identity.device.device_id.to_vec(),
+            username: identity.user.username.clone(),
+            discriminator: identity.user.discriminator.clone(),
+            protocol_version: CURRENT_PROTOCOL_VERSION,
         })),
     }
 }
@@ -99,11 +128,17 @@ pub fn reply_to(message: &Message, sent_at_unix_ms: u64) -> SocketReply {
         Message::Binary(frame) => {
             let response = match decode_frame(frame) {
                 Ok(envelope) => response_for(&envelope, sent_at_unix_ms),
-                Err(error) => protocol_error(Vec::new(), error.to_string(), sent_at_unix_ms),
+                Err(error) => protocol_error(
+                    ProtocolErrorCode::InvalidMessage,
+                    Vec::new(),
+                    error.to_string(),
+                    sent_at_unix_ms,
+                ),
             };
             SocketReply::Send(binary_frame(&response))
         }
         Message::Text(_) => SocketReply::Send(binary_frame(&protocol_error(
+            ProtocolErrorCode::InvalidMessage,
             Vec::new(),
             "expected a binary protobuf envelope".to_owned(),
             sent_at_unix_ms,
@@ -116,8 +151,6 @@ pub fn reply_to(message: &Message, sent_at_unix_ms: u64) -> SocketReply {
 
 #[cfg(test)]
 mod tests {
-    use portalis_nexus_protocol::CURRENT_PROTOCOL_VERSION;
-
     use super::*;
 
     fn policy() -> ProtocolPolicy {

@@ -15,6 +15,7 @@ license = "Apache-2.0"
 
 [workspace.dependencies]
 blake3 = "1.8.2"
+getrandom = "0.3.3"
 ed25519-dalek = "2.2.0"
 axum = { version = "0.8.9", features = ["http1", "json", "tokio", "ws"] }
 futures-util = "0.3.33"

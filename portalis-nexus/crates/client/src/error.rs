@@ -1,5 +1,6 @@
 //! Deterministic protocol failures, independent of any transport.
 
+use portalis_nexus_protocol::v1::ProtocolErrorCode;
 use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, MAX_PENDING_REQUESTS};
 use thiserror::Error;
 
@@ -11,10 +12,18 @@ pub enum ClientError {
     UnsupportedProtocolVersion,
     #[error("expected {expected} but received a different envelope payload")]
     UnexpectedEnvelope { expected: &'static str },
-    #[error("pong correlation_id did not match the ping message_id")]
-    InvalidPongCorrelation,
+    #[error("a response was not correlated to its request")]
+    InvalidCorrelation,
     #[error("pong nonce did not match the ping nonce")]
     InvalidPongNonce,
     #[error("at most {MAX_PENDING_REQUESTS} requests may be in flight at once")]
     TooManyPendingRequests,
+    /// The server answered with a typed refusal rather than a result. Callers
+    /// need the code to tell "pick another name" from "your device is
+    /// revoked", so it is carried rather than flattened.
+    #[error("the server refused the request: {message}")]
+    Refused {
+        code: ProtocolErrorCode,
+        message: String,
+    },
 }
