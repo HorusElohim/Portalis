@@ -44,9 +44,6 @@ mod tests {
         assert_eq!(client.version(), CURRENT_PROTOCOL_VERSION);
         assert_eq!(envelope.sent_at_unix_ms, 1000);
         assert_eq!(envelope.validate(), Ok(()));
-        assert!(matches!(
-            envelope.payload,
-            Some(Payload::Ping(Ping { nonce: 42 }))
-        ));
+        assert_eq!(envelope.payload, Some(Payload::Ping(Ping { nonce: 42 })));
     }
 }

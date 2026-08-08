@@ -21,6 +21,8 @@
 - Started Portalis Nexus as an isolated Rust workspace for the new protobuf
   control-plane protocol and Linux discovery server, with portable client and
   server-core crates, health endpoints, container packaging, and dedicated CI.
+- Fixed the Nexus coverage gate to use stable `cargo-llvm-cov` line, function,
+  and region thresholds instead of unsupported branch-threshold flags.
 
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 
