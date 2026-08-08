@@ -7,7 +7,9 @@ license.workspace = true
 
 [dependencies]
 axum.workspace = true
+futures-util.workspace = true
 portalis-nexus-protocol.workspace = true
+portalis-nexus-server-core.workspace = true
 serde.workspace = true
 tokio.workspace = true
 tower-http.workspace = true

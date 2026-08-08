@@ -52,7 +52,7 @@ jobs:
       - name: Lint Rust
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test Rust
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --all-targets --all-features
       - name: Enforce coverage
         run: ./scripts/coverage.sh
       - name: Build Linux server

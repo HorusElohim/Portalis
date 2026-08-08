@@ -6,7 +6,15 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+futures-util.workspace = true
 portalis-nexus-protocol.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+portalis-nexus-server = { path = "../../apps/server" }
 
 [lints]
 workspace = true

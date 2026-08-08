@@ -23,6 +23,9 @@
   server-core crates, health endpoints, container packaging, and dedicated CI.
 - Fixed the Nexus coverage gate to use stable `cargo-llvm-cov` line, function,
   and region thresholds instead of unsupported branch-threshold flags.
+- Added the first Nexus WebSocket transport slice: bounded protobuf frames,
+  subprotocol negotiation, validated server hello, and correlated ping/pong
+  with a real client/server integration test.
 
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 

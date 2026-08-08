@@ -9,7 +9,7 @@ The architecture and migration contract live in [`SPEC.md`](SPEC.md).
 ## Workspace
 
 - `crates/protocol`: protobuf-generated types and validation.
-- `crates/client`: portable client-side protocol foundation.
+- `crates/client`: portable WebSocket client and deterministic protocol rules.
 - `crates/server-core`: transport-independent server rules.
 - `apps/server`: Linux-oriented Axum server.
 - `proto`: authoritative protobuf schemas.
@@ -19,7 +19,7 @@ The architecture and migration contract live in [`SPEC.md`](SPEC.md).
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
+cargo test --workspace --all-targets --all-features
 ```
 
 If Buf is installed:
@@ -37,3 +37,7 @@ PORTALIS_NEXUS_LISTEN_ADDR=127.0.0.1:8080 cargo run -p portalis-nexus-server
 
 Then request `http://127.0.0.1:8080/health/live` or
 `http://127.0.0.1:8080/health/ready`.
+
+The local server also exposes `ws://127.0.0.1:8080/v1/socket`. Clients must
+request the `portalis.protobuf.v1` subprotocol, receive a binary protobuf
+`ServerHello`, and can then exchange correlated `Ping`/`Pong` envelopes.
