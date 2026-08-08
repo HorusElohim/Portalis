@@ -11,7 +11,9 @@ pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct ClientConfig {
     /// Governs the first connection attempt and every later reconnect.
     pub reconnect: ReconnectPolicy,
-    /// How long one command waits for its correlated response.
+    /// How long one command waits for its correlated response. It also bounds
+    /// the connection handshake, so a peer that accepts a socket but never
+    /// greets cannot stall a caller or the supervisor.
     pub request_timeout: Duration,
 }
 

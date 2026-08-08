@@ -9,7 +9,11 @@ use portalis_nexus_protocol::v1::{Envelope, ServerHello};
 use portalis_nexus_protocol::{MAX_OUTBOUND_QUEUE, decode_frame, format_id};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tracing::{debug, warn};
+
+/// How long a closing socket may take before it is dropped outright.
+const CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 
 use crate::pending::PendingRequests;
 use crate::protocol::ClientProtocol;
@@ -102,13 +106,17 @@ pub(crate) fn start_connection(
 }
 
 /// Keeps one connection live until the handle shuts down or retries run out.
+///
+/// `shutdown` is subscribed by the caller before this task is spawned:
+/// `watch::Sender::subscribe` marks the current value as seen, so a receiver
+/// created in here would miss a shutdown requested before the task first ran.
 pub(crate) async fn supervise(
     shared: Arc<Shared>,
     endpoint: String,
     policy: ReconnectPolicy,
     first: Tasks,
+    mut shutdown: watch::Receiver<bool>,
 ) {
-    let mut shutdown = shared.shutdown.subscribe();
     let mut next = Some(first);
     loop {
         let tasks = if let Some(tasks) = next.take() {
@@ -116,7 +124,7 @@ pub(crate) async fn supervise(
         } else {
             let attempt = tokio::select! {
                 _ = shutdown.changed() => return,
-                attempt = handshake_with_retry(&endpoint, &policy) => attempt,
+                attempt = handshake_with_retry(&endpoint, &policy, shared.request_timeout) => attempt,
             };
             match attempt {
                 Ok(connection) => start_connection(&shared, connection),
@@ -142,15 +150,30 @@ async fn run_connection(shared: &Arc<Shared>, tasks: Tasks, shutdown: &mut watch
         outbound,
     } = tasks;
 
-    tokio::select! {
-        _ = &mut reader => {}
-        _ = shutdown.changed() => reader.abort(),
-    }
+    // A completed `JoinHandle` panics when polled again, so remember which
+    // branch ended the connection before awaiting the reader a second time.
+    let reader_finished = tokio::select! {
+        _ = &mut reader => true,
+        _ = shutdown.changed() => false,
+    };
 
-    // Dropping every queue sender lets the writer send its close frame.
+    // Dropping every queue sender lets the writer send its close frame. The
+    // reader has to stay alive to answer the peer's close reply: WebSocket
+    // closing is a handshake, and flushing it stalls when nothing is reading.
     drop(outbound);
     shared.clear_live();
-    let _ = writer.await;
+    let closed = timeout(CLOSE_TIMEOUT, async {
+        let _ = writer.await;
+        if !reader_finished {
+            let _ = (&mut reader).await;
+        }
+    })
+    .await;
+    if closed.is_err() {
+        // A peer that never answers must not hold up shutdown.
+        debug!("Nexus connection did not close cleanly");
+        reader.abort();
+    }
     shared.pending.cancel_all();
 }
 

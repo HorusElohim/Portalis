@@ -575,6 +575,11 @@ no request become events. One supervisor task rebuilds the connection under
 HTTP serve loop that Axum's graceful shutdown tracks. Each socket carries a
 `connection_id` tracing span.
 
+Every wait is bounded: the handshake, each request, connection teardown, and
+server draining. Integration suites exercise these against real sockets,
+including peers that never answer, refuse the subprotocol, advertise an
+unsupported version, push unsolicited envelopes, or close mid-request.
+
 ### M2: Identity
 
 - Registration and challenge authentication.

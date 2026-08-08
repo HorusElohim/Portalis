@@ -49,12 +49,9 @@ impl NexusClient {
     /// Returns [`TransportError`] when the WebSocket handshake, subprotocol, or
     /// protobuf hello is invalid.
     pub async fn connect(endpoint: &str) -> Result<Self, TransportError> {
-        let connection = handshake(endpoint).await?;
-        Ok(Self::supervised(
-            endpoint,
-            connection,
-            ClientConfig::default(),
-        ))
+        let config = ClientConfig::default();
+        let connection = handshake(endpoint, config.request_timeout).await?;
+        Ok(Self::supervised(endpoint, connection, config))
     }
 
     /// Connects under the configured retry policy, then supervises the socket.
@@ -67,7 +64,8 @@ impl NexusClient {
         endpoint: &str,
         config: &ClientConfig,
     ) -> Result<Self, TransportError> {
-        let connection = handshake_with_retry(endpoint, &config.reconnect).await?;
+        let connection =
+            handshake_with_retry(endpoint, &config.reconnect, config.request_timeout).await?;
         Ok(Self::supervised(endpoint, connection, config.clone()))
     }
 
@@ -76,12 +74,16 @@ impl NexusClient {
     fn supervised(endpoint: &str, connection: (Socket, ServerHello), config: ClientConfig) -> Self {
         let (events, inbox) = mpsc::channel(MAX_OUTBOUND_QUEUE);
         let shared = Arc::new(Shared::new(events, config.request_timeout));
+        // Subscribed here, not inside the task: a caller may shut down before
+        // the supervisor has run for the first time.
+        let shutdown = shared.shutdown.subscribe();
         let first = start_connection(&shared, connection);
         let supervisor = tokio::spawn(supervise(
             Arc::clone(&shared),
             endpoint.to_owned(),
             config.reconnect,
             first,
+            shutdown,
         ));
 
         Self {
@@ -100,6 +102,12 @@ impl NexusClient {
     #[must_use]
     pub fn is_connected(&self) -> bool {
         self.shared.outbound().is_some()
+    }
+
+    /// Returns how many requests are awaiting a response right now.
+    #[must_use]
+    pub fn in_flight(&self) -> usize {
+        self.shared.pending.len()
     }
 
     /// Takes the stream of server-initiated envelopes, which is available once.
@@ -168,6 +176,18 @@ impl NexusClient {
         if let Some(supervisor) = self.supervisor.take() {
             let _ = supervisor.await;
         }
+    }
+}
+
+/// Reports connection state only. A derived implementation would print the
+/// server challenge, which `SPEC.md` section 15 keeps out of logs.
+impl std::fmt::Debug for NexusClient {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("NexusClient")
+            .field("connected", &self.is_connected())
+            .field("in_flight", &self.in_flight())
+            .finish()
     }
 }
 

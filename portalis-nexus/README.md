@@ -76,6 +76,12 @@ across 80%-120% with randomized jitter, and caps the result at its maximum
 delay. In-flight requests fail as soon as their connection drops rather than
 waiting for the timeout.
 
+Transport behaviour is covered by integration suites against real sockets:
+`tests/connection.rs`, `tests/reconnect.rs`, and `tests/events.rs`, with shared
+servers in `tests/common/`. Alongside the real server they run peers that never
+answer, skip the subprotocol, advertise an unsupported version, push
+unsolicited envelopes, or close on command.
+
 ## Backpressure and shutdown
 
 Both peers split each socket into a read loop and one writer task joined by a

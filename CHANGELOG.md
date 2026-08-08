@@ -36,6 +36,11 @@
   handle that correlates concurrent requests, times them out, reconnects on its
   own, and exposes server-initiated envelopes as an event stream.
 - Split the Nexus crates into focused modules, each covered by its own tests.
+- Added transport integration suites for connection, reconnect, and event
+  behaviour, which caught three client defects: a shutdown requested before the
+  supervisor first ran was never observed, tearing down a peer-closed socket
+  panicked the supervisor and stranded in-flight requests, and a handshake
+  against a peer that never greeted could stall forever.
 
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 

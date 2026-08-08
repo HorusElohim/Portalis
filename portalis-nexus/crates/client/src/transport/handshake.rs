@@ -1,9 +1,11 @@
 //! Establishing one authenticated-ready socket.
 
+use std::time::Duration;
+
 use futures_util::StreamExt;
 use portalis_nexus_protocol::v1::{Envelope, ServerHello};
 use portalis_nexus_protocol::{MAX_FRAME_BYTES, WEBSOCKET_SUBPROTOCOL, decode_frame};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tokio_tungstenite::connect_async_with_config;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -16,8 +18,23 @@ use crate::reconnect::ReconnectPolicy;
 use crate::transport::Socket;
 use crate::transport::error::TransportError;
 
-/// Connects once and validates the server's hello.
-pub(crate) async fn handshake(endpoint: &str) -> Result<(Socket, ServerHello), TransportError> {
+/// Connects once and validates the server's hello, within `limit`.
+///
+/// The bound matters: a peer that accepts the TCP connection but never finishes
+/// the upgrade would otherwise stall the caller, or the supervisor, forever.
+pub(crate) async fn handshake(
+    endpoint: &str,
+    limit: Duration,
+) -> Result<(Socket, ServerHello), TransportError> {
+    timeout(limit, connect_and_greet(endpoint))
+        .await
+        .map_err(|_| TransportError::HandshakeTimeout(limit))?
+}
+
+/// Requesting `Sec-WebSocket-Protocol` makes the handshake itself enforce
+/// negotiation: tungstenite fails the connection when a server answers with a
+/// different subprotocol or none at all, so no separate check is needed here.
+async fn connect_and_greet(endpoint: &str) -> Result<(Socket, ServerHello), TransportError> {
     let mut request = endpoint.into_client_request()?;
     request.headers_mut().insert(
         SEC_WEBSOCKET_PROTOCOL,
@@ -26,14 +43,7 @@ pub(crate) async fn handshake(endpoint: &str) -> Result<(Socket, ServerHello), T
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_FRAME_BYTES))
         .max_frame_size(Some(MAX_FRAME_BYTES));
-    let (mut socket, response) = connect_async_with_config(request, Some(config), false).await?;
-    let uses_expected_subprotocol = response
-        .headers()
-        .get(SEC_WEBSOCKET_PROTOCOL)
-        .is_some_and(|value| value.as_bytes() == WEBSOCKET_SUBPROTOCOL.as_bytes());
-    if !uses_expected_subprotocol {
-        return Err(TransportError::MissingSubprotocol);
-    }
+    let (mut socket, _response) = connect_async_with_config(request, Some(config), false).await?;
     let hello = validate_hello(receive_envelope(&mut socket).await?)?;
 
     Ok((socket, hello))
@@ -43,11 +53,12 @@ pub(crate) async fn handshake(endpoint: &str) -> Result<(Socket, ServerHello), T
 pub(crate) async fn handshake_with_retry(
     endpoint: &str,
     policy: &ReconnectPolicy,
+    limit: Duration,
 ) -> Result<(Socket, ServerHello), TransportError> {
     let mut attempts = 0;
     loop {
         attempts += 1;
-        match handshake(endpoint).await {
+        match handshake(endpoint, limit).await {
             Ok(connection) => return Ok(connection),
             Err(error) if !policy.can_retry_after(attempts) => {
                 return Err(TransportError::ReconnectExhausted {

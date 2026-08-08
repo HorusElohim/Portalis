@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use portalis_nexus_protocol::{MAX_OUTBOUND_QUEUE, WEBSOCKET_SUBPROTOCOL};
+use portalis_nexus_protocol::MAX_OUTBOUND_QUEUE;
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::Error as WebSocketError;
 
@@ -16,8 +16,6 @@ pub enum TransportError {
     Frame(#[from] portalis_nexus_protocol::FrameError),
     #[error(transparent)]
     Client(#[from] ClientError),
-    #[error("server did not negotiate the {WEBSOCKET_SUBPROTOCOL} subprotocol")]
-    MissingSubprotocol,
     #[error("connection closed before a response arrived")]
     ConnectionClosed,
     #[error("expected a binary protobuf response")]
@@ -32,6 +30,8 @@ pub enum TransportError {
     Disconnected,
     #[error("the outbound queue already holds {MAX_OUTBOUND_QUEUE} messages")]
     OutboundQueueFull,
+    #[error("the handshake did not finish within {0:?}")]
+    HandshakeTimeout(Duration),
     #[error("no response arrived within {0:?}")]
     RequestTimeout(Duration),
 }
