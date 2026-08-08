@@ -13,6 +13,11 @@ required-features = ["local-integration"]
 test = false
 bench = false
 
+[[test]]
+name = "two_instance_sync"
+path = "tests/two_instance_sync.rs"
+required-features = ["local-integration"]
+
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]  # rlib is used by the local peer harness
 
