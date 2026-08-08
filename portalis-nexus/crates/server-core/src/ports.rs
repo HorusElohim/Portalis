@@ -10,6 +10,8 @@ use std::future::Future;
 use portalis_nexus_protocol::{DEVICE_ID_BYTES, DEVICE_KEY_BYTES, USER_ID_BYTES};
 use thiserror::Error;
 
+use crate::friendship::{FriendshipEdge, FriendshipRecord};
+
 pub type UserId = [u8; USER_ID_BYTES];
 pub type DeviceId = [u8; DEVICE_ID_BYTES];
 pub type DeviceKey = [u8; DEVICE_KEY_BYTES];
@@ -35,6 +37,10 @@ pub enum RepositoryError {
     DeviceExists,
     #[error("the identity store is unavailable: {0}")]
     Unavailable(String),
+    /// A write lost a race: the stored version moved after it was read. The
+    /// caller re-reads and re-applies rather than overwriting.
+    #[error("the record changed since it was read")]
+    VersionConflict,
 }
 
 /// A durable user record.
@@ -73,7 +79,25 @@ impl DeviceRecord {
 /// or neither: a user whose first device is missing holds a handle it can
 /// never authenticate with. Splitting them would leave no place to express
 /// that, so [`IdentityRepository::insert_registration`] owns the pair.
-pub trait IdentityRepository: Send + Sync {
+/// Looking users up, which friends and presence need without touching devices.
+///
+/// Kept separate from [`IdentityRepository`] so a caller that only reads users
+/// does not depend on device enrolment or revocation.
+pub trait UserDirectory: Send + Sync {
+    fn find_user(
+        &self,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send;
+
+    /// Looks a user up by the indexed form of their handle.
+    fn find_user_by_handle(
+        &self,
+        normalized_username: &str,
+        discriminator: &str,
+    ) -> impl Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send;
+}
+
+pub trait IdentityRepository: UserDirectory {
     /// Inserts a user and its first device as one atomic unit.
     ///
     /// Fails with [`RepositoryError::HandleTaken`] when the handle is already
@@ -84,11 +108,6 @@ pub trait IdentityRepository: Send + Sync {
         user: UserRecord,
         device: DeviceRecord,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
-
-    fn find_user(
-        &self,
-        user_id: UserId,
-    ) -> impl Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send;
 
     fn find_device(
         &self,
@@ -109,4 +128,29 @@ pub trait IdentityRepository: Send + Sync {
         device_id: DeviceId,
         at_unix_ms: u64,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+}
+
+/// Durable friendship storage, one row per canonical edge.
+pub trait FriendRepository: Send + Sync {
+    fn find_friendship(
+        &self,
+        edge: FriendshipEdge,
+    ) -> impl Future<Output = Result<Option<FriendshipRecord>, RepositoryError>> + Send;
+
+    /// Writes a friendship only while the stored version still matches
+    /// `expected_version`, which is how concurrent commands stay deterministic.
+    /// A version of zero means the edge must not exist yet.
+    ///
+    /// Fails with [`RepositoryError::VersionConflict`] when it has moved.
+    fn save_friendship(
+        &self,
+        record: FriendshipRecord,
+        expected_version: u64,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// Every friendship joining `user`, in no particular order.
+    fn list_friendships(
+        &self,
+        user: UserId,
+    ) -> impl Future<Output = Result<Vec<FriendshipRecord>, RepositoryError>> + Send;
 }

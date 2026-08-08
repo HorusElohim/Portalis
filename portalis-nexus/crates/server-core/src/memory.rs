@@ -8,9 +8,10 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, MutexGuard};
 
+use crate::friendship::{FriendshipEdge, FriendshipRecord};
 use crate::ports::{
-    Clock, DeviceId, DeviceRecord, IdentityRepository, RandomSource, RepositoryError, UserId,
-    UserRecord,
+    Clock, DeviceId, DeviceRecord, FriendRepository, IdentityRepository, RandomSource,
+    RepositoryError, UserDirectory, UserId, UserRecord,
 };
 
 /// A clock that stands still until a test advances it.
@@ -93,6 +94,7 @@ pub struct InMemoryIdentities {
 struct Stored {
     users: Vec<UserRecord>,
     devices: HashMap<DeviceId, DeviceRecord>,
+    friendships: HashMap<FriendshipEdge, FriendshipRecord>,
 }
 
 impl Stored {
@@ -160,6 +162,38 @@ impl InMemoryIdentities {
     }
 }
 
+impl UserDirectory for InMemoryIdentities {
+    fn find_user(
+        &self,
+        user_id: UserId,
+    ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
+        let found = self
+            .lock()
+            .users
+            .iter()
+            .find(|user| user.user_id == user_id)
+            .cloned();
+        async move { Ok(found) }
+    }
+
+    fn find_user_by_handle(
+        &self,
+        normalized_username: &str,
+        discriminator: &str,
+    ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
+        let found = self
+            .lock()
+            .users
+            .iter()
+            .find(|user| {
+                user.normalized_username == normalized_username
+                    && user.discriminator == discriminator
+            })
+            .cloned();
+        async move { Ok(found) }
+    }
+}
+
 impl IdentityRepository for InMemoryIdentities {
     fn insert_registration(
         &self,
@@ -181,19 +215,6 @@ impl IdentityRepository for InMemoryIdentities {
                 })
         };
         async move { result }
-    }
-
-    fn find_user(
-        &self,
-        user_id: UserId,
-    ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
-        let found = self
-            .lock()
-            .users
-            .iter()
-            .find(|user| user.user_id == user_id)
-            .cloned();
-        async move { Ok(found) }
     }
 
     fn find_device(
@@ -225,6 +246,53 @@ impl IdentityRepository for InMemoryIdentities {
             device.revoked_at_unix_ms = Some(at_unix_ms);
         }
         async move { Ok(()) }
+    }
+}
+
+impl FriendRepository for InMemoryIdentities {
+    fn find_friendship(
+        &self,
+        edge: FriendshipEdge,
+    ) -> impl std::future::Future<Output = Result<Option<FriendshipRecord>, RepositoryError>> + Send
+    {
+        let found = self.lock().friendships.get(&edge).cloned();
+        async move { Ok(found) }
+    }
+
+    fn save_friendship(
+        &self,
+        record: FriendshipRecord,
+        expected_version: u64,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let result = {
+            let mut stored = self.lock();
+            let current = stored
+                .friendships
+                .get(&record.edge)
+                .map_or(0, |existing| existing.version);
+            if current == expected_version {
+                stored.friendships.insert(record.edge, record);
+                Ok(())
+            } else {
+                Err(RepositoryError::VersionConflict)
+            }
+        };
+        async move { result }
+    }
+
+    fn list_friendships(
+        &self,
+        user: UserId,
+    ) -> impl std::future::Future<Output = Result<Vec<FriendshipRecord>, RepositoryError>> + Send
+    {
+        let found: Vec<_> = self
+            .lock()
+            .friendships
+            .values()
+            .filter(|record| record.edge.joins(user))
+            .cloned()
+            .collect();
+        async move { Ok(found) }
     }
 }
 
@@ -330,6 +398,33 @@ mod tests {
             1,
             "a rejected registration must not claim its handle"
         );
+    }
+
+    #[tokio::test]
+    async fn a_friendship_write_must_match_the_stored_version() {
+        let store = InMemoryIdentities::default();
+        let edge = FriendshipEdge::between([1; 16], [2; 16]).expect("distinct users");
+        let first = FriendshipRecord::requested(edge, [1; 16], 1);
+
+        // Version zero means the edge must not exist yet.
+        assert_eq!(store.save_friendship(first.clone(), 0).await, Ok(()));
+        assert_eq!(
+            store.save_friendship(first.clone(), 0).await,
+            Err(RepositoryError::VersionConflict),
+            "a second writer that read nothing must not overwrite"
+        );
+
+        let accepted = FriendshipRecord {
+            version: 2,
+            ..first.clone()
+        };
+        assert_eq!(store.save_friendship(accepted.clone(), 1).await, Ok(()));
+        assert_eq!(store.find_friendship(edge).await, Ok(Some(accepted)));
+        assert_eq!(
+            store.list_friendships([1; 16]).await.map(|all| all.len()),
+            Ok(1)
+        );
+        assert_eq!(store.list_friendships([9; 16]).await, Ok(Vec::new()));
     }
 
     #[tokio::test]

@@ -7,11 +7,13 @@
 //! - [`handle`]: user handles, their rules, and allocation input.
 //! - [`challenge`]: the one challenge a connection may sign.
 //! - [`friendship`]: the friendship state machine over one canonical edge.
+//! - [`friends`]: handle resolution, friend commands, and listing.
 //! - [`ports`]: the storage, time, and randomness the domain depends on.
 //! - [`identity`]: registration and device authentication.
 //! - [`memory`]: in-memory ports for tests and local development.
 
 mod challenge;
+mod friends;
 mod friendship;
 mod handle;
 mod identity;
@@ -20,6 +22,7 @@ mod negotiation;
 mod ports;
 
 pub use challenge::{ChallengeError, IssuedChallenge};
+pub use friends::{COMMAND_ATTEMPTS, FriendError, FriendService, FriendSummary};
 pub use friendship::{
     FriendshipEdge, FriendshipError, FriendshipRecord, Transition, apply as apply_friend_action,
 };
@@ -34,6 +37,6 @@ pub use identity::{
 pub use memory::{FixedClock, InMemoryIdentities, ScriptedRandom};
 pub use negotiation::{NegotiationError, ProtocolPolicy};
 pub use ports::{
-    Clock, DeviceId, DeviceKey, DeviceRecord, IdentityRepository, RandomSource, RepositoryError,
-    UserId, UserRecord,
+    Clock, DeviceId, DeviceKey, DeviceRecord, FriendRepository, IdentityRepository, RandomSource,
+    RepositoryError, UserDirectory, UserId, UserRecord,
 };

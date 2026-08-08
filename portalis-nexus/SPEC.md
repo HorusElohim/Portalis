@@ -662,8 +662,18 @@ accepting it. Repeating any command reports `Unchanged` rather than failing or
 bumping the version, and every move carries the version its write must match,
 which is what makes concurrent commands deterministic.
 
-Next: the friend repository and service over those rules, then handle
-resolution, friend-only presence, and the socket commands.
+`FriendService` applies those rules over storage and time. A command reads the
+edge, applies the action, and writes under the version it read; losing that
+race means another side wrote first, so it re-reads and re-applies up to
+`COMMAND_ATTEMPTS` times before reporting contention. Handle resolution
+normalizes both halves of `<username>#<discriminator>` before the indexed
+lookup, and listing carries the peer behind each edge along with who asked.
+
+`UserDirectory` is split out of `IdentityRepository`: friends and presence read
+users but never enrol or revoke devices, so they do not depend on that surface.
+
+Next: friend-only presence over live connections, then the socket commands for
+resolving handles, acting on friendships, and listing them.
 
 ### M4: Collections
 

@@ -243,6 +243,7 @@ mod tests {
 
     use super::*;
     use crate::memory::{FixedClock, InMemoryIdentities, ScriptedRandom};
+    use crate::ports::UserDirectory;
 
     const NOW: u64 = 1_700_000_000_000;
     const AUTHORITY: &str = "nexus.portalis.test";
@@ -290,14 +291,14 @@ mod tests {
         fault: Fault,
     }
 
-    impl IdentityRepository for FaultyStore {
-        fn insert_registration(
+    impl UserDirectory for FaultyStore {
+        fn find_user(
             &self,
-            user: UserRecord,
-            device: DeviceRecord,
-        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-            let failure = self.fault.hits(Fault::Insert);
-            let inner = self.inner.insert_registration(user, device);
+            user_id: UserId,
+        ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send
+        {
+            let failure = self.fault.hits(Fault::FindUser);
+            let inner = self.inner.find_user(user_id);
             async move {
                 match failure {
                     Some(error) => Err(error),
@@ -306,13 +307,33 @@ mod tests {
             }
         }
 
-        fn find_user(
+        fn find_user_by_handle(
             &self,
-            user_id: UserId,
+            normalized_username: &str,
+            discriminator: &str,
         ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send
         {
             let failure = self.fault.hits(Fault::FindUser);
-            let inner = self.inner.find_user(user_id);
+            let inner = self
+                .inner
+                .find_user_by_handle(normalized_username, discriminator);
+            async move {
+                match failure {
+                    Some(error) => Err(error),
+                    None => inner.await,
+                }
+            }
+        }
+    }
+
+    impl IdentityRepository for FaultyStore {
+        fn insert_registration(
+            &self,
+            user: UserRecord,
+            device: DeviceRecord,
+        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+            let failure = self.fault.hits(Fault::Insert);
+            let inner = self.inner.insert_registration(user, device);
             async move {
                 match failure {
                     Some(error) => Err(error),
@@ -911,7 +932,8 @@ mod tests {
         let signer = key(7);
         let (mut public, mut signature) = ([0; 32], [0; 64]);
 
-        service(&[9])
+        let fresh = service(&[9]);
+        let registered = fresh
             .register(registration(
                 &signer,
                 "Ada",
@@ -938,5 +960,28 @@ mod tests {
             .expect("revocation passes through");
 
         assert_eq!(Fault::None.label(), "none");
+
+        // The directory lookups are part of the same store, so exercise both
+        // their pass-through and their failure here.
+        let found = fresh
+            .store
+            .find_user_by_handle("ada", &registered.user.discriminator)
+            .await
+            .expect("the lookup passes through");
+        assert_eq!(
+            found.map(|user| user.user_id),
+            Some(registered.user.user_id)
+        );
+        let failing = service_with(
+            FaultyStore {
+                fault: Fault::FindUser,
+                ..FaultyStore::default()
+            },
+            &[9],
+        );
+        assert_eq!(
+            failing.store.find_user_by_handle("ada", "7Q2XZ").await,
+            Err(RepositoryError::Unavailable("find-user".to_owned()))
+        );
     }
 }
