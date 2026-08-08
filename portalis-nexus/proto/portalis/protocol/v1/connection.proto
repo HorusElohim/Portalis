@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package portalis.protocol.v1;
+
+import "portalis/protocol/v1/common.proto";
+
+message ServerHello {
+  bytes connection_id = 1;
+  bytes challenge = 2;
+  uint64 server_time_unix_ms = 3;
+  ProtocolRange supported_protocols = 4;
+}
+
+message Ping {
+  uint64 nonce = 1;
+}
+
+message Pong {
+  uint64 nonce = 1;
+}
+
+message Envelope {
+  bytes message_id = 1;
+  bytes correlation_id = 2;
+  uint64 sent_at_unix_ms = 3;
+
+  oneof payload {
+    ServerHello server_hello = 10;
+    Ping ping = 14;
+    Pong pong = 15;
+    Ack ack = 16;
+    ProtocolError protocol_error = 17;
+  }
+}

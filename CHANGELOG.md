@@ -18,6 +18,10 @@
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
 
+- Started Portalis Nexus as an isolated Rust workspace for the new protobuf
+  control-plane protocol and Linux discovery server, with portable client and
+  server-core crates, health endpoints, container packaging, and dedicated CI.
+
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 
 ### Added

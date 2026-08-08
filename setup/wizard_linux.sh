@@ -107,6 +107,35 @@ case "$PKG_MANAGER" in
         ;;
 esac
 
+if ! command_exists buf; then
+    case "$ARCH" in
+        x86_64|amd64)
+            BUF_ARCH="x86_64"
+            ;;
+        aarch64|arm64)
+            BUF_ARCH="aarch64"
+            ;;
+        *)
+            BUF_ARCH=""
+            warn "Buf has no automatic installer for architecture: $ARCH"
+            ;;
+    esac
+
+    if [[ -n "$BUF_ARCH" ]]; then
+        info "Installing Buf for Portalis Nexus protobuf checks"
+        tmpdir="$(mktemp -d)"
+        if curl -fsSL "https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-$BUF_ARCH" -o "$tmpdir/buf"; then
+            $SUDO install -m 0755 "$tmpdir/buf" /usr/local/bin/buf
+            ok "Buf installed"
+        else
+            warn "Buf download failed"
+        fi
+        rm -rf "$tmpdir"
+    fi
+else
+    ok "Buf already installed"
+fi
+
 case "$PKG_MANAGER" in
     apt)
         install_packages openjdk-17-jdk
@@ -228,12 +257,20 @@ if command_exists rustup; then
     rustup self update
     rustup toolchain install stable
     rustup default stable
+    rustup component add clippy rustfmt llvm-tools-preview || warn "Rust component setup encountered issues"
     ok "Rust stable ready"
 else
     warn "rustup not available; skipping Rust setup"
 fi
 
 if command_exists cargo; then
+    if ! command_exists cargo-llvm-cov; then
+        info "Installing cargo-llvm-cov for Portalis Nexus coverage"
+        cargo install cargo-llvm-cov --locked || warn "cargo-llvm-cov install failed"
+    else
+        ok "cargo-llvm-cov already installed"
+    fi
+
     if ! command_exists flutter_rust_bridge_codegen; then
         info "Installing flutter_rust_bridge_codegen"
         cargo install flutter_rust_bridge_codegen || warn "flutter_rust_bridge_codegen install failed"
@@ -347,6 +384,18 @@ if command_exists cargo; then
     cargo --version || warn "cargo --version reported issues"
 else
     warn "cargo not found in PATH"
+fi
+
+if command_exists buf; then
+    buf --version || warn "buf --version reported issues"
+else
+    warn "buf not found in PATH"
+fi
+
+if command_exists cargo-llvm-cov; then
+    cargo llvm-cov --version || warn "cargo llvm-cov --version reported issues"
+else
+    warn "cargo-llvm-cov not found in PATH"
 fi
 
 ok "Setup wizard finished. Open a new shell to ensure PATH updates take effect."

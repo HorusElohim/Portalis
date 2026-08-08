@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package portalis.protocol.v1;
+
+enum ProtocolErrorCode {
+  PROTOCOL_ERROR_CODE_UNSPECIFIED = 0;
+  PROTOCOL_ERROR_CODE_INVALID_MESSAGE = 1;
+  PROTOCOL_ERROR_CODE_UNSUPPORTED_VERSION = 2;
+  PROTOCOL_ERROR_CODE_UNAUTHENTICATED = 3;
+  PROTOCOL_ERROR_CODE_UNAUTHORIZED = 4;
+  PROTOCOL_ERROR_CODE_RATE_LIMITED = 5;
+  PROTOCOL_ERROR_CODE_INTERNAL = 6;
+}
+
+message ProtocolRange {
+  uint32 minimum = 1;
+  uint32 maximum = 2;
+}
+
+message Ack {
+  bytes command_id = 1;
+}
+
+message ProtocolError {
+  ProtocolErrorCode code = 1;
+  string message = 2;
+  optional uint64 retry_after_ms = 3;
+  bool retryable = 4;
+}

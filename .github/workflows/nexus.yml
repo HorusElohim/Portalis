@@ -1,0 +1,59 @@
+name: Portalis Nexus
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "portalis-nexus/**"
+      - ".github/workflows/nexus.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "portalis-nexus/**"
+      - ".github/workflows/nexus.yml"
+
+concurrency:
+  group: nexus-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: portalis-nexus
+
+jobs:
+  quality:
+    name: Protocol and Rust quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt, llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: portalis-nexus
+      - uses: bufbuild/buf-setup-action@v1
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Validate protobuf
+        run: buf lint
+      - name: Check protobuf compatibility
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          if git cat-file -e FETCH_HEAD:portalis-nexus/buf.yaml; then
+            buf breaking \
+              --against \
+              "https://github.com/${{ github.repository }}.git#branch=${{ github.base_ref }},subdir=portalis-nexus"
+          else
+            echo "No released Nexus schema exists on the base branch yet."
+          fi
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint Rust
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Test Rust
+        run: cargo test --workspace --all-features
+      - name: Enforce coverage
+        run: ./scripts/coverage.sh
+      - name: Build Linux server
+        run: cargo build --locked --release -p portalis-nexus-server

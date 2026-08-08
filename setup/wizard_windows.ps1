@@ -3,12 +3,12 @@
   Portalis Windows Dev Environment Wizard
 .DESCRIPTION
   Idempotent PowerShell wizard that installs and configures:
-    - winget-managed: Git, VS Code, Android Studio, OpenJDK 17, Rust (rustup), VS 2022 Build Tools
+    - winget-managed: Git, VS Code, Android Studio, OpenJDK 17, Rust (rustup), Buf, VS 2022 Build Tools
     - Flutter SDK from the official release archive (not on winget); override the
       install location with $env:FLUTTER_ROOT (default: %LOCALAPPDATA%\flutter)
     - Android SDK base, platform-tools, build-tools, emulator; accepts licenses
     - VS Code extensions (Flutter, Dart, Rust Analyzer, TOML, EditorConfig)
-    - Rust tools: flutter_rust_bridge_codegen, gitmoji-rs
+    - Rust tools: flutter_rust_bridge_codegen, cargo-llvm-cov, gitmoji-rs
     - Environment variables: JAVA_HOME, ANDROID_SDK_ROOT, PATH
     - Validates via flutter doctor / rustc / cargo
 .NOTES
@@ -113,6 +113,9 @@ Install-IfMissingWinget "Microsoft.VisualStudioCode" "Visual Studio Code"
 
 # Rust (rustup)
 Install-IfMissingWinget "Rustlang.Rustup" "Rustup"
+
+# Protobuf linting and breaking-change checks for Portalis Nexus
+Install-IfMissingWinget "bufbuild.buf" "Buf"
 
 # C++ Build Tools (for native Rust crates)
 if (Confirm-Yes "Install Visual Studio 2022 Build Tools (C++ toolchain)?" $true) {
@@ -429,6 +432,7 @@ if (Test-Cmd rustup) {
     rustup self update | Out-Null
     rustup toolchain install stable | Out-Null
     rustup default stable | Out-Null
+    rustup component add clippy rustfmt llvm-tools-preview | Out-Null
     Write-Ok "Rust stable ready."
 }
 else {
@@ -437,6 +441,15 @@ else {
 
 # flutter_rust_bridge_codegen
 if (Test-Cmd cargo) {
+    if (-not (Test-Cmd cargo-llvm-cov)) {
+        Write-Info "Installing cargo-llvm-cov for Portalis Nexus coverage…"
+        cargo install cargo-llvm-cov --locked | Out-Null
+        Write-Ok "Installed cargo-llvm-cov."
+    }
+    else {
+        Write-Ok "cargo-llvm-cov already installed."
+    }
+
     if (-not (Test-Cmd flutter_rust_bridge_codegen)) {
         Write-Info "Installing flutter_rust_bridge_codegen…"
         cargo install flutter_rust_bridge_codegen | Out-Null
@@ -504,6 +517,8 @@ catch { Write-Warn "flutter doctor encountered issues. Open Android Studio, ensu
 
 try { rustc --version } catch { Write-Warn "rustc not found in current shell." }
 try { cargo --version } catch { Write-Warn "cargo not found in current shell." }
+try { buf --version } catch { Write-Warn "buf not found in current shell." }
+try { cargo llvm-cov --version } catch { Write-Warn "cargo-llvm-cov not found in current shell." }
 
 Write-Ok "Setup wizard finished. If some tools weren't detected, open a NEW PowerShell and re-run for PATH to refresh."
 

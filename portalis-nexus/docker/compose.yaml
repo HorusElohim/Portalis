@@ -1,0 +1,10 @@
+services:
+  nexus:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      PORTALIS_NEXUS_LISTEN_ADDR: 0.0.0.0:8080
+      RUST_LOG: portalis_nexus_server=info,tower_http=info
+    ports:
+      - "8080:8080"

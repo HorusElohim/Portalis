@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = [
+    "apps/server",
+    "crates/client",
+    "crates/protocol",
+    "crates/server-core",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+axum = { version = "0.8.9", features = ["http1", "json", "tokio", "ws"] }
+prost = "0.14.4"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.0", features = ["trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+uuid = { version = "1.24.0", features = ["v7"] }
+
+portalis-nexus-client = { path = "crates/client" }
+portalis-nexus-protocol = { path = "crates/protocol" }
+portalis-nexus-server-core = { path = "crates/server-core" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

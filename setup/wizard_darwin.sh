@@ -75,6 +75,13 @@ brew update
 info "Installing core packages"
 brew install git curl unzip zip xz pkg-config cmake ninja
 
+if ! command_exists buf; then
+    info "Installing Buf for Portalis Nexus protobuf checks"
+    brew install bufbuild/buf/buf || warn "Buf install failed"
+else
+    ok "Buf already installed"
+fi
+
 if confirm_yes "Install Visual Studio Code via Homebrew Cask?" y; then
     if ! command_exists code; then
         info "Installing VS Code"
@@ -188,12 +195,20 @@ if command_exists rustup; then
     rustup self update
     rustup toolchain install stable
     rustup default stable
+    rustup component add clippy rustfmt llvm-tools-preview || warn "Rust component setup encountered issues"
     ok "Rust stable ready"
 else
     warn "rustup not available; skipping Rust setup"
 fi
 
 if command_exists cargo; then
+    if ! command_exists cargo-llvm-cov; then
+        info "Installing cargo-llvm-cov for Portalis Nexus coverage"
+        cargo install cargo-llvm-cov --locked || warn "cargo-llvm-cov install failed"
+    else
+        ok "cargo-llvm-cov already installed"
+    fi
+
     if ! command_exists flutter_rust_bridge_codegen; then
         info "Installing flutter_rust_bridge_codegen"
         cargo install flutter_rust_bridge_codegen || warn "flutter_rust_bridge_codegen install failed"
@@ -304,6 +319,18 @@ if command_exists cargo; then
     cargo --version || warn "cargo --version reported issues"
 else
     warn "cargo not found in PATH"
+fi
+
+if command_exists buf; then
+    buf --version || warn "buf --version reported issues"
+else
+    warn "buf not found in PATH"
+fi
+
+if command_exists cargo-llvm-cov; then
+    cargo llvm-cov --version || warn "cargo llvm-cov --version reported issues"
+else
+    warn "cargo-llvm-cov not found in PATH"
 fi
 
 ok "Setup wizard finished. Open a new shell to ensure PATH updates take effect."

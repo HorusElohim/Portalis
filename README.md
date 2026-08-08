@@ -18,6 +18,7 @@
 │   ├── lib/              # Flutter widgets and FRB-generated API surface
 │   ├── rust/backend/     # Rust crate compiled into native libs / wasm
 │   └── tool/             # Platform-specific build helpers
+├── portalis-nexus/       # Protobuf client/server control-plane workspace
 ├── setup/                # Environment bootstrap scripts for Linux, macOS & Windows
 ├── tests/                # Shell helpers to run Rust/Flutter test suites
 ├── scripts/              # Utility scripts (e.g., project migration)
@@ -29,6 +30,8 @@ Install the toolchains listed below before working on the project:
 
 - Flutter SDK 3.32.x (stable channel recommended)
 - Rust toolchain via `rustup`
+- Buf CLI for Portalis Nexus protobuf validation
+- `cargo-llvm-cov` for Portalis Nexus coverage reports
 - Android Studio (SDK + NDK) for mobile builds
 - Xcode for iOS/macOS builds on macOS hosts
 - Chrome (or another Flutter-supported browser) for web builds
@@ -39,7 +42,7 @@ To accelerate setup on fresh machines, run the platform wizard that matches your
 - macOS: `./setup/wizard_darwin.sh`
 - Windows: `powershell -ExecutionPolicy Bypass -File .\setup\wizard_windows.ps1`
 
-Each wizard installs common dependencies, configures environment variables, and validates with `flutter doctor` plus `rustc`/`cargo` checks. Re-running is safe and idempotent.
+Each wizard installs common dependencies, Buf, Rust coverage tooling, configures environment variables, and validates with `flutter doctor` plus Rust/Nexus tool checks. Re-running is safe and idempotent.
 
 ## Quick Start
 1. Clone the repository and enter it: `git clone ... && cd Portalis`
@@ -52,6 +55,28 @@ Each wizard installs common dependencies, configures environment variables, and 
    - macOS: `flutter run -d macos`
 
 Detailed build instructions for every platform live in [`doc/build.md`](doc/build.md).
+
+## Portalis Nexus
+
+[`portalis-nexus/`](portalis-nexus/) is the standalone Rust control plane for reliable peer discovery, presence, friendships, and collection metadata exchange. Nexus coordinates peers only: collection media continues to move directly between clients with BitTorrent.
+
+The workspace owns the versioned protobuf contract, reusable client library, server domain logic, and Linux-first server binary. See the [Nexus README](portalis-nexus/README.md) for commands and the [protocol specification](portalis-nexus/SPEC.md) for the architecture and migration plan.
+
+```bash
+cd portalis-nexus
+
+# Validate the contract and Rust workspace.
+buf lint
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-targets --all-features
+
+# Start the local discovery server.
+PORTALIS_NEXUS_LISTEN_ADDR=127.0.0.1:8080 cargo run -p portalis-nexus-server
+curl http://127.0.0.1:8080/health
+```
+
+Run coverage with `./scripts/coverage.sh`. On Linux, the server can also run with `docker compose -f docker/compose.yaml up --build` from `portalis-nexus/`.
 
 ## Building
 
