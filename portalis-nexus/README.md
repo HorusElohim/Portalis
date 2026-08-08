@@ -47,3 +47,10 @@ when a caller needs a bounded retry loop. The policy doubles its delay per
 failure, spreads it across 80%-120% with randomized jitter, caps the result at
 its maximum delay, and returns the final transport error once its configured
 maximum attempts are spent.
+
+Each socket splits into a read loop and one writer task joined by a queue of at
+most `MAX_OUTBOUND_QUEUE` messages. Filling that queue disconnects the peer, so
+a client that stops reading cannot grow server memory. On `SIGTERM` the server
+finishes its HTTP serve loop and then calls `Shutdown::drain`, which asks every
+live socket to send a close frame and waits up to `GRACEFUL_DRAIN_TIMEOUT` for
+them to finish.

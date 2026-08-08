@@ -4,28 +4,37 @@ use std::time::Duration;
 use portalis_nexus_client::{NexusClient, ReconnectPolicy};
 use portalis_nexus_protocol::v1::Pong;
 use portalis_nexus_protocol::v1::envelope::Payload;
+use portalis_nexus_server::AppState;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
-async fn start_server(address: SocketAddr) -> JoinHandle<()> {
+async fn start_server(address: SocketAddr) -> (AppState, JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .expect("bind test server");
-    let state = portalis_nexus_server::AppState::default();
+    let state = AppState::default();
     state.mark_ready();
-    tokio::spawn(async move {
-        let _ = axum::serve(listener, portalis_nexus_server::app(&state)).await;
-    })
+    let served = state.clone();
+    let handle = tokio::spawn(async move {
+        let _ = axum::serve(listener, portalis_nexus_server::app(&served)).await;
+    });
+    (state, handle)
+}
+
+/// Reserves an ephemeral port so a restarted server can rebind the address.
+async fn reserve_address() -> SocketAddr {
+    let reservation = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("reserve test server address");
+    let address = reservation.local_addr().expect("test server address");
+    drop(reservation);
+    address
 }
 
 #[tokio::test]
 async fn connects_and_exchanges_a_correlated_ping() {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind test server");
-    let address = listener.local_addr().expect("test server address");
-    drop(listener);
-    let server = start_server(address).await;
+    let address = reserve_address().await;
+    let (_state, server) = start_server(address).await;
 
     let mut client = NexusClient::connect(&format!("ws://{address}/v1/socket"))
         .await
@@ -40,12 +49,8 @@ async fn connects_and_exchanges_a_correlated_ping() {
 
 #[tokio::test]
 async fn clients_reconnect_after_a_forced_server_restart() {
-    let reservation = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("reserve test server address");
-    let address = reservation.local_addr().expect("test server address");
-    drop(reservation);
-    let initial_server = start_server(address).await;
+    let address = reserve_address().await;
+    let (_initial_state, initial_server) = start_server(address).await;
     let endpoint = format!("ws://{address}/v1/socket");
     let initial_client = NexusClient::connect(&endpoint)
         .await
@@ -68,7 +73,7 @@ async fn clients_reconnect_after_a_forced_server_restart() {
         );
 
     sleep(Duration::from_millis(30)).await;
-    let restarted_server = start_server(address).await;
+    let (_restarted_state, restarted_server) = start_server(address).await;
     let mut first_client = timeout(Duration::from_secs(1), first)
         .await
         .expect("first reconnect completes")
@@ -97,4 +102,22 @@ async fn clients_reconnect_after_a_forced_server_restart() {
         Some(Payload::Pong(Pong { nonce: 2 }))
     );
     restarted_server.abort();
+}
+
+#[tokio::test]
+async fn draining_closes_live_connections() {
+    let address = reserve_address().await;
+    let (state, server) = start_server(address).await;
+    let endpoint = format!("ws://{address}/v1/socket");
+    let mut client = NexusClient::connect(&endpoint)
+        .await
+        .expect("connect before draining");
+
+    timeout(Duration::from_secs(5), state.shutdown().drain())
+        .await
+        .expect("drain completes while a client is connected");
+
+    assert!(state.shutdown().is_draining());
+    assert!(client.ping(1, 1).await.is_err());
+    server.abort();
 }

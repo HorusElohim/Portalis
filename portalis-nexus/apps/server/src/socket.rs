@@ -2,71 +2,81 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::{extract::State, response::IntoResponse};
-use futures_util::StreamExt;
-use portalis_nexus_protocol::{MAX_FRAME_BYTES, WEBSOCKET_SUBPROTOCOL, decode_frame, encode_frame};
-use portalis_nexus_server_core::ProtocolPolicy;
+use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::{SinkExt, StreamExt};
+use portalis_nexus_protocol::{MAX_FRAME_BYTES, MAX_OUTBOUND_QUEUE, WEBSOCKET_SUBPROTOCOL};
+use tokio::sync::{mpsc, watch};
 
-use crate::{AppState, protocol_error, response_for, server_hello};
+use crate::{AppState, SocketReply, binary_frame, reply_to, server_hello};
 
 pub(crate) async fn upgrade(
     websocket: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let protocol_policy = state.protocol_policy().clone();
     websocket
         .protocols([WEBSOCKET_SUBPROTOCOL])
         .max_frame_size(MAX_FRAME_BYTES)
         .max_message_size(MAX_FRAME_BYTES)
-        .on_upgrade(move |socket| handle_socket(socket, protocol_policy))
+        .on_upgrade(move |socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(mut socket: WebSocket, protocol_policy: ProtocolPolicy) {
-    let hello = server_hello(&protocol_policy, now_unix_ms());
-    if send_envelope(&mut socket, &hello).await.is_err() {
-        return;
+/// Runs one socket as a bounded read loop feeding a single writer task.
+///
+/// The writer owns the sink, so every outbound message crosses one queue of at
+/// most [`MAX_OUTBOUND_QUEUE`] entries. A peer that stops reading fills that
+/// queue and loses its connection instead of growing server memory.
+async fn handle_socket(socket: WebSocket, state: AppState) {
+    let mut draining = state.shutdown().register();
+    let (sink, mut stream) = socket.split();
+    let (outbound, inbox) = mpsc::channel(MAX_OUTBOUND_QUEUE);
+    let writer = tokio::spawn(write_outbound(sink, inbox));
+
+    let hello = binary_frame(&server_hello(state.protocol_policy(), now_unix_ms()));
+    if outbound.send(hello).await.is_ok() {
+        read_inbound(&mut stream, &outbound, &mut draining).await;
     }
 
-    while let Some(message) = socket.next().await {
-        let Ok(message) = message else {
+    drop(outbound);
+    let _ = writer.await;
+}
+
+/// Reads until the peer leaves, the queue fills, or the server starts draining.
+async fn read_inbound(
+    stream: &mut SplitStream<WebSocket>,
+    outbound: &mpsc::Sender<Message>,
+    draining: &mut watch::Receiver<bool>,
+) {
+    loop {
+        let message = tokio::select! {
+            _ = draining.changed() => return,
+            message = stream.next() => message,
+        };
+        let Some(Ok(message)) = message else {
             return;
         };
-        match message {
-            Message::Binary(frame) => {
-                let response = match decode_frame(&frame) {
-                    Ok(envelope) => response_for(&envelope, now_unix_ms()),
-                    Err(error) => protocol_error(Vec::new(), error.to_string(), now_unix_ms()),
-                };
-                if send_envelope(&mut socket, &response).await.is_err() {
+        match reply_to(&message, now_unix_ms()) {
+            SocketReply::Send(reply) => {
+                if outbound.try_send(reply).is_err() {
                     return;
                 }
             }
-            Message::Ping(payload) => {
-                if socket.send(Message::Pong(payload)).await.is_err() {
-                    return;
-                }
-            }
-            Message::Text(_) => {
-                let response = protocol_error(
-                    Vec::new(),
-                    "expected a binary protobuf envelope".to_owned(),
-                    now_unix_ms(),
-                );
-                if send_envelope(&mut socket, &response).await.is_err() {
-                    return;
-                }
-            }
-            Message::Close(_) => return,
-            Message::Pong(_) => {}
+            SocketReply::Idle => {}
+            SocketReply::Close => return,
         }
     }
 }
 
-async fn send_envelope(
-    socket: &mut WebSocket,
-    envelope: &portalis_nexus_protocol::v1::Envelope,
-) -> Result<(), axum::Error> {
-    let frame = encode_frame(envelope).expect("server-generated envelopes are valid and bounded");
-    socket.send(Message::Binary(frame.into())).await
+/// Writes queued messages, then closes the socket once the queue is dropped.
+async fn write_outbound(
+    mut sink: SplitSink<WebSocket, Message>,
+    mut inbox: mpsc::Receiver<Message>,
+) {
+    while let Some(message) = inbox.recv().await {
+        if sink.send(message).await.is_err() {
+            return;
+        }
+    }
+    let _ = sink.send(Message::Close(None)).await;
 }
 
 fn now_unix_ms() -> u64 {

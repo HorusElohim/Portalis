@@ -558,9 +558,14 @@ Current slice: the `/v1/socket` endpoint enforces the protobuf subprotocol and
 `Ping` envelopes with correlated `Pong`s. The portable client validates the
 upgrade, hello, frame limit, correlation ID, and nonce. `ReconnectPolicy`
 provides bounded exponential retry with randomized jitter, and two real clients
-reconnect after a forced server restart. Bounded outbound queues, request
-timeouts, continuous connection supervision, and graceful connection draining
-are the next M1 slice.
+reconnect after a forced server restart. Each server socket now splits into a
+read loop and a single writer task joined by one 256-entry outbound queue, so a
+peer that stops reading loses its connection instead of growing server memory.
+`Shutdown` signals every live socket and waits for them to close within
+`GRACEFUL_DRAIN_TIMEOUT`, because upgraded WebSocket connections outlive the
+HTTP serve loop that Axum's graceful shutdown tracks. Client request timeouts,
+a pending-request registry, and continuous connection supervision are the next
+M1 slice.
 
 ### M2: Identity
 

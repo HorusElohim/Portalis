@@ -1,7 +1,8 @@
 use std::error::Error;
 
-use portalis_nexus_server::{AppState, ServerConfig, app};
-use tracing::info;
+use portalis_nexus_server::{AppState, GRACEFUL_DRAIN_TIMEOUT, ServerConfig, app};
+use tokio::time::timeout;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -23,6 +24,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     axum::serve(listener, app(&state))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+
+    // Upgraded sockets outlive the HTTP serve loop, so drain them explicitly.
+    info!("draining live Nexus sockets");
+    if timeout(GRACEFUL_DRAIN_TIMEOUT, state.shutdown().drain())
+        .await
+        .is_err()
+    {
+        warn!(
+            timeout_secs = GRACEFUL_DRAIN_TIMEOUT.as_secs(),
+            "drain timed out; closing remaining sockets"
+        );
+    }
     Ok(())
 }
 

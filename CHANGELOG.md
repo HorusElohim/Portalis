@@ -28,6 +28,10 @@
   with a real client/server integration test.
 - Added bounded exponential reconnect with randomized jitter to the portable
   Nexus client, verified by two clients reconnecting after a forced restart.
+- Gave each Nexus socket a bounded outbound queue and a dedicated writer task,
+  so a peer that stops reading is disconnected instead of growing server memory.
+- Added graceful Nexus socket draining, so shutdown signals every live
+  connection and waits for it to close within a bounded timeout.
 
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 
