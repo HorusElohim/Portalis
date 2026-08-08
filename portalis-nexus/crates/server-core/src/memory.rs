@@ -1,15 +1,16 @@
 //! In-memory ports for tests and local development.
 //!
-//! These are deliberately simple: a map behind a mutex, a clock that only
-//! moves when a test moves it, and randomness a test can dictate. They make
-//! the identity rules provable without `MongoDB`.
+//! These are deliberately simple: one lock over both collections, a clock that
+//! only moves when a test moves it, and randomness a test can dictate. They
+//! make the identity rules provable without `MongoDB`.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Mutex, MutexGuard};
 
 use crate::ports::{
-    Clock, DeviceId, DeviceRecord, DeviceRepository, RandomSource, RepositoryError, UserId,
-    UserRecord, UserRepository,
+    Clock, DeviceId, DeviceRecord, IdentityRepository, RandomSource, RepositoryError, UserId,
+    UserRecord,
 };
 
 /// A clock that stands still until a test advances it.
@@ -34,7 +35,7 @@ impl FixedClock {
         *self.lock() = now_unix_ms;
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, u64> {
+    fn lock(&self) -> MutexGuard<'_, u64> {
         self.now_unix_ms
             .lock()
             .expect("the test clock is not poisoned")
@@ -50,7 +51,7 @@ impl Clock for FixedClock {
 /// Randomness a test dictates, cycling through a scripted sequence.
 #[derive(Debug)]
 pub struct ScriptedRandom {
-    bytes: Mutex<std::collections::VecDeque<u8>>,
+    bytes: Mutex<VecDeque<u8>>,
 }
 
 impl ScriptedRandom {
@@ -82,45 +83,102 @@ impl RandomSource for ScriptedRandom {
     }
 }
 
-/// Users held in memory, enforcing the unique-handle index.
+/// Users and devices behind one lock, so a registration is genuinely atomic.
 #[derive(Debug, Default)]
-pub struct InMemoryUsers {
-    users: Mutex<Vec<UserRecord>>,
+pub struct InMemoryIdentities {
+    stored: Mutex<Stored>,
 }
 
-impl InMemoryUsers {
+#[derive(Debug, Default)]
+struct Stored {
+    users: Vec<UserRecord>,
+    devices: HashMap<DeviceId, DeviceRecord>,
+}
+
+impl Stored {
+    fn insert_user(&mut self, user: UserRecord) -> Result<(), RepositoryError> {
+        let taken = self.users.iter().any(|existing| {
+            existing.normalized_username == user.normalized_username
+                && existing.discriminator == user.discriminator
+        });
+        if taken {
+            return Err(RepositoryError::HandleTaken);
+        }
+        self.users.push(user);
+        Ok(())
+    }
+
+    fn insert_device(&mut self, device: DeviceRecord) -> Result<(), RepositoryError> {
+        match self.devices.entry(device.device_id) {
+            Entry::Occupied(_) => Err(RepositoryError::DeviceExists),
+            Entry::Vacant(slot) => {
+                slot.insert(device);
+                Ok(())
+            }
+        }
+    }
+}
+
+impl InMemoryIdentities {
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.lock().len()
+    pub fn user_count(&self) -> usize {
+        self.lock().users.len()
+    }
+
+    #[must_use]
+    pub fn device_count(&self) -> usize {
+        self.lock().devices.len()
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.user_count() == 0 && self.device_count() == 0
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<UserRecord>> {
-        self.users.lock().expect("the user store is not poisoned")
+    /// Enrols a device directly, for tests that need one without registering.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RepositoryError::DeviceExists`] when already enrolled.
+    pub fn enrol_device(&self, device: DeviceRecord) -> Result<(), RepositoryError> {
+        self.lock().insert_device(device)
+    }
+
+    /// Stores a user directly, for tests that need one without registering.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RepositoryError::HandleTaken`] when the handle is claimed.
+    pub fn store_user(&self, user: UserRecord) -> Result<(), RepositoryError> {
+        self.lock().insert_user(user)
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Stored> {
+        self.stored
+            .lock()
+            .expect("the identity store is not poisoned")
     }
 }
 
-impl UserRepository for InMemoryUsers {
-    fn insert_user(
+impl IdentityRepository for InMemoryIdentities {
+    fn insert_registration(
         &self,
         user: UserRecord,
+        device: DeviceRecord,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
         let result = {
-            let mut users = self.lock();
-            let taken = users.iter().any(|existing| {
-                existing.normalized_username == user.normalized_username
-                    && existing.discriminator == user.discriminator
-            });
-            if taken {
-                Err(RepositoryError::HandleTaken)
-            } else {
-                users.push(user);
-                Ok(())
-            }
+            let mut stored = self.lock();
+            // Both writes happen under one lock, and the handle is checked
+            // first so a collision never enrols the device.
+            stored
+                .insert_user(user)
+                .and_then(|()| match stored.insert_device(device) {
+                    Ok(()) => Ok(()),
+                    Err(error) => {
+                        stored.users.pop();
+                        Err(error)
+                    }
+                })
         };
         async move { result }
     }
@@ -131,55 +189,11 @@ impl UserRepository for InMemoryUsers {
     ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
         let found = self
             .lock()
+            .users
             .iter()
             .find(|user| user.user_id == user_id)
             .cloned();
         async move { Ok(found) }
-    }
-}
-
-/// Devices held in memory, enforcing the unique-device index.
-#[derive(Debug, Default)]
-pub struct InMemoryDevices {
-    devices: Mutex<HashMap<DeviceId, DeviceRecord>>,
-}
-
-impl InMemoryDevices {
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.lock().len()
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<DeviceId, DeviceRecord>> {
-        self.devices
-            .lock()
-            .expect("the device store is not poisoned")
-    }
-}
-
-impl DeviceRepository for InMemoryDevices {
-    fn insert_device(
-        &self,
-        device: DeviceRecord,
-    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-        let result = {
-            let mut devices = self.lock();
-            match devices.entry(device.device_id) {
-                std::collections::hash_map::Entry::Occupied(_) => {
-                    Err(RepositoryError::DeviceExists)
-                }
-                std::collections::hash_map::Entry::Vacant(slot) => {
-                    slot.insert(device);
-                    Ok(())
-                }
-            }
-        };
-        async move { result }
     }
 
     fn find_device(
@@ -187,7 +201,7 @@ impl DeviceRepository for InMemoryDevices {
         device_id: DeviceId,
     ) -> impl std::future::Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send
     {
-        let found = self.lock().get(&device_id).cloned();
+        let found = self.lock().devices.get(&device_id).cloned();
         async move { Ok(found) }
     }
 
@@ -196,7 +210,7 @@ impl DeviceRepository for InMemoryDevices {
         device_id: DeviceId,
         at_unix_ms: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-        if let Some(device) = self.lock().get_mut(&device_id) {
+        if let Some(device) = self.lock().devices.get_mut(&device_id) {
             device.last_authenticated_at_unix_ms = Some(at_unix_ms);
         }
         async move { Ok(()) }
@@ -207,7 +221,7 @@ impl DeviceRepository for InMemoryDevices {
         device_id: DeviceId,
         at_unix_ms: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-        if let Some(device) = self.lock().get_mut(&device_id) {
+        if let Some(device) = self.lock().devices.get_mut(&device_id) {
             device.revoked_at_unix_ms = Some(at_unix_ms);
         }
         async move { Ok(()) }
@@ -217,6 +231,27 @@ impl DeviceRepository for InMemoryDevices {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn user(discriminator: &str) -> UserRecord {
+        UserRecord {
+            user_id: [1; 16],
+            username: "Ada".to_owned(),
+            normalized_username: "ada".to_owned(),
+            discriminator: discriminator.to_owned(),
+            created_at_unix_ms: 1,
+        }
+    }
+
+    fn device(seed: u8) -> DeviceRecord {
+        DeviceRecord {
+            device_id: [seed; 32],
+            user_id: [1; 16],
+            public_key: [3; 32],
+            created_at_unix_ms: 1,
+            last_authenticated_at_unix_ms: None,
+            revoked_at_unix_ms: None,
+        }
+    }
 
     #[test]
     fn the_clock_only_moves_when_told_to() {
@@ -240,56 +275,81 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_user_store_enforces_unique_handles() {
-        let users = InMemoryUsers::default();
-        let user = UserRecord {
-            user_id: [1; 16],
-            username: "Ada".to_owned(),
-            normalized_username: "ada".to_owned(),
-            discriminator: "7Q2XZ".to_owned(),
-            created_at_unix_ms: 1,
-        };
-        assert!(users.is_empty());
+    async fn a_registration_stores_the_user_and_its_device() {
+        let store = InMemoryIdentities::default();
+        assert!(store.is_empty());
 
-        assert_eq!(users.insert_user(user.clone()).await, Ok(()));
         assert_eq!(
-            users
-                .insert_user(UserRecord {
-                    user_id: [2; 16],
-                    ..user.clone()
-                })
-                .await,
-            Err(RepositoryError::HandleTaken)
+            store.insert_registration(user("7Q2XZ"), device(1)).await,
+            Ok(())
         );
 
-        assert_eq!(users.len(), 1);
-        assert_eq!(users.find_user([1; 16]).await, Ok(Some(user)));
-        assert_eq!(users.find_user([9; 16]).await, Ok(None));
+        assert_eq!(store.user_count(), 1);
+        assert_eq!(store.device_count(), 1);
+        assert_eq!(store.find_user([1; 16]).await, Ok(Some(user("7Q2XZ"))));
+        assert_eq!(store.find_device([1; 32]).await, Ok(Some(device(1))));
+        assert_eq!(store.find_user([9; 16]).await, Ok(None));
+        assert_eq!(store.find_device([9; 32]).await, Ok(None));
     }
 
     #[tokio::test]
-    async fn the_device_store_enforces_unique_devices_and_records_changes() {
-        let devices = InMemoryDevices::default();
-        let device = DeviceRecord {
-            device_id: [1; 32],
-            user_id: [2; 16],
-            public_key: [3; 32],
-            created_at_unix_ms: 1,
-            last_authenticated_at_unix_ms: None,
-            revoked_at_unix_ms: None,
-        };
-        assert!(devices.is_empty());
+    async fn a_taken_handle_leaves_nothing_behind() {
+        let store = InMemoryIdentities::default();
+        store
+            .insert_registration(user("7Q2XZ"), device(1))
+            .await
+            .expect("first registration");
 
-        assert_eq!(devices.insert_device(device.clone()).await, Ok(()));
         assert_eq!(
-            devices.insert_device(device.clone()).await,
+            store.insert_registration(user("7Q2XZ"), device(2)).await,
+            Err(RepositoryError::HandleTaken)
+        );
+
+        assert_eq!(store.user_count(), 1);
+        assert_eq!(
+            store.device_count(),
+            1,
+            "a rejected registration must not enrol its device"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_enrolled_device_cannot_register_again() {
+        let store = InMemoryIdentities::default();
+        store
+            .insert_registration(user("7Q2XZ"), device(1))
+            .await
+            .expect("first registration");
+
+        assert_eq!(
+            store.insert_registration(user("ABCDE"), device(1)).await,
             Err(RepositoryError::DeviceExists)
         );
-        assert_eq!(devices.len(), 1);
+        assert_eq!(
+            store.user_count(),
+            1,
+            "a rejected registration must not claim its handle"
+        );
+    }
 
-        assert_eq!(devices.touch_device([1; 32], 42).await, Ok(()));
-        assert_eq!(devices.revoke_device([1; 32], 43).await, Ok(()));
-        let stored = devices
+    #[tokio::test]
+    async fn records_authentication_and_revocation() {
+        let store = InMemoryIdentities::default();
+        store.enrol_device(device(1)).expect("device enrolled");
+        store.store_user(user("7Q2XZ")).expect("user stored");
+        assert_eq!(
+            store.enrol_device(device(1)),
+            Err(RepositoryError::DeviceExists)
+        );
+        assert_eq!(
+            store.store_user(user("7Q2XZ")),
+            Err(RepositoryError::HandleTaken)
+        );
+
+        assert_eq!(store.touch_device([1; 32], 42).await, Ok(()));
+        assert_eq!(store.revoke_device([1; 32], 43).await, Ok(()));
+
+        let stored = store
             .find_device([1; 32])
             .await
             .expect("stored")
@@ -299,8 +359,7 @@ mod tests {
         assert!(stored.is_revoked());
 
         // Updating a device that is not there is a no-op, not an error.
-        assert_eq!(devices.touch_device([9; 32], 1).await, Ok(()));
-        assert_eq!(devices.revoke_device([9; 32], 1).await, Ok(()));
-        assert_eq!(devices.find_device([9; 32]).await, Ok(None));
+        assert_eq!(store.touch_device([9; 32], 1).await, Ok(()));
+        assert_eq!(store.revoke_device([9; 32], 1).await, Ok(()));
     }
 }

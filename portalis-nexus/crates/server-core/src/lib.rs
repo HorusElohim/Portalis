@@ -26,9 +26,9 @@ pub use identity::{
     AuthenticationRequest, HANDLE_ALLOCATION_ATTEMPTS, Identity, IdentityError, IdentityService,
     RegistrationRequest,
 };
-pub use memory::{FixedClock, InMemoryDevices, InMemoryUsers, ScriptedRandom};
+pub use memory::{FixedClock, InMemoryIdentities, ScriptedRandom};
 pub use negotiation::{NegotiationError, ProtocolPolicy};
 pub use ports::{
-    Clock, DeviceId, DeviceKey, DeviceRecord, DeviceRepository, RandomSource, RepositoryError,
-    UserId, UserRecord, UserRepository,
+    Clock, DeviceId, DeviceKey, DeviceRecord, IdentityRepository, RandomSource, RepositoryError,
+    UserId, UserRecord,
 };

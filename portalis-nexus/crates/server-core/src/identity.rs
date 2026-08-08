@@ -10,8 +10,8 @@ use crate::handle::{
     HandleError, discriminator_from_entropy, normalize_username, validate_username,
 };
 use crate::ports::{
-    Clock, DeviceKey, DeviceRecord, DeviceRepository, RandomSource, RepositoryError, UserId,
-    UserRecord, UserRepository,
+    Clock, DeviceKey, DeviceRecord, IdentityRepository, RandomSource, RepositoryError, UserId,
+    UserRecord,
 };
 
 /// How many random discriminators a registration tries before giving up.
@@ -66,24 +66,21 @@ pub struct AuthenticationRequest<'a> {
 }
 
 /// Applies the identity rules over injected storage, time, and randomness.
-pub struct IdentityService<U, D, C, R> {
-    users: U,
-    devices: D,
+pub struct IdentityService<S, C, R> {
+    store: S,
     clock: C,
     random: R,
 }
 
-impl<U, D, C, R> IdentityService<U, D, C, R>
+impl<S, C, R> IdentityService<S, C, R>
 where
-    U: UserRepository,
-    D: DeviceRepository,
+    S: IdentityRepository,
     C: Clock,
     R: RandomSource,
 {
-    pub const fn new(users: U, devices: D, clock: C, random: R) -> Self {
+    pub const fn new(store: S, clock: C, random: R) -> Self {
         Self {
-            users,
-            devices,
+            store,
             clock,
             random,
         }
@@ -112,19 +109,12 @@ where
         let public_key = Self::verify(request.device_public_key, &payload, request.signature)?;
 
         let device_id = derive_device_id(&public_key);
-        if self.devices.find_device(device_id).await?.is_some() {
+        if self.store.find_device(device_id).await?.is_some() {
             return Err(IdentityError::DeviceAlreadyRegistered);
         }
 
         let now = self.clock.now_unix_ms();
         let user_id = self.new_user_id(now);
-        let user = self
-            .allocate_handle(request.requested_username, user_id, now)
-            .await?;
-
-        // The user and its first device must land together. Until the adapter
-        // wraps both writes in a transaction, a failure here leaves a user
-        // with no device, which registration below reports rather than hides.
         let device = DeviceRecord {
             device_id,
             user_id,
@@ -133,9 +123,9 @@ where
             last_authenticated_at_unix_ms: Some(now),
             revoked_at_unix_ms: None,
         };
-        self.devices.insert_device(device.clone()).await?;
 
-        Ok(Identity { user, device })
+        self.allocate_handle(request.requested_username, user_id, device, now)
+            .await
     }
 
     /// Verifies that a connection holds the key of an authorized device.
@@ -154,7 +144,7 @@ where
 
         let device_id = derive_device_id(&public_key);
         let mut device = self
-            .devices
+            .store
             .find_device(device_id)
             .await?
             .ok_or(IdentityError::UnknownDevice)?;
@@ -163,13 +153,13 @@ where
         }
 
         let user = self
-            .users
+            .store
             .find_user(device.user_id)
             .await?
             .ok_or(IdentityError::MissingUser)?;
 
         let now = self.clock.now_unix_ms();
-        self.devices.touch_device(device_id, now).await?;
+        self.store.touch_device(device_id, now).await?;
         device.last_authenticated_at_unix_ms = Some(now);
 
         Ok(Identity { user, device })
@@ -181,11 +171,11 @@ where
     ///
     /// Returns [`IdentityError`] when the device is unknown or storage fails.
     pub async fn revoke_device(&self, device_id: [u8; 32]) -> Result<(), IdentityError> {
-        if self.devices.find_device(device_id).await?.is_none() {
+        if self.store.find_device(device_id).await?.is_none() {
             return Err(IdentityError::UnknownDevice);
         }
         let now = self.clock.now_unix_ms();
-        self.devices.revoke_device(device_id, now).await?;
+        self.store.revoke_device(device_id, now).await?;
         Ok(())
     }
 
@@ -209,12 +199,16 @@ where
     }
 
     /// Retries random discriminators against the unique index.
+    ///
+    /// Each attempt writes the user and its device together, so a collision
+    /// leaves nothing behind and a success cannot strand either record.
     async fn allocate_handle(
         &self,
         username: &str,
         user_id: UserId,
+        device: DeviceRecord,
         now_unix_ms: u64,
-    ) -> Result<UserRecord, IdentityError> {
+    ) -> Result<Identity, IdentityError> {
         for _ in 0..HANDLE_ALLOCATION_ATTEMPTS {
             let mut entropy = [0_u8; DISCRIMINATOR_CHARS];
             self.random.fill(&mut entropy);
@@ -228,8 +222,12 @@ where
                 discriminator: discriminator_from_entropy(&entropy),
                 created_at_unix_ms: now_unix_ms,
             };
-            match self.users.insert_user(user.clone()).await {
-                Ok(()) => return Ok(user),
+            match self
+                .store
+                .insert_registration(user.clone(), device.clone())
+                .await
+            {
+                Ok(()) => return Ok(Identity { user, device }),
                 Err(RepositoryError::HandleTaken) => {}
                 Err(error) => return Err(error.into()),
             }
@@ -244,7 +242,7 @@ mod tests {
     use portalis_nexus_protocol::CURRENT_PROTOCOL_VERSION;
 
     use super::*;
-    use crate::memory::{FixedClock, InMemoryDevices, InMemoryUsers, ScriptedRandom};
+    use crate::memory::{FixedClock, InMemoryIdentities, ScriptedRandom};
 
     const NOW: u64 = 1_700_000_000_000;
     const AUTHORITY: &str = "nexus.portalis.test";
@@ -253,7 +251,7 @@ mod tests {
     /// second instantiation would be measured as its own set of coverage
     /// regions; the fault-injecting stores stand in for the plain ones with
     /// `Fault::None`.
-    type TestService = IdentityService<FaultyUsers, FaultyDevices, FixedClock, ScriptedRandom>;
+    type TestService = IdentityService<FaultyStore, FixedClock, ScriptedRandom>;
 
     /// Which store operation should fail, so the service's degraded paths are
     /// exercised rather than assumed.
@@ -261,7 +259,8 @@ mod tests {
     enum Fault {
         #[default]
         None,
-        Find,
+        FindUser,
+        FindDevice,
         Insert,
         Touch,
         Revoke,
@@ -276,7 +275,8 @@ mod tests {
         fn label(self) -> &'static str {
             match self {
                 Self::None => "none",
-                Self::Find => "find",
+                Self::FindUser => "find-user",
+                Self::FindDevice => "find-device",
                 Self::Insert => "insert",
                 Self::Touch => "touch",
                 Self::Revoke => "revoke",
@@ -285,18 +285,19 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct FaultyUsers {
-        inner: InMemoryUsers,
+    struct FaultyStore {
+        inner: InMemoryIdentities,
         fault: Fault,
     }
 
-    impl UserRepository for FaultyUsers {
-        fn insert_user(
+    impl IdentityRepository for FaultyStore {
+        fn insert_registration(
             &self,
             user: UserRecord,
+            device: DeviceRecord,
         ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
             let failure = self.fault.hits(Fault::Insert);
-            let inner = self.inner.insert_user(user);
+            let inner = self.inner.insert_registration(user, device);
             async move {
                 match failure {
                     Some(error) => Err(error),
@@ -310,30 +311,8 @@ mod tests {
             user_id: UserId,
         ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send
         {
-            let failure = self.fault.hits(Fault::Find);
+            let failure = self.fault.hits(Fault::FindUser);
             let inner = self.inner.find_user(user_id);
-            async move {
-                match failure {
-                    Some(error) => Err(error),
-                    None => inner.await,
-                }
-            }
-        }
-    }
-
-    #[derive(Default)]
-    struct FaultyDevices {
-        inner: InMemoryDevices,
-        fault: Fault,
-    }
-
-    impl DeviceRepository for FaultyDevices {
-        fn insert_device(
-            &self,
-            device: DeviceRecord,
-        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-            let failure = self.fault.hits(Fault::Insert);
-            let inner = self.inner.insert_device(device);
             async move {
                 match failure {
                     Some(error) => Err(error),
@@ -347,7 +326,7 @@ mod tests {
             device_id: crate::ports::DeviceId,
         ) -> impl std::future::Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send
         {
-            let failure = self.fault.hits(Fault::Find);
+            let failure = self.fault.hits(Fault::FindDevice);
             let inner = self.inner.find_device(device_id);
             async move {
                 match failure {
@@ -393,16 +372,11 @@ mod tests {
     }
 
     fn service(random: &[u8]) -> TestService {
-        service_with(FaultyUsers::default(), FaultyDevices::default(), random)
+        service_with(FaultyStore::default(), random)
     }
 
-    fn service_with(users: FaultyUsers, devices: FaultyDevices, random: &[u8]) -> TestService {
-        IdentityService::new(
-            users,
-            devices,
-            FixedClock::new(NOW),
-            ScriptedRandom::new(random),
-        )
+    fn service_with(store: FaultyStore, random: &[u8]) -> TestService {
+        IdentityService::new(store, FixedClock::new(NOW), ScriptedRandom::new(random))
     }
 
     fn key(seed: u8) -> SigningKey {
@@ -692,7 +666,7 @@ mod tests {
             }))
         );
         assert!(
-            service.users.inner.is_empty() && service.devices.inner.is_empty(),
+            service.store.inner.is_empty(),
             "a rejected registration must write nothing"
         );
     }
@@ -760,6 +734,12 @@ mod tests {
                 .await,
             Err(IdentityError::UsernameUnavailable)
         );
+        assert_eq!(service.store.inner.user_count(), 1);
+        assert_eq!(
+            service.store.inner.device_count(),
+            1,
+            "a registration that cannot claim a handle must not enrol its device"
+        );
     }
 
     #[tokio::test]
@@ -783,29 +763,15 @@ mod tests {
             Err(IdentityError::Signature(SignatureError::Rejected))
         );
         assert!(
-            service.users.inner.is_empty(),
+            service.store.inner.is_empty(),
             "nothing is written for a bad signature"
         );
     }
 
     #[tokio::test]
     async fn authenticating_a_device_whose_user_vanished_is_reported() {
-        let devices = FaultyDevices::default();
         let signer = key(7);
-        let public = signer.verifying_key().to_bytes();
-        devices
-            .inner
-            .insert_device(DeviceRecord {
-                device_id: derive_device_id(&public),
-                user_id: [9; 16],
-                public_key: public,
-                created_at_unix_ms: NOW,
-                last_authenticated_at_unix_ms: None,
-                revoked_at_unix_ms: None,
-            })
-            .await
-            .expect("device inserted");
-        let service = service_with(FaultyUsers::default(), devices, &[9]);
+        let service = with_enrolled_device(Fault::None, &signer);
         let (mut public, mut signature) = ([0; 32], [0; 64]);
 
         assert_eq!(
@@ -821,46 +787,47 @@ mod tests {
         );
     }
 
-    /// Builds a service whose device store already holds `signer`'s device.
-    async fn with_enrolled_device(
-        users: FaultyUsers,
-        fault: Fault,
-        signer: &SigningKey,
-    ) -> TestService {
-        let devices = FaultyDevices {
-            fault,
-            ..FaultyDevices::default()
-        };
+    /// A device record for `signer`, owned by the fixed test user.
+    fn enrolled_record(signer: &SigningKey) -> DeviceRecord {
         let public = signer.verifying_key().to_bytes();
-        devices
-            .inner
-            .insert_device(DeviceRecord {
-                device_id: derive_device_id(&public),
-                user_id: [9; 16],
-                public_key: public,
-                created_at_unix_ms: NOW,
-                last_authenticated_at_unix_ms: None,
-                revoked_at_unix_ms: None,
-            })
-            .await
-            .expect("device inserted");
-        service_with(users, devices, &[9])
+        DeviceRecord {
+            device_id: derive_device_id(&public),
+            user_id: [9; 16],
+            public_key: public,
+            created_at_unix_ms: NOW,
+            last_authenticated_at_unix_ms: None,
+            revoked_at_unix_ms: None,
+        }
     }
 
-    /// A user store already holding the user those devices belong to.
-    async fn users_with_owner() -> FaultyUsers {
-        let users = FaultyUsers::default();
-        users
-            .insert_user(UserRecord {
+    /// A service whose store already holds `signer`'s device, but no user.
+    fn with_enrolled_device(fault: Fault, signer: &SigningKey) -> TestService {
+        let store = FaultyStore {
+            fault,
+            ..FaultyStore::default()
+        };
+        store
+            .inner
+            .enrol_device(enrolled_record(signer))
+            .expect("device enrolled");
+        service_with(store, &[9])
+    }
+
+    /// A service whose store holds `signer`'s device and the user owning it.
+    fn with_enrolled_identity(fault: Fault, signer: &SigningKey) -> TestService {
+        let service = with_enrolled_device(fault, signer);
+        service
+            .store
+            .inner
+            .store_user(UserRecord {
                 user_id: [9; 16],
                 username: "Ada".to_owned(),
                 normalized_username: "ada".to_owned(),
                 discriminator: "7Q2XZ".to_owned(),
                 created_at_unix_ms: NOW,
             })
-            .await
-            .expect("user inserted");
-        users
+            .expect("user stored");
+        service
     }
 
     #[tokio::test]
@@ -868,27 +835,11 @@ mod tests {
         let signer = key(7);
         let (mut public, mut signature) = ([0; 32], [0; 64]);
 
-        for (fault, users) in [
-            (Fault::Find, FaultyUsers::default()),
-            (
-                Fault::None,
-                FaultyUsers {
-                    fault: Fault::Insert,
-                    ..FaultyUsers::default()
-                },
-            ),
-            (Fault::Insert, FaultyUsers::default()),
-        ] {
-            let expected = if fault == Fault::None {
-                Fault::Insert
-            } else {
-                fault
-            };
+        for fault in [Fault::FindDevice, Fault::Insert] {
             let service = service_with(
-                users,
-                FaultyDevices {
+                FaultyStore {
                     fault,
-                    ..FaultyDevices::default()
+                    ..FaultyStore::default()
                 },
                 &[9],
             );
@@ -903,7 +854,7 @@ mod tests {
                         &mut signature
                     ))
                     .await,
-                Err(unavailable(expected.label()))
+                Err(unavailable(fault.label()))
             );
         }
     }
@@ -913,53 +864,29 @@ mod tests {
         let signer = key(7);
         let (mut public, mut signature) = ([0; 32], [0; 64]);
 
-        let lookup_fails = with_enrolled_device(FaultyUsers::default(), Fault::Find, &signer).await;
-        assert_eq!(
-            lookup_fails
-                .authenticate(authentication(
-                    &signer,
-                    &[2; 32],
-                    &mut public,
-                    &mut signature
-                ))
-                .await,
-            Err(unavailable("find"))
-        );
-
-        let user_lookup_fails = with_enrolled_device(
-            FaultyUsers {
-                fault: Fault::Find,
-                ..FaultyUsers::default()
-            },
-            Fault::None,
-            &signer,
-        )
-        .await;
-        assert_eq!(
-            user_lookup_fails
-                .authenticate(authentication(
-                    &signer,
-                    &[2; 32],
-                    &mut public,
-                    &mut signature
-                ))
-                .await,
-            Err(unavailable("find"))
-        );
-
-        let touch_fails =
-            with_enrolled_device(users_with_owner().await, Fault::Touch, &signer).await;
-        assert_eq!(
-            touch_fails
-                .authenticate(authentication(
-                    &signer,
-                    &[2; 32],
-                    &mut public,
-                    &mut signature
-                ))
-                .await,
-            Err(unavailable("touch"))
-        );
+        for (service, fault) in [
+            (
+                with_enrolled_device(Fault::FindDevice, &signer),
+                Fault::FindDevice,
+            ),
+            (
+                with_enrolled_device(Fault::FindUser, &signer),
+                Fault::FindUser,
+            ),
+            (with_enrolled_identity(Fault::Touch, &signer), Fault::Touch),
+        ] {
+            assert_eq!(
+                service
+                    .authenticate(authentication(
+                        &signer,
+                        &[2; 32],
+                        &mut public,
+                        &mut signature
+                    ))
+                    .await,
+                Err(unavailable(fault.label()))
+            );
+        }
     }
 
     #[tokio::test]
@@ -967,29 +894,24 @@ mod tests {
         let signer = key(7);
         let device_id = derive_device_id(&signer.verifying_key().to_bytes());
 
-        let lookup_fails = with_enrolled_device(FaultyUsers::default(), Fault::Find, &signer).await;
-        assert_eq!(
-            lookup_fails.revoke_device(device_id).await,
-            Err(unavailable("find"))
-        );
+        for fault in [Fault::FindDevice, Fault::Revoke] {
+            let service = with_enrolled_device(fault, &signer);
 
-        let revoke_fails =
-            with_enrolled_device(FaultyUsers::default(), Fault::Revoke, &signer).await;
-        assert_eq!(
-            revoke_fails.revoke_device(device_id).await,
-            Err(unavailable("revoke"))
-        );
+            assert_eq!(
+                service.revoke_device(device_id).await,
+                Err(unavailable(fault.label()))
+            );
+        }
     }
 
-    /// The fault-injecting doubles must be transparent when nothing is set to
+    /// The fault-injecting double must be transparent when nothing is set to
     /// fail, or the failure tests above could pass for the wrong reason.
     #[tokio::test]
-    async fn the_doubles_pass_through_when_no_fault_is_injected() {
+    async fn the_double_passes_through_when_no_fault_is_injected() {
         let signer = key(7);
         let (mut public, mut signature) = ([0; 32], [0; 64]);
 
-        let fresh = service(&[9]);
-        fresh
+        service(&[9])
             .register(registration(
                 &signer,
                 "Ada",
@@ -1000,7 +922,7 @@ mod tests {
             .await
             .expect("registration passes through");
 
-        let enrolled = with_enrolled_device(users_with_owner().await, Fault::None, &signer).await;
+        let enrolled = with_enrolled_identity(Fault::None, &signer);
         enrolled
             .authenticate(authentication(
                 &signer,

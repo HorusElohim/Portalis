@@ -67,27 +67,28 @@ impl DeviceRecord {
     }
 }
 
-pub trait UserRepository: Send + Sync {
-    /// Inserts a user, failing with [`RepositoryError::HandleTaken`] when the
-    /// handle is already claimed.
-    fn insert_user(
+/// Durable identity storage.
+///
+/// Users and devices share one trait because registration has to write both
+/// or neither: a user whose first device is missing holds a handle it can
+/// never authenticate with. Splitting them would leave no place to express
+/// that, so [`IdentityRepository::insert_registration`] owns the pair.
+pub trait IdentityRepository: Send + Sync {
+    /// Inserts a user and its first device as one atomic unit.
+    ///
+    /// Fails with [`RepositoryError::HandleTaken`] when the handle is already
+    /// claimed, which allocation answers by trying another discriminator, or
+    /// [`RepositoryError::DeviceExists`] when the device is already enrolled.
+    fn insert_registration(
         &self,
         user: UserRecord,
+        device: DeviceRecord,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
 
     fn find_user(
         &self,
         user_id: UserId,
     ) -> impl Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send;
-}
-
-pub trait DeviceRepository: Send + Sync {
-    /// Inserts a device, failing with [`RepositoryError::DeviceExists`] when
-    /// the identifier is already enrolled.
-    fn insert_device(
-        &self,
-        device: DeviceRecord,
-    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
 
     fn find_device(
         &self,

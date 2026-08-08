@@ -43,7 +43,7 @@
 - Added the Nexus registration and device-authentication rules over injected
   storage, time, and randomness: single-use expiring challenges, handle
   allocation that retries random discriminators against the unique index, and
-  device revocation.
+  device revocation, writing each user and its first device atomically.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket

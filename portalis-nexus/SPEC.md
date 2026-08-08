@@ -615,12 +615,15 @@ handle by retrying random discriminators against the unique index rather than
 scanning for a free one. Authentication rejects unknown and revoked devices and
 records the time of each success.
 
-Registration writes a user and its first device separately. The MongoDB adapter
-must wrap that pair in a transaction so a failure cannot leave a user with no
-device.
+A user and its first device are written through one `insert_registration` port
+call rather than two, because a user whose device is missing holds a handle it
+can never authenticate with. Expressing the pair as one operation is what lets
+the MongoDB adapter wrap it in a transaction, and lets handle allocation retry
+the whole write on a collision without stranding a device.
 
-Next: the MongoDB adapters and their indexes, then wiring registration and
-authentication into the socket and the portable client.
+Next: the MongoDB adapter behind that port, with unique indexes on
+`(normalized_username, discriminator)` and device ID, then wiring registration
+and authentication into the socket and the portable client.
 
 ### M3: Friends and presence
 
