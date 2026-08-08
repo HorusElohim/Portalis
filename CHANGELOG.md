@@ -52,6 +52,9 @@
   two-process client that persists its device key. Running it found a bug where
   a connection stamped its hello and its challenge from two separate clock
   readings, so every signature failed whenever the two straddled a millisecond.
+- Added the Nexus friendship contract and state machine: one canonical edge per
+  pair, idempotent commands, and versioned transitions for deterministic
+  concurrent accepts, rejects, and removals.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket

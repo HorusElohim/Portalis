@@ -648,6 +648,23 @@ It needs a real database to verify, so it waits on Docker or a local `mongod`.
 
 Gate: two clients become friends and observe deterministic online/offline state.
 
+Current slice: the friendship contract and its state machine. `friends.proto`
+and `presence.proto` add handle resolution, friend commands and events, friend
+listing, and presence at the reserved envelope numbers.
+
+`FriendshipEdge` sorts its two user IDs, so naming the edge does not depend on
+who asked first and one unique index keeps a single row per friendship.
+`apply` decides what an action does without touching storage: only the side
+that did not ask may accept or reject, either side may remove an accepted
+friendship, the asker may cancel one still pending, and a refusal or removal
+can be asked again. A request sent back while one is pending is taken as
+accepting it. Repeating any command reports `Unchanged` rather than failing or
+bumping the version, and every move carries the version its write must match,
+which is what makes concurrent commands deterministic.
+
+Next: the friend repository and service over those rules, then handle
+resolution, friend-only presence, and the socket commands.
+
 ### M4: Collections
 
 - Collection/member/head repositories.

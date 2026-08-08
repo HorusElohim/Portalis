@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package portalis.protocol.v1;
+
+// Where a friendship stands between two users.
+//
+// One canonical edge holds the state for both sides, so the two never
+// disagree about whether they are friends.
+enum FriendshipState {
+  FRIENDSHIP_STATE_UNSPECIFIED = 0;
+  FRIENDSHIP_STATE_NONE = 1;
+  FRIENDSHIP_STATE_PENDING = 2;
+  FRIENDSHIP_STATE_ACCEPTED = 3;
+  FRIENDSHIP_STATE_REJECTED = 4;
+  FRIENDSHIP_STATE_REMOVED = 5;
+}
+
+// What one side asks to do to a friendship.
+enum FriendAction {
+  FRIEND_ACTION_UNSPECIFIED = 0;
+  FRIEND_ACTION_REQUEST = 1;
+  FRIEND_ACTION_ACCEPT = 2;
+  FRIEND_ACTION_REJECT = 3;
+  FRIEND_ACTION_REMOVE = 4;
+}
+
+// Looks up a user by the handle a person typed.
+message ResolveHandleRequest {
+  string handle = 1;
+}
+
+message ResolveHandleResponse {
+  bytes user_id = 1;
+  string username = 2;
+  string discriminator = 3;
+}
+
+message FriendCommand {
+  FriendAction action = 1;
+  bytes peer_user_id = 2;
+}
+
+// One side of a friendship, as the asking user sees it.
+message Friend {
+  bytes user_id = 1;
+  string username = 2;
+  string discriminator = 3;
+  FriendshipState state = 4;
+  // Whether the asking user is the one who sent the request, which decides
+  // who may accept it.
+  bool requested_by_me = 5;
+}
+
+message FriendEvent {
+  Friend friend = 1;
+}
+
+message ListFriendsRequest {}
+
+message ListFriendsResponse {
+  repeated Friend friends = 1;
+}

@@ -3,7 +3,9 @@ syntax = "proto3";
 package portalis.protocol.v1;
 
 import "portalis/protocol/v1/common.proto";
+import "portalis/protocol/v1/friends.proto";
 import "portalis/protocol/v1/identity.proto";
+import "portalis/protocol/v1/presence.proto";
 
 message ServerHello {
   bytes connection_id = 1;
@@ -34,5 +36,13 @@ message Envelope {
     Pong pong = 15;
     Ack ack = 16;
     ProtocolError protocol_error = 17;
+
+    ResolveHandleRequest resolve_handle_request = 30;
+    ResolveHandleResponse resolve_handle_response = 31;
+    FriendCommand friend_command = 32;
+    FriendEvent friend_event = 33;
+    ListFriendsRequest list_friends_request = 34;
+    ListFriendsResponse list_friends_response = 35;
+    PresenceEvent presence_event = 36;
   }
 }
