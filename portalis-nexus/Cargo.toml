@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "apps/server",
+    "demo",
     "crates/client",
     "crates/protocol",
     "crates/server-core",
@@ -32,6 +33,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1.24.0", features = ["v4", "v7"] }
 
 portalis-nexus-client = { path = "crates/client" }
+portalis-nexus-server = { path = "apps/server" }
 portalis-nexus-protocol = { path = "crates/protocol" }
 portalis-nexus-server-core = { path = "crates/server-core" }
 

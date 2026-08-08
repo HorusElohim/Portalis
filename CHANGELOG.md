@@ -48,6 +48,10 @@
   with per-connection challenge state, typed refusal codes, and client commands
   that sign through a caller-supplied device signer. Storage remains in-memory
   until the durable adapter lands.
+- Added a Nexus demo: a narrated walkthrough of the whole identity flow and a
+  two-process client that persists its device key. Running it found a bug where
+  a connection stamped its hello and its challenge from two separate clock
+  readings, so every signature failed whenever the two straddled a millisecond.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket

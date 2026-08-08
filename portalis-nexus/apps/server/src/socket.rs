@@ -36,7 +36,8 @@ pub(crate) async fn upgrade(
 /// most [`MAX_OUTBOUND_QUEUE`] entries. A peer that stops reading fills that
 /// queue and loses its connection instead of growing server memory.
 async fn handle_socket(socket: WebSocket, state: AppState) {
-    let hello = hello_payload(state.protocol_policy(), now_unix_ms());
+    let issued_at = now_unix_ms();
+    let hello = hello_payload(state.protocol_policy(), issued_at);
     let span = info_span!(
         "nexus_socket",
         connection_id = %format_id(&hello.connection_id)
@@ -48,8 +49,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         let (outbound, inbox) = mpsc::channel(MAX_OUTBOUND_QUEUE);
         let writer = tokio::spawn(write_outbound(sink, inbox));
 
-        let issued_at = now_unix_ms();
-        let mut session = Session::new(&hello, issued_at);
+        let mut session = Session::new(&hello);
         let greeting = binary_frame(&hello_envelope(hello, issued_at));
         if outbound.send(greeting).await.is_ok() {
             debug!("socket established");

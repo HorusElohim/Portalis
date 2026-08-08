@@ -14,6 +14,7 @@ The architecture and migration contract live in [`SPEC.md`](SPEC.md).
 - `crates/server-core`: transport-independent server rules.
 - `apps/server`: `config`, `state`, `shutdown`, `health`, `messages`, `socket`.
 - `proto`: authoritative protobuf schemas.
+- `demo`: runnable examples — see [`demo/README.md`](demo/README.md).
 
 Deterministic rules live in their own modules and are covered by tests; the
 socket plumbing they drive (`apps/server/src/socket.rs`, `crates/client/src/
@@ -37,6 +38,12 @@ buf breaking --against '../.git#subdir=portalis-nexus,ref=main'
 
 Until the schema is released on `main`, compare against the previous commit
 instead: `buf breaking --against '../.git#subdir=portalis-nexus,ref=HEAD~1'`.
+
+See it work end to end, server and clients in one process:
+
+```sh
+cargo run -p portalis-nexus-demo
+```
 
 Run the server:
 

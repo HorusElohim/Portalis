@@ -27,12 +27,17 @@ pub struct Session {
 impl Session {
     /// Starts a session from the hello the connection was greeted with.
     ///
+    /// The challenge's issue time is read from the hello rather than the clock,
+    /// because the client signs the timestamp the hello carried. Taking a
+    /// second clock reading here would make every signature on this connection
+    /// fail whenever the two readings straddled a millisecond.
+    ///
     /// # Panics
     ///
     /// Panics when the hello was not built by this server, which would mean
     /// its fixed-size fields are the wrong length.
     #[must_use]
-    pub fn new(hello: &ServerHello, issued_at_unix_ms: u64) -> Self {
+    pub fn new(hello: &ServerHello) -> Self {
         let connection_id = hello
             .connection_id
             .as_slice()
@@ -44,7 +49,7 @@ impl Session {
             .try_into()
             .expect("a server-built hello has a fixed-size challenge");
         Self {
-            challenge: IssuedChallenge::new(connection_id, challenge, issued_at_unix_ms),
+            challenge: IssuedChallenge::new(connection_id, challenge, hello.server_time_unix_ms),
             identity: None,
         }
     }
@@ -309,7 +314,7 @@ mod tests {
     async fn registering_binds_the_connection_to_its_identity() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
         assert!(!session.is_authenticated());
         assert!(session.identity().is_none());
         let request = register_envelope(&hello, "Ada", &key(7));
@@ -332,7 +337,7 @@ mod tests {
     async fn a_challenge_is_spent_once_even_on_a_second_command() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
         session
             .respond(
                 &identities,
@@ -358,7 +363,7 @@ mod tests {
     async fn an_expired_challenge_is_refused() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
 
         let reply = session
             .respond(
@@ -377,7 +382,7 @@ mod tests {
     async fn an_unsigned_command_is_refused_without_spending_the_challenge() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
         let request = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
@@ -408,7 +413,7 @@ mod tests {
     async fn a_signature_for_another_server_is_refused() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
 
         let reply = session
             .respond(
@@ -426,7 +431,7 @@ mod tests {
     async fn a_revoked_device_is_unauthorized() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
         session
             .respond(
                 &identities,
@@ -442,7 +447,7 @@ mod tests {
 
         // A fresh connection carries a fresh challenge.
         let next_hello = greeting();
-        let mut next = Session::new(&next_hello, NOW);
+        let mut next = Session::new(&next_hello);
         let reply = next
             .respond(
                 &identities,
@@ -459,7 +464,7 @@ mod tests {
     async fn registering_a_device_twice_is_rejected_as_invalid() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
         session
             .respond(
                 &identities,
@@ -470,7 +475,7 @@ mod tests {
             .await;
 
         let next_hello = greeting();
-        let mut next = Session::new(&next_hello, NOW);
+        let mut next = Session::new(&next_hello);
         let reply = next
             .respond(
                 &identities,
@@ -487,7 +492,7 @@ mod tests {
     async fn an_unknown_device_is_unauthenticated() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
 
         let reply = session
             .respond(
@@ -506,7 +511,7 @@ mod tests {
     async fn non_identity_requests_fall_through_to_the_stateless_reply() {
         let identities = store();
         let hello = greeting();
-        let mut session = Session::new(&hello, NOW);
+        let mut session = Session::new(&hello);
         let ping = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
@@ -585,5 +590,19 @@ mod tests {
             "storage detail belongs in the logs, not on the wire"
         );
         assert!(refusal_message(&request).is_none());
+    }
+
+    #[test]
+    fn the_challenge_is_issued_at_the_time_the_hello_carries() {
+        let hello = greeting();
+
+        let session = Session::new(&hello);
+
+        // The client signs the hello's timestamp, so the session must verify
+        // against that exact value rather than a second clock reading.
+        assert_eq!(
+            session.challenge.issued_at_unix_ms(),
+            hello.server_time_unix_ms
+        );
     }
 }

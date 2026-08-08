@@ -1,0 +1,19 @@
+[package]
+name = "portalis-nexus-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+default-run = "portalis-nexus-demo"
+
+[dependencies]
+axum.workspace = true
+ed25519-dalek.workspace = true
+portalis-nexus-client.workspace = true
+portalis-nexus-protocol.workspace = true
+portalis-nexus-server.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

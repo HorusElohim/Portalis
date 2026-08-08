@@ -84,6 +84,7 @@ Portalis/
     ├── apps/
     │   └── server/                   # config, state, shutdown, health,
     │                                 #   messages, socket
+    ├── demo/                         # Runnable server/client examples
     ├── tests/
     │   └── integration/              # Real server/client/MongoDB tests
     └── docker/
