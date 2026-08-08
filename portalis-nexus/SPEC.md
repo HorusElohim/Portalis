@@ -83,7 +83,8 @@ Portalis/
     │   └── server-core/              # Pure domain/application logic
     ├── apps/
     │   └── server/                   # config, state, shutdown, health,
-    │                                 #   messages, socket
+    │                                 #   messages, session, socket,
+    │                                 #   handlers/ (one per subsystem)
     ├── demo/                         # Runnable server/client examples
     ├── tests/
     │   └── integration/              # Real server/client/MongoDB tests
@@ -128,6 +129,8 @@ portalis-nexus-client = { path = "../../../portalis-nexus/crates/client" }
 
 ### `server`
 
+- Routes decoded envelopes to a handler module per subsystem, so the socket
+  and the session never learn what a command means.
 - Runs the Tokio multithread runtime.
 - Terminates TLS and WebSocket connections.
 - Implements MongoDB repositories.

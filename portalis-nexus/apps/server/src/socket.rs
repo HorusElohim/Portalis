@@ -13,6 +13,7 @@ use portalis_nexus_protocol::{
 use tokio::sync::{mpsc, watch};
 use tracing::{Instrument, debug, info_span, warn};
 
+use crate::handlers::dispatch;
 use crate::messages::{
     SocketReply, binary_frame, hello_envelope, hello_payload, protocol_error, reply_to,
 };
@@ -88,14 +89,14 @@ async fn read_inbound(
             // they are answered here rather than by the stateless mapping.
             Message::Binary(ref frame) => match decode_frame(frame) {
                 Ok(request) => SocketReply::Send(binary_frame(
-                    &session
-                        .respond(
-                            state.identities(),
-                            state.server_authority(),
-                            &request,
-                            now_unix_ms(),
-                        )
-                        .await,
+                    &dispatch(
+                        session,
+                        state.identities(),
+                        state.server_authority(),
+                        &request,
+                        now_unix_ms(),
+                    )
+                    .await,
                 )),
                 Err(error) => SocketReply::Send(binary_frame(&protocol_error(
                     ProtocolErrorCode::InvalidMessage,

@@ -10,6 +10,7 @@
 //! - [`identity`]: the concrete identity service this server runs.
 //! - [`messages`]: envelope construction and inbound dispatch decisions.
 //! - [`session`]: per-connection authentication state.
+//! - [`handlers`]: domain commands, one module per subsystem.
 //! - `socket`: the WebSocket plumbing those decisions drive.
 
 use axum::Router;
@@ -18,6 +19,7 @@ use tower_http::trace::TraceLayer;
 
 mod config;
 mod environment;
+mod handlers;
 mod health;
 mod identity;
 mod messages;
@@ -28,6 +30,7 @@ mod state;
 
 pub use config::{DEFAULT_LISTEN_ADDR, ServerConfig};
 pub use environment::{OsRandom, SystemClock, now_unix_ms};
+pub use handlers::dispatch;
 pub use health::SERVICE_NAME;
 pub use identity::{DefaultStore, NexusIdentities, identities};
 pub use messages::{

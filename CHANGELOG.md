@@ -57,6 +57,10 @@
   concurrent accepts, rejects, and removals, plus the friend service over it:
   handle resolution, friend listing, and commands that re-read and re-apply
   when another side writes first.
+- Separated the Nexus server's layers: the socket moves bytes, the session
+  holds who a connection is, and a handler module per subsystem decides what a
+  command means. Adding a subsystem no longer changes transport code, and the
+  protobuf build discovers schemas instead of listing them.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket
