@@ -16,7 +16,9 @@ mod signing;
 mod validate;
 
 pub use frame::{FrameError, decode_frame, encode_frame, validate_frame_size};
-pub use ids::{derive_device_id, format_id, new_challenge, new_message_id};
+pub use ids::{
+    UUID_V7_ENTROPY_BYTES, derive_device_id, format_id, new_challenge, new_message_id, user_id_from,
+};
 pub use limits::{
     CHALLENGE_BYTES, CHALLENGE_LIFETIME_MS, CONNECTION_ID_BYTES, CURRENT_PROTOCOL_VERSION,
     DEVICE_ID_BYTES, DEVICE_KEY_BYTES, DISCRIMINATOR_CHARS, MAX_FRAME_BYTES, MAX_OUTBOUND_QUEUE,

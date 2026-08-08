@@ -2,7 +2,33 @@
 
 use uuid::Uuid;
 
-use crate::limits::{CHALLENGE_BYTES, DEVICE_ID_BYTES};
+use crate::limits::{CHALLENGE_BYTES, DEVICE_ID_BYTES, USER_ID_BYTES};
+
+/// Bytes of entropy a `UUIDv7` needs beside its timestamp.
+pub const UUID_V7_ENTROPY_BYTES: usize = 10;
+
+/// Builds a `UUIDv7` from an explicit clock reading and entropy.
+///
+/// `new_message_id` reads the system clock and its own randomness, which makes
+/// it untestable. Identifiers the server allocates for durable records go
+/// through here instead, so a test can pin exactly which one is produced.
+/// Time-ordered identifiers also keep `MongoDB` index writes local.
+#[must_use]
+pub fn user_id_from(
+    now_unix_ms: u64,
+    entropy: &[u8; UUID_V7_ENTROPY_BYTES],
+) -> [u8; USER_ID_BYTES] {
+    let mut id = [0_u8; USER_ID_BYTES];
+    // 48-bit big-endian millisecond timestamp.
+    id[..6].copy_from_slice(&now_unix_ms.to_be_bytes()[2..]);
+    // Version 7 in the high nibble, then entropy.
+    id[6] = 0x70 | (entropy[0] & 0x0f);
+    id[7] = entropy[1];
+    // RFC 4122 variant in the top two bits, then entropy.
+    id[8] = 0x80 | (entropy[2] & 0x3f);
+    id[9..].copy_from_slice(&entropy[3..]);
+    id
+}
 
 /// Domain separator for device identifiers, so the digest of a public key can
 /// never collide with a digest computed for any other purpose.
@@ -61,6 +87,25 @@ mod tests {
         assert_eq!(id, derive_device_id(&key), "derivation must be stable");
         assert_ne!(id, key, "the identifier is derived, not the key itself");
         assert_ne!(id, derive_device_id(&[8_u8; 32]));
+    }
+
+    #[test]
+    fn builds_time_ordered_user_ids_from_injected_inputs() {
+        let entropy = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let id = user_id_from(1_700_000_000_000, &entropy);
+
+        let parsed = Uuid::from_slice(&id).expect("a valid UUID");
+        assert_eq!(parsed.get_version_num(), 7);
+        assert_eq!(parsed.get_variant(), uuid::Variant::RFC4122);
+        assert_eq!(
+            id,
+            user_id_from(1_700_000_000_000, &entropy),
+            "generation must be deterministic"
+        );
+
+        // Time ordering: a later timestamp sorts after an earlier one.
+        let later = user_id_from(1_700_000_000_001, &entropy);
+        assert!(later > id);
     }
 
     #[test]

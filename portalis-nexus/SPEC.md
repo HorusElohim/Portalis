@@ -605,8 +605,22 @@ device identifier, so Nexus labels the same key differently. The derivation is
 deterministic, making the mapping trivial, but the two identifiers should be
 reconciled before M6 integration.
 
-Next: the registration and authentication state machines over repository,
-clock, and random-source traits, then the MongoDB adapters behind them.
+The registration and authentication rules now sit in `IdentityService` over
+repository, clock, and random-source traits, so they are provable without a
+database. `IssuedChallenge` spends a challenge once and expires it after
+`CHALLENGE_LIFETIME_MS`; a wrong guess still spends the attempt, so a
+connection cannot keep probing. Registration verifies the signature before it
+writes anything, refuses a device that is already enrolled, and allocates a
+handle by retrying random discriminators against the unique index rather than
+scanning for a free one. Authentication rejects unknown and revoked devices and
+records the time of each success.
+
+Registration writes a user and its first device separately. The MongoDB adapter
+must wrap that pair in a transaction so a failure cannot leave a user with no
+device.
+
+Next: the MongoDB adapters and their indexes, then wiring registration and
+authentication into the socket and the portable client.
 
 ### M3: Friends and presence
 

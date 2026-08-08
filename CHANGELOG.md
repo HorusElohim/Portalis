@@ -40,6 +40,10 @@
   messages, domain-separated signing payloads that bind a signature to one
   operation, connection, server, and challenge, BLAKE3 device identifiers
   derived from existing Ed25519 keys, and user handle rules.
+- Added the Nexus registration and device-authentication rules over injected
+  storage, time, and randomness: single-use expiring challenges, handle
+  allocation that retries random discriminators against the unique index, and
+  device revocation.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket
