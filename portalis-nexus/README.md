@@ -8,11 +8,16 @@ The architecture and migration contract live in [`SPEC.md`](SPEC.md).
 
 ## Workspace
 
-- `crates/protocol`: protobuf-generated types and validation.
-- `crates/client`: portable WebSocket client and deterministic protocol rules.
+- `crates/protocol`: `limits`, `ids`, `frame`, `validate`.
+- `crates/client`: `error`, `protocol`, `pending`, `reconnect`, `config`, and
+  the `transport` socket actor.
 - `crates/server-core`: transport-independent server rules.
-- `apps/server`: Linux-oriented Axum server.
+- `apps/server`: `config`, `state`, `shutdown`, `health`, `messages`, `socket`.
 - `proto`: authoritative protobuf schemas.
+
+Deterministic rules live in their own modules and are covered by tests; the
+socket plumbing they drive (`apps/server/src/socket.rs`, `crates/client/src/
+transport/`) is excluded from the coverage gate as a platform adapter.
 
 ## Development
 
@@ -42,15 +47,42 @@ The local server also exposes `ws://127.0.0.1:8080/v1/socket`. Clients must
 request the `portalis.protobuf.v1` subprotocol, receive a binary protobuf
 `ServerHello`, and can then exchange correlated `Ping`/`Pong` envelopes.
 
-Use `NexusClient::connect_with_retry(endpoint, &ReconnectPolicy::default())`
-when a caller needs a bounded retry loop. The policy doubles its delay per
-failure, spreads it across 80%-120% with randomized jitter, caps the result at
-its maximum delay, and returns the final transport error once its configured
-maximum attempts are spent.
+## Client
 
-Each socket splits into a read loop and one writer task joined by a queue of at
-most `MAX_OUTBOUND_QUEUE` messages. Filling that queue disconnects the peer, so
-a client that stops reading cannot grow server memory. On `SIGTERM` the server
-finishes its HTTP serve loop and then calls `Shutdown::drain`, which asks every
-live socket to send a close frame and waits up to `GRACEFUL_DRAIN_TIMEOUT` for
-them to finish.
+`NexusClient` is a supervised handle that owns no socket:
+
+```rust
+let client = NexusClient::connect("wss://nexus.example/v1/socket").await?;
+let pong = client.ping(42).await?;      // correlated, timed out, concurrent
+let events = client.events();           // server-initiated envelopes
+client.shutdown().await;                // closes the socket and stops retrying
+```
+
+`connect` makes one handshake attempt, so a misconfigured endpoint fails
+immediately. `connect_with_config` retries the first attempt too, and sets the
+request timeout:
+
+```rust
+let config = ClientConfig {
+    reconnect: ReconnectPolicy::new(initial, maximum, attempts)?,
+    request_timeout: Duration::from_secs(5),
+};
+let client = NexusClient::connect_with_config(endpoint, &config).await?;
+```
+
+A supervisor task rebuilds the connection whenever it ends, so callers do not
+reconnect by hand. `ReconnectPolicy` doubles its delay per failure, spreads it
+across 80%-120% with randomized jitter, and caps the result at its maximum
+delay. In-flight requests fail as soon as their connection drops rather than
+waiting for the timeout.
+
+## Backpressure and shutdown
+
+Both peers split each socket into a read loop and one writer task joined by a
+queue of at most `MAX_OUTBOUND_QUEUE` messages. Filling that queue disconnects
+the peer, so a client that stops reading cannot grow server memory. At most
+`MAX_PENDING_REQUESTS` commands may await a response at once.
+
+On `SIGTERM` the server finishes its HTTP serve loop and then calls
+`Shutdown::drain`, which asks every live socket to send a close frame and waits
+up to `GRACEFUL_DRAIN_TIMEOUT` for them to finish.

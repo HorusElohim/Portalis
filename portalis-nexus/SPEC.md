@@ -1,6 +1,6 @@
 # Portalis Nexus Specification
 
-Status: M1 transport foundation in progress
+Status: M1 connection lifecycle complete; M2 identity next
 
 Protocol: `portalis.protocol.v1`
 
@@ -77,11 +77,13 @@ Portalis/
     │       ├── collections.proto
     │       └── swarm.proto
     ├── crates/
-    │   ├── protocol/                 # Generated types and validation
-    │   ├── client/                   # Portable connection library
+    │   ├── protocol/                 # limits, ids, frame, validate
+    │   ├── client/                   # error, protocol, pending, reconnect,
+    │   │                             #   config, transport/
     │   └── server-core/              # Pure domain/application logic
     ├── apps/
-    │   └── server/                   # Server binary and adapters
+    │   └── server/                   # config, state, shutdown, health,
+    │                                 #   messages, socket
     ├── tests/
     │   └── integration/              # Real server/client/MongoDB tests
     └── docker/
@@ -553,19 +555,25 @@ Gate: CI rejects a deliberate protobuf breaking change.
 
 Gate: multiple clients reconnect after forced server restart without leaks.
 
-Current slice: the `/v1/socket` endpoint enforces the protobuf subprotocol and
-8 MiB frame limit, sends a validated `ServerHello`, and replies to binary
-`Ping` envelopes with correlated `Pong`s. The portable client validates the
-upgrade, hello, frame limit, correlation ID, and nonce. `ReconnectPolicy`
-provides bounded exponential retry with randomized jitter, and two real clients
-reconnect after a forced server restart. Each server socket now splits into a
-read loop and a single writer task joined by one 256-entry outbound queue, so a
-peer that stops reading loses its connection instead of growing server memory.
-`Shutdown` signals every live socket and waits for them to close within
+Status: complete.
+
+The `/v1/socket` endpoint enforces the protobuf subprotocol and 8 MiB frame
+limit, sends a validated `ServerHello`, and replies to binary `Ping` envelopes
+with correlated `Pong`s. Both peers split each socket into a read loop and a
+single writer task joined by one `MAX_OUTBOUND_QUEUE` channel, so a peer that
+stops reading loses its connection instead of growing memory.
+
+The client is a supervised handle that owns no socket. `PendingRequests`
+correlates responses by `correlation_id` within `MAX_PENDING_REQUESTS`, so
+commands are concurrent and independent; a timeout, a dropped connection, and a
+delivered response each remove their waiter exactly once. Envelopes that answer
+no request become events. One supervisor task rebuilds the connection under
+`ReconnectPolicy`, so callers never reconnect by hand.
+
+`Shutdown` signals every live server socket and waits for them to close within
 `GRACEFUL_DRAIN_TIMEOUT`, because upgraded WebSocket connections outlive the
-HTTP serve loop that Axum's graceful shutdown tracks. Client request timeouts,
-a pending-request registry, and continuous connection supervision are the next
-M1 slice.
+HTTP serve loop that Axum's graceful shutdown tracks. Each socket carries a
+`connection_id` tracing span.
 
 ### M2: Identity
 

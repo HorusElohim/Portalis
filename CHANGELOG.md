@@ -32,6 +32,10 @@
   so a peer that stops reading is disconnected instead of growing server memory.
 - Added graceful Nexus socket draining, so shutdown signals every live
   connection and waits for it to close within a bounded timeout.
+- Completed the Nexus connection lifecycle: the client is now a supervised
+  handle that correlates concurrent requests, times them out, reconnects on its
+  own, and exposes server-initiated envelopes as an event stream.
+- Split the Nexus crates into focused modules, each covered by its own tests.
 
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 
