@@ -88,6 +88,7 @@ impl RandomSource for ScriptedRandom {
 #[derive(Debug, Default)]
 pub struct InMemoryIdentities {
     stored: Mutex<Stored>,
+    unavailable: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -155,6 +156,20 @@ impl InMemoryIdentities {
         self.lock().insert_user(user)
     }
 
+    /// Makes every operation fail, for exercising what callers do when the
+    /// store is down. Off by default.
+    pub fn set_unavailable(&self, unavailable: bool) {
+        self.unavailable
+            .store(unavailable, std::sync::atomic::Ordering::Release);
+    }
+
+    /// The failure to report, or `None` while the store is healthy.
+    fn outage(&self) -> Option<RepositoryError> {
+        self.unavailable
+            .load(std::sync::atomic::Ordering::Acquire)
+            .then(|| RepositoryError::Unavailable("the store is switched off".to_owned()))
+    }
+
     fn lock(&self) -> MutexGuard<'_, Stored> {
         self.stored
             .lock()
@@ -167,13 +182,14 @@ impl UserDirectory for InMemoryIdentities {
         &self,
         user_id: UserId,
     ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
+        let outage = self.outage();
         let found = self
             .lock()
             .users
             .iter()
             .find(|user| user.user_id == user_id)
             .cloned();
-        async move { Ok(found) }
+        async move { outage.map_or(Ok(found), Err) }
     }
 
     fn find_user_by_handle(
@@ -181,6 +197,7 @@ impl UserDirectory for InMemoryIdentities {
         normalized_username: &str,
         discriminator: &str,
     ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
+        let outage = self.outage();
         let found = self
             .lock()
             .users
@@ -190,7 +207,7 @@ impl UserDirectory for InMemoryIdentities {
                     && user.discriminator == discriminator
             })
             .cloned();
-        async move { Ok(found) }
+        async move { outage.map_or(Ok(found), Err) }
     }
 }
 
@@ -200,20 +217,23 @@ impl IdentityRepository for InMemoryIdentities {
         user: UserRecord,
         device: DeviceRecord,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-        let result = {
-            let mut stored = self.lock();
-            // Both writes happen under one lock, and the handle is checked
-            // first so a collision never enrols the device.
-            stored
-                .insert_user(user)
-                .and_then(|()| match stored.insert_device(device) {
-                    Ok(()) => Ok(()),
-                    Err(error) => {
-                        stored.users.pop();
-                        Err(error)
-                    }
-                })
-        };
+        let result = self.outage().map_or_else(
+            || {
+                let mut stored = self.lock();
+                // Both writes happen under one lock, and the handle is checked
+                // first so a collision never enrols the device.
+                stored
+                    .insert_user(user)
+                    .and_then(|()| match stored.insert_device(device) {
+                        Ok(()) => Ok(()),
+                        Err(error) => {
+                            stored.users.pop();
+                            Err(error)
+                        }
+                    })
+            },
+            Err,
+        );
         async move { result }
     }
 
@@ -222,8 +242,9 @@ impl IdentityRepository for InMemoryIdentities {
         device_id: DeviceId,
     ) -> impl std::future::Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send
     {
+        let outage = self.outage();
         let found = self.lock().devices.get(&device_id).cloned();
-        async move { Ok(found) }
+        async move { outage.map_or(Ok(found), Err) }
     }
 
     fn touch_device(
@@ -231,10 +252,11 @@ impl IdentityRepository for InMemoryIdentities {
         device_id: DeviceId,
         at_unix_ms: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let outage = self.outage();
         if let Some(device) = self.lock().devices.get_mut(&device_id) {
             device.last_authenticated_at_unix_ms = Some(at_unix_ms);
         }
-        async move { Ok(()) }
+        async move { outage.map_or(Ok(()), Err) }
     }
 
     fn revoke_device(
@@ -242,10 +264,11 @@ impl IdentityRepository for InMemoryIdentities {
         device_id: DeviceId,
         at_unix_ms: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let outage = self.outage();
         if let Some(device) = self.lock().devices.get_mut(&device_id) {
             device.revoked_at_unix_ms = Some(at_unix_ms);
         }
-        async move { Ok(()) }
+        async move { outage.map_or(Ok(()), Err) }
     }
 }
 
@@ -255,8 +278,9 @@ impl FriendRepository for InMemoryIdentities {
         edge: FriendshipEdge,
     ) -> impl std::future::Future<Output = Result<Option<FriendshipRecord>, RepositoryError>> + Send
     {
+        let outage = self.outage();
         let found = self.lock().friendships.get(&edge).cloned();
-        async move { Ok(found) }
+        async move { outage.map_or(Ok(found), Err) }
     }
 
     fn save_friendship(
@@ -264,19 +288,22 @@ impl FriendRepository for InMemoryIdentities {
         record: FriendshipRecord,
         expected_version: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-        let result = {
-            let mut stored = self.lock();
-            let current = stored
-                .friendships
-                .get(&record.edge)
-                .map_or(0, |existing| existing.version);
-            if current == expected_version {
-                stored.friendships.insert(record.edge, record);
-                Ok(())
-            } else {
-                Err(RepositoryError::VersionConflict)
-            }
-        };
+        let result = self.outage().map_or_else(
+            || {
+                let mut stored = self.lock();
+                let current = stored
+                    .friendships
+                    .get(&record.edge)
+                    .map_or(0, |existing| existing.version);
+                if current == expected_version {
+                    stored.friendships.insert(record.edge, record);
+                    Ok(())
+                } else {
+                    Err(RepositoryError::VersionConflict)
+                }
+            },
+            Err,
+        );
         async move { result }
     }
 
@@ -285,6 +312,7 @@ impl FriendRepository for InMemoryIdentities {
         user: UserId,
     ) -> impl std::future::Future<Output = Result<Vec<FriendshipRecord>, RepositoryError>> + Send
     {
+        let outage = self.outage();
         let found: Vec<_> = self
             .lock()
             .friendships
@@ -292,7 +320,7 @@ impl FriendRepository for InMemoryIdentities {
             .filter(|record| record.edge.joins(user))
             .cloned()
             .collect();
-        async move { Ok(found) }
+        async move { outage.map_or(Ok(found), Err) }
     }
 }
 

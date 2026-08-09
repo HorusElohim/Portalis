@@ -85,10 +85,43 @@ where
         peer: UserId,
         action: FriendAction,
     ) -> Result<FriendshipRecord, FriendError> {
+        Ok(self.apply(actor, peer, action).await?.0)
+    }
+
+    /// Applies one friend action and reports the friendship as `actor` sees it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FriendError`] for the same reasons as [`Self::command`].
+    pub async fn command_summary(
+        &self,
+        actor: UserId,
+        peer: UserId,
+        action: FriendAction,
+    ) -> Result<FriendSummary, FriendError> {
+        let (friendship, peer) = self.apply(actor, peer, action).await?;
+        Ok(FriendSummary {
+            peer,
+            state: friendship.state,
+            requested_by_me: friendship.requested_by == actor,
+        })
+    }
+
+    /// Applies an action, returning the friendship and the peer behind it.
+    ///
+    /// The peer is carried out rather than looked up again: proving they exist
+    /// is already part of applying the command, and a second read could only
+    /// disagree with the first.
+    async fn apply(
+        &self,
+        actor: UserId,
+        peer: UserId,
+        action: FriendAction,
+    ) -> Result<(FriendshipRecord, UserRecord), FriendError> {
         let edge = FriendshipEdge::between(actor, peer)?;
-        if self.store.find_user(peer).await?.is_none() {
+        let Some(peer_record) = self.store.find_user(peer).await? else {
             return Err(FriendError::UnknownUser);
-        }
+        };
 
         for _ in 0..COMMAND_ATTEMPTS {
             let current = self.store.find_friendship(edge).await?;
@@ -101,7 +134,10 @@ where
                 // Already where the action would take it. Repeating a command
                 // must not bump the version or fail. Only an existing
                 // friendship can report no change.
-                return Ok(current.expect("an unchanged transition implies a friendship"));
+                return Ok((
+                    current.expect("an unchanged transition implies a friendship"),
+                    peer_record,
+                ));
             };
 
             let now = self.clock.now_unix_ms();
@@ -120,7 +156,7 @@ where
                 .save_friendship(updated.clone(), expected_version)
                 .await
             {
-                Ok(()) => return Ok(updated),
+                Ok(()) => return Ok((updated, peer_record)),
                 Err(RepositoryError::VersionConflict) => {}
                 Err(error) => return Err(error.into()),
             }
@@ -599,5 +635,20 @@ mod tests {
                 "FindUser".to_owned()
             )))
         );
+    }
+
+    #[tokio::test]
+    async fn a_command_reports_the_friendship_as_the_actor_sees_it() {
+        let service = service();
+
+        let summary = service
+            .command_summary(ADA, GRACE, FriendAction::Request)
+            .await
+            .expect("request sent");
+
+        assert_eq!(summary.peer.user_id, GRACE);
+        assert_eq!(summary.peer.username, "Grace");
+        assert_eq!(summary.state, FriendshipState::Pending);
+        assert!(summary.requested_by_me);
     }
 }

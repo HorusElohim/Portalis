@@ -35,7 +35,7 @@ pub use health::SERVICE_NAME;
 pub use identity::{DefaultStore, NexusIdentities, identities};
 pub use messages::{
     SocketReply, authenticated_reply, binary_frame, hello_envelope, hello_payload, protocol_error,
-    reply_to, response_for, server_hello,
+    reply_to, reply_with, response_for, server_hello,
 };
 pub use session::Session;
 pub use shutdown::{GRACEFUL_DRAIN_TIMEOUT, Shutdown};

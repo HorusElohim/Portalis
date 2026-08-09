@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use portalis_nexus_protocol::CURRENT_PROTOCOL_VERSION;
-use portalis_nexus_server_core::ProtocolPolicy;
+use portalis_nexus_server_core::{PresenceRegistry, ProtocolPolicy};
 
 use crate::config::DEFAULT_SERVER_AUTHORITY;
-use crate::identity::{DefaultStore, NexusIdentities, identities};
+use crate::identity::{DefaultStore, NexusFriends, NexusIdentities, friends, identities};
 use crate::shutdown::Shutdown;
 
 #[derive(Clone)]
@@ -15,7 +15,10 @@ pub struct AppState {
     ready: Arc<AtomicBool>,
     protocol_policy: ProtocolPolicy,
     shutdown: Shutdown,
+    store: DefaultStore,
     identities: Arc<NexusIdentities<DefaultStore>>,
+    friends: Arc<NexusFriends<DefaultStore>>,
+    presence: Arc<PresenceRegistry>,
     /// The host clients believe they are talking to. Signatures are bound to
     /// it, so a signature captured by one deployment cannot be replayed
     /// against another.
@@ -35,6 +38,9 @@ impl std::fmt::Debug for AppState {
 
 impl Default for AppState {
     fn default() -> Self {
+        // One store behind both services, so a user registered through
+        // identity is immediately findable as a friend.
+        let store = DefaultStore::default();
         Self {
             ready: Arc::new(AtomicBool::new(false)),
             protocol_policy: ProtocolPolicy::new(
@@ -43,7 +49,10 @@ impl Default for AppState {
             )
             .expect("the current protocol version is a valid range"),
             shutdown: Shutdown::default(),
-            identities: Arc::new(identities(DefaultStore::default())),
+            identities: Arc::new(identities(Arc::clone(&store))),
+            friends: Arc::new(friends(Arc::clone(&store))),
+            store,
+            presence: Arc::new(PresenceRegistry::default()),
             server_authority: Arc::from(DEFAULT_SERVER_AUTHORITY),
         }
     }
@@ -65,6 +74,22 @@ impl AppState {
     #[must_use]
     pub fn identities(&self) -> &NexusIdentities<DefaultStore> {
         &self.identities
+    }
+
+    #[must_use]
+    pub fn friends(&self) -> &NexusFriends<DefaultStore> {
+        &self.friends
+    }
+
+    /// The store behind both services, so a caller can seed or fault it.
+    #[must_use]
+    pub fn store(&self) -> &DefaultStore {
+        &self.store
+    }
+
+    #[must_use]
+    pub fn presence(&self) -> &PresenceRegistry {
+        &self.presence
     }
 
     pub fn mark_ready(&self) {
@@ -100,6 +125,19 @@ mod tests {
 
         assert!(state.is_ready());
         assert!(!state.shutdown().is_draining());
+    }
+
+    #[tokio::test]
+    async fn one_store_backs_both_identity_and_friend_rules() {
+        let state = AppState::default();
+
+        // Nobody is online and nothing is stored until a client arrives.
+        assert_eq!(state.presence().online_users(), 0);
+        assert!(!state.presence().is_online([1; 16]));
+        assert_eq!(
+            state.friends().list([1; 16]).await.expect("listed"),
+            Vec::new()
+        );
     }
 
     #[test]

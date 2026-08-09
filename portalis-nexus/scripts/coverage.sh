@@ -7,6 +7,9 @@ set -euo pipefail
 #   crates/client/src/transport  socket actor driven by covered decisions
 #   demo/                        runnable examples, exercised by running them
 #   generated protobuf code and integration tests
+# Each crate is compiled twice, with and without cfg(test), and both builds are
+# measured. A path reached only by unit tests or only by integration tests is
+# therefore uncovered in the other build, so both layers exercise the same code.
 cargo llvm-cov \
   --workspace \
   --all-features \

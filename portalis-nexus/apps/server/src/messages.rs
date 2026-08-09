@@ -88,6 +88,17 @@ pub fn protocol_error(
     }
 }
 
+/// Answers `request` with `payload`, correlated to it.
+#[must_use]
+pub fn reply_with(request: &Envelope, payload: Payload, sent_at_unix_ms: u64) -> Envelope {
+    Envelope {
+        message_id: new_message_id(),
+        correlation_id: request.message_id.clone(),
+        sent_at_unix_ms,
+        payload: Some(payload),
+    }
+}
+
 /// Confirms which identity a connection is now bound to.
 #[must_use]
 pub fn authenticated_reply(

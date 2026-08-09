@@ -61,6 +61,9 @@
   holds who a connection is, and a handler module per subsystem decides what a
   command means. Adding a subsystem no longer changes transport code, and the
   protobuf build discovers schemas instead of listing them.
+- Added Nexus presence aggregation across a user's devices, and served handle
+  resolution, friend commands, and friend listing over the socket, verified by
+  two clients becoming friends end to end.
 - Added transport integration suites for connection, reconnect, and event
   behaviour, which caught three client defects: a shutdown requested before the
   supervisor first ran was never observed, tearing down a peer-closed socket

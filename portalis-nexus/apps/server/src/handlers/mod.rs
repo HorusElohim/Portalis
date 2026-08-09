@@ -7,28 +7,28 @@
 
 use portalis_nexus_protocol::v1::Envelope;
 use portalis_nexus_protocol::v1::envelope::Payload;
-use portalis_nexus_server_core::IdentityRepository;
 
-use crate::identity::NexusIdentities;
 use crate::messages::response_for;
 use crate::session::Session;
+use crate::state::AppState;
 
+pub(crate) mod friends;
 pub(crate) mod identity;
 
 /// Answers one decoded request on behalf of its connection.
-pub async fn dispatch<S: IdentityRepository>(
+pub async fn dispatch(
     session: &mut Session,
-    identities: &NexusIdentities<S>,
-    server_authority: &str,
+    state: &AppState,
     request: &Envelope,
     now_unix_ms: u64,
 ) -> Envelope {
+    let authority = state.server_authority();
     match &request.payload {
         Some(Payload::RegisterUser(register)) => {
             identity::claim(
                 session,
-                identities,
-                server_authority,
+                state.identities(),
+                authority,
                 request,
                 register,
                 now_unix_ms,
@@ -38,13 +38,22 @@ pub async fn dispatch<S: IdentityRepository>(
         Some(Payload::AuthenticateDevice(authenticate)) => {
             identity::prove(
                 session,
-                identities,
-                server_authority,
+                state.identities(),
+                authority,
                 request,
                 authenticate,
                 now_unix_ms,
             )
             .await
+        }
+        Some(Payload::ResolveHandleRequest(lookup)) => {
+            friends::resolve(session, state.friends(), request, lookup, now_unix_ms).await
+        }
+        Some(Payload::FriendCommand(command)) => {
+            friends::command(session, state.friends(), request, command, now_unix_ms).await
+        }
+        Some(Payload::ListFriendsRequest(_)) => {
+            friends::list(session, state.friends(), request, now_unix_ms).await
         }
         // Ping and anything this version does not accept yet.
         _ => response_for(request, now_unix_ms),

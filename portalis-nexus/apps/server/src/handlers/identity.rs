@@ -2,18 +2,17 @@
 
 use portalis_nexus_protocol::v1::{AuthenticateDevice, Envelope, ProtocolErrorCode, RegisterUser};
 use portalis_nexus_server_core::{
-    AuthenticationRequest, ChallengeError, Identity, IdentityError, IdentityRepository,
-    RegistrationRequest,
+    AuthenticationRequest, ChallengeError, Identity, IdentityError, RegistrationRequest,
 };
 
-use crate::identity::NexusIdentities;
+use crate::identity::{DefaultStore, NexusIdentities};
 use crate::messages::{authenticated_reply, protocol_error};
 use crate::session::Session;
 
 /// Claims a username and enrols the signing device as its first.
-pub(crate) async fn claim<S: IdentityRepository>(
+pub(crate) async fn claim(
     session: &mut Session,
-    identities: &NexusIdentities<S>,
+    identities: &NexusIdentities<DefaultStore>,
     server_authority: &str,
     request: &Envelope,
     register: &RegisterUser,
@@ -34,9 +33,9 @@ pub(crate) async fn claim<S: IdentityRepository>(
 }
 
 /// Proves this connection holds the key of an authorized device.
-pub(crate) async fn prove<S: IdentityRepository>(
+pub(crate) async fn prove(
     session: &mut Session,
-    identities: &NexusIdentities<S>,
+    identities: &NexusIdentities<DefaultStore>,
     server_authority: &str,
     request: &Envelope,
     authenticate: &AuthenticateDevice,
@@ -116,18 +115,19 @@ mod tests {
         new_message_id, registration_payload,
     };
     use portalis_nexus_server_core::HandleError;
-    use portalis_nexus_server_core::{InMemoryIdentities, ProtocolPolicy, RepositoryError};
+    use portalis_nexus_server_core::{ProtocolPolicy, RepositoryError};
 
     use super::*;
     use crate::handlers::dispatch;
-    use crate::identity::identities;
     use crate::messages::hello_payload;
+    use crate::state::AppState;
 
     const NOW: u64 = 1_700_000_000_000;
     const AUTHORITY: &str = "nexus.portalis.test";
 
-    fn store() -> NexusIdentities<InMemoryIdentities> {
-        identities(InMemoryIdentities::default())
+    /// A server bound to the authority these tests sign against.
+    fn server() -> AppState {
+        AppState::default().with_server_authority(AUTHORITY)
     }
 
     /// The message a reply carries, or `None` when it is not a refusal.
@@ -211,14 +211,14 @@ mod tests {
 
     #[tokio::test]
     async fn registering_binds_the_connection_to_its_identity() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
         assert!(!session.is_authenticated());
         assert!(session.identity().is_none());
         let request = register_envelope(&hello, "Ada", &key(7));
 
-        let reply = dispatch(&mut session, &identities, AUTHORITY, &request, NOW + 1).await;
+        let reply = dispatch(&mut session, &state, &request, NOW + 1).await;
 
         let identity = authenticated(&reply).expect("an Authenticated reply");
         assert_eq!(identity.username, "Ada");
@@ -232,13 +232,12 @@ mod tests {
 
     #[tokio::test]
     async fn a_challenge_is_spent_once_even_on_a_second_command() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
         dispatch(
             &mut session,
-            &identities,
-            AUTHORITY,
+            &state,
             &register_envelope(&hello, "Ada", &key(7)),
             NOW,
         )
@@ -246,8 +245,7 @@ mod tests {
 
         let reply = dispatch(
             &mut session,
-            &identities,
-            AUTHORITY,
+            &state,
             &authenticate_envelope(&hello, &key(7)),
             NOW,
         )
@@ -258,14 +256,13 @@ mod tests {
 
     #[tokio::test]
     async fn an_expired_challenge_is_refused() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
 
         let reply = dispatch(
             &mut session,
-            &identities,
-            AUTHORITY,
+            &state,
             &register_envelope(&hello, "Ada", &key(7)),
             NOW + CHALLENGE_LIFETIME_MS + 1,
         )
@@ -277,7 +274,7 @@ mod tests {
 
     #[tokio::test]
     async fn an_unsigned_command_is_refused_without_spending_the_challenge() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
         let request = Envelope {
@@ -291,14 +288,13 @@ mod tests {
             })),
         };
 
-        let reply = dispatch(&mut session, &identities, AUTHORITY, &request, NOW).await;
+        let reply = dispatch(&mut session, &state, &request, NOW).await;
 
         assert_eq!(refusal(&reply), Some(ProtocolErrorCode::Unauthenticated));
         // The challenge survives, so an honest retry still works.
         let retry = dispatch(
             &mut session,
-            &identities,
-            AUTHORITY,
+            &state,
             &register_envelope(&hello, "Ada", &key(7)),
             NOW,
         )
@@ -308,14 +304,15 @@ mod tests {
 
     #[tokio::test]
     async fn a_signature_for_another_server_is_refused() {
-        let identities = store();
+        // The client signs for AUTHORITY; this server answers for a different
+        // host, so the signature cannot verify against it.
+        let state = AppState::default().with_server_authority("nexus.attacker.test");
         let hello = greeting();
         let mut session = Session::new(&hello);
 
         let reply = dispatch(
             &mut session,
-            &identities,
-            "nexus.attacker.test",
+            &state,
             &register_envelope(&hello, "Ada", &key(7)),
             NOW,
         )
@@ -326,18 +323,18 @@ mod tests {
 
     #[tokio::test]
     async fn a_revoked_device_is_unauthorized() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
         dispatch(
             &mut session,
-            &identities,
-            AUTHORITY,
+            &state,
             &register_envelope(&hello, "Ada", &key(7)),
             NOW,
         )
         .await;
-        identities
+        state
+            .identities()
             .revoke_device(derive_device_id(&key(7).verifying_key().to_bytes()))
             .await
             .expect("revocation succeeds");
@@ -347,8 +344,7 @@ mod tests {
         let mut next = Session::new(&next_hello);
         let reply = dispatch(
             &mut next,
-            &identities,
-            AUTHORITY,
+            &state,
             &authenticate_envelope(&next_hello, &key(7)),
             NOW,
         )
@@ -359,13 +355,12 @@ mod tests {
 
     #[tokio::test]
     async fn registering_a_device_twice_is_rejected_as_invalid() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
         dispatch(
             &mut session,
-            &identities,
-            AUTHORITY,
+            &state,
             &register_envelope(&hello, "Ada", &key(7)),
             NOW,
         )
@@ -375,8 +370,7 @@ mod tests {
         let mut next = Session::new(&next_hello);
         let reply = dispatch(
             &mut next,
-            &identities,
-            AUTHORITY,
+            &state,
             &register_envelope(&next_hello, "Grace", &key(7)),
             NOW,
         )
@@ -387,14 +381,13 @@ mod tests {
 
     #[tokio::test]
     async fn an_unknown_device_is_unauthenticated() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
 
         let reply = dispatch(
             &mut session,
-            &identities,
-            AUTHORITY,
+            &state,
             &authenticate_envelope(&hello, &key(11)),
             NOW,
         )
@@ -406,7 +399,7 @@ mod tests {
 
     #[tokio::test]
     async fn non_identity_requests_fall_through_to_the_stateless_reply() {
-        let identities = store();
+        let state = server();
         let hello = greeting();
         let mut session = Session::new(&hello);
         let ping = Envelope {
@@ -416,7 +409,7 @@ mod tests {
             payload: Some(Payload::Ping(Ping { nonce: 5 })),
         };
 
-        let reply = dispatch(&mut session, &identities, AUTHORITY, &ping, NOW).await;
+        let reply = dispatch(&mut session, &state, &ping, NOW).await;
 
         assert_eq!(reply.payload, Some(Payload::Pong(Pong { nonce: 5 })));
         assert!(refusal(&reply).is_none());

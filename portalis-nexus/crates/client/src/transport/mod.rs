@@ -3,7 +3,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use portalis_nexus_protocol::v1::{Authenticated, Envelope, ServerHello};
+use portalis_nexus_protocol::v1::{
+    Authenticated, Envelope, Friend, FriendAction, ResolveHandleResponse, ServerHello,
+};
 use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
@@ -13,7 +15,10 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::config::ClientConfig;
-use crate::protocol::{validate_authenticated, validate_pong};
+use crate::protocol::{
+    validate_authenticated, validate_friend_event, validate_friend_list, validate_pong,
+    validate_resolved,
+};
 use crate::signer::DeviceSigner;
 use crate::transport::connection::{Shared, start_connection, supervise};
 use crate::transport::handshake::{handshake, handshake_with_retry};
@@ -209,6 +214,49 @@ impl NexusClient {
     #[must_use]
     pub fn authority(&self) -> &str {
         &self.shared.server_authority
+    }
+
+    /// Finds the user behind a handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the server refuses or cannot answer.
+    pub async fn resolve_handle(
+        &self,
+        handle: &str,
+    ) -> Result<ResolveHandleResponse, TransportError> {
+        let request = self.shared.protocol.resolve_handle(handle, now_unix_ms());
+        let response = self.request(&request).await?;
+        Ok(validate_resolved(&request, &response)?)
+    }
+
+    /// Applies a friend action against `peer`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the server refuses or cannot answer.
+    pub async fn friend_command(
+        &self,
+        action: FriendAction,
+        peer: &[u8],
+    ) -> Result<Friend, TransportError> {
+        let request = self
+            .shared
+            .protocol
+            .friend_command(action, peer, now_unix_ms());
+        let response = self.request(&request).await?;
+        Ok(validate_friend_event(&request, &response)?)
+    }
+
+    /// Lists every friendship this user is part of.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the server refuses or cannot answer.
+    pub async fn list_friends(&self) -> Result<Vec<Friend>, TransportError> {
+        let request = self.shared.protocol.list_friends(now_unix_ms());
+        let response = self.request(&request).await?;
+        Ok(validate_friend_list(&request, &response)?)
     }
 
     /// Sends a ping and verifies the correlated pong response.

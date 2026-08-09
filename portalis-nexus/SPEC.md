@@ -675,8 +675,18 @@ lookup, and listing carries the peer behind each edge along with who asked.
 `UserDirectory` is split out of `IdentityRepository`: friends and presence read
 users but never enrol or revoke devices, so they do not depend on that surface.
 
-Next: friend-only presence over live connections, then the socket commands for
-resolving handles, acting on friendships, and listing them.
+`PresenceRegistry` derives who is online from live connections rather than
+storing it: a user is online while at least one device is connected, and only
+the transitions are reported, so callers fan out one event per real change
+rather than one per device. Coming back clears the last-seen time.
+
+Resolving handles, acting on friendships, and listing them are served over the
+socket, refused for a connection that has not authenticated, and answered with
+typed codes: invalid message for a rejected action, rate limited when a
+contended edge exhausts its retries, and a generic internal error that keeps
+storage detail off the wire. Two clients become friends end to end.
+
+Next: fanning presence out to accepted friends only, which completes M3.
 
 ### M4: Collections
 

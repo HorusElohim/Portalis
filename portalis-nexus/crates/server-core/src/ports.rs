@@ -154,3 +154,80 @@ pub trait FriendRepository: Send + Sync {
         user: UserId,
     ) -> impl Future<Output = Result<Vec<FriendshipRecord>, RepositoryError>> + Send;
 }
+
+// Shared-ownership delegations, so one store can back several services. The
+// server holds a single identity store that both identity and friend rules
+// read, which is why these exist.
+impl<T: UserDirectory> UserDirectory for std::sync::Arc<T> {
+    fn find_user(
+        &self,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
+        T::find_user(self, user_id)
+    }
+
+    fn find_user_by_handle(
+        &self,
+        normalized_username: &str,
+        discriminator: &str,
+    ) -> impl Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send {
+        T::find_user_by_handle(self, normalized_username, discriminator)
+    }
+}
+
+impl<T: IdentityRepository> IdentityRepository for std::sync::Arc<T> {
+    fn insert_registration(
+        &self,
+        user: UserRecord,
+        device: DeviceRecord,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::insert_registration(self, user, device)
+    }
+
+    fn find_device(
+        &self,
+        device_id: DeviceId,
+    ) -> impl Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send {
+        T::find_device(self, device_id)
+    }
+
+    fn touch_device(
+        &self,
+        device_id: DeviceId,
+        at_unix_ms: u64,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::touch_device(self, device_id, at_unix_ms)
+    }
+
+    fn revoke_device(
+        &self,
+        device_id: DeviceId,
+        at_unix_ms: u64,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::revoke_device(self, device_id, at_unix_ms)
+    }
+}
+
+impl<T: FriendRepository> FriendRepository for std::sync::Arc<T> {
+    fn find_friendship(
+        &self,
+        edge: FriendshipEdge,
+    ) -> impl Future<Output = Result<Option<FriendshipRecord>, RepositoryError>> + Send {
+        T::find_friendship(self, edge)
+    }
+
+    fn save_friendship(
+        &self,
+        record: FriendshipRecord,
+        expected_version: u64,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::save_friendship(self, record, expected_version)
+    }
+
+    fn list_friendships(
+        &self,
+        user: UserId,
+    ) -> impl Future<Output = Result<Vec<FriendshipRecord>, RepositoryError>> + Send {
+        T::list_friendships(self, user)
+    }
+}

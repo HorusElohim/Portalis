@@ -2,8 +2,9 @@
 
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
-    AuthenticateDevice, Authenticated, Envelope, Ping, Pong, ProtocolErrorCode, RegisterUser,
-    ServerHello,
+    AuthenticateDevice, Authenticated, Envelope, Friend, FriendAction, FriendCommand,
+    ListFriendsRequest, ListFriendsResponse, Ping, Pong, ProtocolErrorCode, RegisterUser,
+    ResolveHandleRequest, ResolveHandleResponse, ServerHello,
 };
 use portalis_nexus_protocol::{
     CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, new_message_id,
@@ -73,6 +74,52 @@ impl ClientProtocol {
                 device_public_key: public_key.to_vec(),
                 signature: signer.sign(&payload).to_vec(),
             })),
+        }
+    }
+
+    /// Builds a request for the user behind a handle.
+    #[must_use]
+    pub fn resolve_handle(&self, handle: &str, sent_at_unix_ms: u64) -> Envelope {
+        Self::envelope(
+            Payload::ResolveHandleRequest(ResolveHandleRequest {
+                handle: handle.to_owned(),
+            }),
+            sent_at_unix_ms,
+        )
+    }
+
+    /// Builds a friend action against `peer`.
+    #[must_use]
+    pub fn friend_command(
+        &self,
+        action: FriendAction,
+        peer: &[u8],
+        sent_at_unix_ms: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::FriendCommand(FriendCommand {
+                action: action as i32,
+                peer_user_id: peer.to_vec(),
+            }),
+            sent_at_unix_ms,
+        )
+    }
+
+    /// Builds a request for every friendship this user is part of.
+    #[must_use]
+    pub fn list_friends(&self, sent_at_unix_ms: u64) -> Envelope {
+        Self::envelope(
+            Payload::ListFriendsRequest(ListFriendsRequest {}),
+            sent_at_unix_ms,
+        )
+    }
+
+    fn envelope(payload: Payload, sent_at_unix_ms: u64) -> Envelope {
+        Envelope {
+            message_id: new_message_id(),
+            correlation_id: Vec::new(),
+            sent_at_unix_ms,
+            payload: Some(payload),
         }
     }
 
@@ -172,9 +219,91 @@ pub fn validate_authenticated(
     }
 }
 
+/// Reads the payload a server answered with, turning a refusal into an error.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not correlated to the request, or
+/// when the server refused it.
+pub fn validate_reply<'a>(
+    request: &Envelope,
+    response: &'a Envelope,
+) -> Result<&'a Payload, ClientError> {
+    if response.correlation_id != request.message_id {
+        return Err(ClientError::InvalidCorrelation);
+    }
+    match &response.payload {
+        Some(Payload::ProtocolError(refusal)) => Err(ClientError::Refused {
+            code: ProtocolErrorCode::try_from(refusal.code)
+                .unwrap_or(ProtocolErrorCode::Unspecified),
+            message: refusal.message.clone(),
+        }),
+        Some(payload) => Ok(payload),
+        None => Err(ClientError::UnexpectedEnvelope {
+            expected: "a payload",
+        }),
+    }
+}
+
+/// Reads a resolved handle.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not a resolved handle.
+pub fn validate_resolved(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<ResolveHandleResponse, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::ResolveHandleResponse(resolved) => Ok(resolved.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "ResolveHandleResponse",
+        }),
+    }
+}
+
+/// Reads the friendship a command produced.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not a friend event.
+pub fn validate_friend_event(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<Friend, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::FriendEvent(event) => {
+            event.friend.clone().ok_or(ClientError::UnexpectedEnvelope {
+                expected: "a friend",
+            })
+        }
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "FriendEvent",
+        }),
+    }
+}
+
+/// Reads a friend list.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not a friend list.
+pub fn validate_friend_list(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<Vec<Friend>, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::ListFriendsResponse(ListFriendsResponse { friends }) => Ok(friends.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "ListFriendsResponse",
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use portalis_nexus_protocol::new_challenge;
+    use portalis_nexus_protocol::v1::FriendEvent;
     use portalis_nexus_protocol::v1::ProtocolRange;
 
     use super::*;
@@ -317,6 +446,13 @@ mod tests {
         }
     }
 
+    fn command_of(envelope: &Envelope) -> Option<FriendCommand> {
+        match &envelope.payload {
+            Some(Payload::FriendCommand(command)) => Some(command.clone()),
+            _ => None,
+        }
+    }
+
     fn proof_of(envelope: &Envelope) -> Option<AuthenticateDevice> {
         match &envelope.payload {
             Some(Payload::AuthenticateDevice(proof)) => Some(proof.clone()),
@@ -443,6 +579,163 @@ mod tests {
             Err(ClientError::Refused {
                 code: ProtocolErrorCode::Unspecified,
                 message: "from a newer server".to_owned(),
+            })
+        );
+    }
+
+    fn resolved_envelope(request: &Envelope) -> Envelope {
+        Envelope {
+            message_id: new_message_id(),
+            correlation_id: request.message_id.clone(),
+            sent_at_unix_ms: 1,
+            payload: Some(Payload::ResolveHandleResponse(ResolveHandleResponse {
+                user_id: vec![2; 16],
+                username: "Grace".to_owned(),
+                discriminator: "ABCDE".to_owned(),
+            })),
+        }
+    }
+
+    fn answered_with(request: &Envelope, payload: Payload) -> Envelope {
+        Envelope {
+            message_id: new_message_id(),
+            correlation_id: request.message_id.clone(),
+            sent_at_unix_ms: 1,
+            payload: Some(payload),
+        }
+    }
+
+    #[test]
+    fn builds_the_friend_commands() {
+        let client = ClientProtocol::default();
+
+        let lookup = client.resolve_handle("grace#ABCDE", 5);
+        assert_eq!(lookup.sent_at_unix_ms, 5);
+        assert_eq!(lookup.validate(), Ok(()));
+        assert_eq!(
+            lookup.payload,
+            Some(Payload::ResolveHandleRequest(ResolveHandleRequest {
+                handle: "grace#ABCDE".to_owned()
+            }))
+        );
+
+        let command = client.friend_command(FriendAction::Accept, &[2; 16], 6);
+        let action = command_of(&command).expect("a friend command");
+        assert_eq!(action.action(), FriendAction::Accept);
+        assert_eq!(action.peer_user_id, vec![2; 16]);
+        assert!(command_of(&lookup).is_none());
+
+        let listing = client.list_friends(7);
+        assert_eq!(
+            listing.payload,
+            Some(Payload::ListFriendsRequest(ListFriendsRequest {}))
+        );
+        assert_eq!(listing.validate(), Ok(()));
+    }
+
+    #[test]
+    fn reads_the_answers_to_friend_commands() {
+        let request = ping_envelope(1);
+
+        assert_eq!(
+            validate_resolved(&request, &resolved_envelope(&request))
+                .expect("resolved")
+                .username,
+            "Grace"
+        );
+
+        let friend = Friend {
+            user_id: vec![2; 16],
+            username: "Grace".to_owned(),
+            discriminator: "ABCDE".to_owned(),
+            state: 3,
+            requested_by_me: true,
+        };
+        let event = answered_with(
+            &request,
+            Payload::FriendEvent(FriendEvent {
+                friend: Some(friend.clone()),
+            }),
+        );
+        assert_eq!(validate_friend_event(&request, &event), Ok(friend.clone()));
+
+        let listing = answered_with(
+            &request,
+            Payload::ListFriendsResponse(ListFriendsResponse {
+                friends: vec![friend.clone()],
+            }),
+        );
+        assert_eq!(validate_friend_list(&request, &listing), Ok(vec![friend]));
+    }
+
+    #[test]
+    fn rejects_answers_that_do_not_fit_the_question() {
+        let request = ping_envelope(1);
+        let pong = answered_with(&request, Payload::Pong(Pong { nonce: 1 }));
+
+        assert_eq!(
+            validate_resolved(&request, &pong),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "ResolveHandleResponse"
+            })
+        );
+        assert_eq!(
+            validate_friend_event(&request, &pong),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "FriendEvent"
+            })
+        );
+        assert_eq!(
+            validate_friend_list(&request, &pong),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "ListFriendsResponse"
+            })
+        );
+
+        // A friend event with no friend in it is not an answer either.
+        let empty = answered_with(&request, Payload::FriendEvent(FriendEvent { friend: None }));
+        assert_eq!(
+            validate_friend_event(&request, &empty),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "a friend"
+            })
+        );
+    }
+
+    #[test]
+    fn a_reply_must_be_correlated_answered_and_not_a_refusal() {
+        let request = ping_envelope(1);
+
+        let mut stray = resolved_envelope(&request);
+        stray.correlation_id = new_message_id();
+        assert_eq!(
+            validate_reply(&request, &stray),
+            Err(ClientError::InvalidCorrelation)
+        );
+
+        let mut empty = resolved_envelope(&request);
+        empty.payload = None;
+        assert_eq!(
+            validate_reply(&request, &empty),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "a payload"
+            })
+        );
+
+        let refused = answered_with(
+            &request,
+            Payload::ProtocolError(portalis_nexus_protocol::v1::ProtocolError {
+                code: ProtocolErrorCode::RateLimited as i32,
+                message: "try again".to_owned(),
+                retry_after_ms: None,
+                retryable: true,
+            }),
+        );
+        assert_eq!(
+            validate_reply(&request, &refused),
+            Err(ClientError::Refused {
+                code: ProtocolErrorCode::RateLimited,
+                message: "try again".to_owned(),
             })
         );
     }

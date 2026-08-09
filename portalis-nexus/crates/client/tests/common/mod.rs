@@ -181,6 +181,33 @@ async fn event_upgrade(websocket: WebSocketUpgrade) -> Response {
         })
 }
 
+/// Greets, then answers every request with a pong, whatever was asked.
+pub fn misanswering_router() -> Router {
+    Router::new().route(SOCKET_ROUTE, get(misanswer_upgrade))
+}
+
+async fn misanswer_upgrade(websocket: WebSocketUpgrade) -> Response {
+    websocket
+        .protocols([WEBSOCKET_SUBPROTOCOL])
+        .on_upgrade(|mut socket| async move {
+            let _ = socket.send(greeting()).await;
+            while let Some(Ok(Message::Binary(frame))) = socket.recv().await {
+                let Ok(request) = portalis_nexus_protocol::decode_frame(&frame) else {
+                    return;
+                };
+                let pong = Envelope {
+                    message_id: new_message_id(),
+                    correlation_id: request.message_id,
+                    sent_at_unix_ms: 1,
+                    payload: Some(Payload::Pong(portalis_nexus_protocol::v1::Pong {
+                        nonce: 0,
+                    })),
+                };
+                let _ = socket.send(binary_frame(&pong)).await;
+            }
+        })
+}
+
 /// Greets, then closes its socket when the returned switch is flipped.
 pub fn closable_router() -> (Router, Arc<watch::Sender<bool>>) {
     let close = Arc::new(watch::Sender::new(false));

@@ -89,14 +89,7 @@ async fn read_inbound(
             // they are answered here rather than by the stateless mapping.
             Message::Binary(ref frame) => match decode_frame(frame) {
                 Ok(request) => SocketReply::Send(binary_frame(
-                    &dispatch(
-                        session,
-                        state.identities(),
-                        state.server_authority(),
-                        &request,
-                        now_unix_ms(),
-                    )
-                    .await,
+                    &dispatch(session, state, &request, now_unix_ms()).await,
                 )),
                 Err(error) => SocketReply::Send(binary_frame(&protocol_error(
                     ProtocolErrorCode::InvalidMessage,
