@@ -1,6 +1,6 @@
 # Portalis Nexus Specification
 
-Status: M2 identity in progress
+Status: M3 friends and presence complete; M4 collections next
 
 Protocol: `portalis.protocol.v1`
 
@@ -646,6 +646,8 @@ It needs a real database to verify, so it waits on Docker or a local `mongod`.
 
 ### M3: Friends and presence
 
+Status: complete.
+
 - Resolve handles and manage friend-state transitions.
 - Track multi-device presence and send friend-only events.
 
@@ -686,7 +688,16 @@ typed codes: invalid message for a rejected action, rate limited when a
 contended edge exhausts its retries, and a generic internal error that keeps
 storage detail off the wire. Two clients become friends end to end.
 
-Next: fanning presence out to accepted friends only, which completes M3.
+Presence is fanned out to accepted friends only. Every event is addressed to a
+specific friend's live connections rather than broadcast, so a stranger and a
+pending friendship both see nothing. A connection that authenticates is told
+where its friends already stand, because otherwise a client would see nothing
+until someone's state changed. Reading friends is best-effort: a store outage
+shares nothing rather than failing the command that triggered it, and clients
+refresh on reconnect.
+
+Gate met: two clients become friends, observe each other going offline and
+coming back, and a second device leaving does not report its user away.
 
 ### M4: Collections
 

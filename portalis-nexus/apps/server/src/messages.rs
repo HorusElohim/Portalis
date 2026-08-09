@@ -6,12 +6,13 @@
 use axum::extract::ws::Message;
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
-    Authenticated, Envelope, Ping, Pong, ProtocolError, ProtocolErrorCode, ServerHello,
+    Authenticated, Envelope, Ping, Pong, PresenceEvent, ProtocolError, ProtocolErrorCode,
+    ServerHello,
 };
 use portalis_nexus_protocol::{
     CURRENT_PROTOCOL_VERSION, decode_frame, encode_frame, new_challenge, new_message_id,
 };
-use portalis_nexus_server_core::{Identity, ProtocolPolicy};
+use portalis_nexus_server_core::{Identity, ProtocolPolicy, UserId};
 
 /// What a socket owes its peer after one inbound WebSocket message.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -116,6 +117,26 @@ pub fn authenticated_reply(
             username: identity.user.username.clone(),
             discriminator: identity.user.discriminator.clone(),
             protocol_version: CURRENT_PROTOCOL_VERSION,
+        })),
+    }
+}
+
+/// Announces where a user stands, unsolicited: it answers no request.
+#[must_use]
+pub fn presence_event(
+    user_id: UserId,
+    online: bool,
+    last_seen_unix_ms: Option<u64>,
+    sent_at_unix_ms: u64,
+) -> Envelope {
+    Envelope {
+        message_id: new_message_id(),
+        correlation_id: Vec::new(),
+        sent_at_unix_ms,
+        payload: Some(Payload::PresenceEvent(PresenceEvent {
+            user_id: user_id.to_vec(),
+            online,
+            last_seen_unix_ms,
         })),
     }
 }

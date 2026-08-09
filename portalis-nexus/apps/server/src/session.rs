@@ -46,6 +46,12 @@ impl Session {
         }
     }
 
+    /// The identifier this connection was greeted with.
+    #[must_use]
+    pub fn connection_id(&self) -> [u8; portalis_nexus_protocol::CONNECTION_ID_BYTES] {
+        *self.challenge.connection_id()
+    }
+
     #[must_use]
     pub fn identity(&self) -> Option<&Identity> {
         self.identity.as_ref()

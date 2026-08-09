@@ -14,6 +14,7 @@ use crate::state::AppState;
 
 pub(crate) mod friends;
 pub(crate) mod identity;
+pub(crate) mod presence;
 
 /// Answers one decoded request on behalf of its connection.
 pub async fn dispatch(
@@ -25,7 +26,7 @@ pub async fn dispatch(
     let authority = state.server_authority();
     match &request.payload {
         Some(Payload::RegisterUser(register)) => {
-            identity::claim(
+            let reply = identity::claim(
                 session,
                 state.identities(),
                 authority,
@@ -33,10 +34,12 @@ pub async fn dispatch(
                 register,
                 now_unix_ms,
             )
-            .await
+            .await;
+            arrived(session, state, now_unix_ms).await;
+            reply
         }
         Some(Payload::AuthenticateDevice(authenticate)) => {
-            identity::prove(
+            let reply = identity::prove(
                 session,
                 state.identities(),
                 authority,
@@ -44,7 +47,9 @@ pub async fn dispatch(
                 authenticate,
                 now_unix_ms,
             )
-            .await
+            .await;
+            arrived(session, state, now_unix_ms).await;
+            reply
         }
         Some(Payload::ResolveHandleRequest(lookup)) => {
             friends::resolve(session, state.friends(), request, lookup, now_unix_ms).await
@@ -57,5 +62,41 @@ pub async fn dispatch(
         }
         // Ping and anything this version does not accept yet.
         _ => response_for(request, now_unix_ms),
+    }
+}
+
+/// Counts a newly authenticated connection and shares the news.
+///
+/// Called after every identity command; a connection that did not become
+/// authenticated, or was already counted, changes nothing.
+async fn arrived(session: &Session, state: &AppState, now_unix_ms: u64) {
+    let Some(identity) = session.identity() else {
+        return;
+    };
+    let user = identity.user.user_id;
+    let connection = session.connection_id();
+
+    if state.presence().arrive(user, connection).is_some() {
+        presence::announce(state, user, true, now_unix_ms).await;
+    }
+    // Told on every authentication, not only the first device, so each new
+    // connection learns where its friends stand.
+    presence::greet(state, user, connection, now_unix_ms).await;
+}
+
+/// Forgets a connection that has ended, telling friends if it was the last.
+pub async fn departed(session: &Session, state: &AppState, now_unix_ms: u64) {
+    let connection = session.connection_id();
+    state.connections().forget(connection);
+    let Some(identity) = session.identity() else {
+        return;
+    };
+    let user = identity.user.user_id;
+    if state
+        .presence()
+        .depart(user, connection, now_unix_ms)
+        .is_some()
+    {
+        presence::announce(state, user, false, now_unix_ms).await;
     }
 }

@@ -6,6 +6,7 @@
 //! - [`state`]: state shared by every handler.
 //! - [`shutdown`]: graceful draining of upgraded sockets.
 //! - [`health`]: liveness and readiness endpoints.
+//! - [`connections`]: where to reach a live connection.
 //! - [`environment`]: the production clock and random source.
 //! - [`identity`]: the concrete identity service this server runs.
 //! - [`messages`]: envelope construction and inbound dispatch decisions.
@@ -18,6 +19,7 @@ use axum::routing::get;
 use tower_http::trace::TraceLayer;
 
 mod config;
+mod connections;
 mod environment;
 mod handlers;
 mod health;
@@ -29,13 +31,14 @@ mod socket;
 mod state;
 
 pub use config::{DEFAULT_LISTEN_ADDR, ServerConfig};
+pub use connections::Connections;
 pub use environment::{OsRandom, SystemClock, now_unix_ms};
-pub use handlers::dispatch;
+pub use handlers::{departed, dispatch};
 pub use health::SERVICE_NAME;
 pub use identity::{DefaultStore, NexusIdentities, identities};
 pub use messages::{
-    SocketReply, authenticated_reply, binary_frame, hello_envelope, hello_payload, protocol_error,
-    reply_to, reply_with, response_for, server_hello,
+    SocketReply, authenticated_reply, binary_frame, hello_envelope, hello_payload, presence_event,
+    protocol_error, reply_to, reply_with, response_for, server_hello,
 };
 pub use session::Session;
 pub use shutdown::{GRACEFUL_DRAIN_TIMEOUT, Shutdown};

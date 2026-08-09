@@ -80,6 +80,17 @@ impl PresenceRegistry {
         Some(PresenceChange::WentOffline)
     }
 
+    /// Every live connection speaking for `user`, for fanning an event out to
+    /// each of their devices.
+    #[must_use]
+    pub fn connections_of(&self, user: UserId) -> Vec<ConnectionId> {
+        self.lock()
+            .connections
+            .get(&user)
+            .map(|devices| devices.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
     #[must_use]
     pub fn is_online(&self, user: UserId) -> bool {
         self.lock().connections.contains_key(&user)
@@ -138,6 +149,8 @@ mod tests {
 
         assert!(registry.is_online(ADA));
         assert_eq!(registry.device_count(ADA), 1);
+        assert_eq!(registry.connections_of(ADA), vec![PHONE]);
+        assert!(registry.connections_of(GRACE).is_empty());
         assert_eq!(registry.online_users(), 1);
         assert_eq!(registry.last_seen(ADA), None);
     }
@@ -153,6 +166,13 @@ mod tests {
 
         assert_eq!(registry.device_count(ADA), 2);
         assert_eq!(registry.online_users(), 1);
+        let mut reached = registry.connections_of(ADA);
+        reached.sort_unstable();
+        assert_eq!(
+            reached,
+            vec![PHONE, LAPTOP],
+            "an event reaches every device"
+        );
     }
 
     #[test]

@@ -7,6 +7,7 @@ use portalis_nexus_protocol::CURRENT_PROTOCOL_VERSION;
 use portalis_nexus_server_core::{PresenceRegistry, ProtocolPolicy};
 
 use crate::config::DEFAULT_SERVER_AUTHORITY;
+use crate::connections::Connections;
 use crate::identity::{DefaultStore, NexusFriends, NexusIdentities, friends, identities};
 use crate::shutdown::Shutdown;
 
@@ -19,6 +20,7 @@ pub struct AppState {
     identities: Arc<NexusIdentities<DefaultStore>>,
     friends: Arc<NexusFriends<DefaultStore>>,
     presence: Arc<PresenceRegistry>,
+    connections: Arc<Connections>,
     /// The host clients believe they are talking to. Signatures are bound to
     /// it, so a signature captured by one deployment cannot be replayed
     /// against another.
@@ -53,6 +55,7 @@ impl Default for AppState {
             friends: Arc::new(friends(Arc::clone(&store))),
             store,
             presence: Arc::new(PresenceRegistry::default()),
+            connections: Arc::new(Connections::default()),
             server_authority: Arc::from(DEFAULT_SERVER_AUTHORITY),
         }
     }
@@ -90,6 +93,11 @@ impl AppState {
     #[must_use]
     pub fn presence(&self) -> &PresenceRegistry {
         &self.presence
+    }
+
+    #[must_use]
+    pub fn connections(&self) -> &Connections {
+        &self.connections
     }
 
     pub fn mark_ready(&self) {

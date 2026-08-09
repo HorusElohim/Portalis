@@ -13,7 +13,7 @@ use portalis_nexus_protocol::{
 use tokio::sync::{mpsc, watch};
 use tracing::{Instrument, debug, info_span, warn};
 
-use crate::handlers::dispatch;
+use crate::handlers::{departed, dispatch};
 use crate::messages::{
     SocketReply, binary_frame, hello_envelope, hello_payload, protocol_error, reply_to,
 };
@@ -51,12 +51,19 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         let writer = tokio::spawn(write_outbound(sink, inbox));
 
         let mut session = Session::new(&hello);
+        // Published before the greeting, so an event triggered by this
+        // connection's own first command can already reach it.
+        state
+            .connections()
+            .register(session.connection_id(), outbound.clone());
+
         let greeting = binary_frame(&hello_envelope(hello, issued_at));
         if outbound.send(greeting).await.is_ok() {
             debug!("socket established");
             read_inbound(&mut stream, &outbound, &mut draining, &mut session, &state).await;
         }
 
+        departed(&session, &state, now_unix_ms()).await;
         drop(outbound);
         let _ = writer.await;
         debug!("socket closed");
