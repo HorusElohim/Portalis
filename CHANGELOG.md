@@ -72,6 +72,10 @@
   supervisor first ran was never observed, tearing down a peer-closed socket
   panicked the supervisor and stranded in-flight requests, and a handshake
   against a peer that never greeted could stall forever.
+- Added durable MongoDB-backed Nexus identity and friendship storage with
+  transactional registration, unique indexes, optimistic friendship writes,
+  and real replica-set integration coverage. The server now refuses to start
+  without a configured and reachable MongoDB instance.
 
 ## Portalis 1.0.8 / backend 0.1.6 — 2026-08-07
 

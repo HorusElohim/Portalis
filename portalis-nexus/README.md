@@ -54,6 +54,30 @@ PORTALIS_NEXUS_LISTEN_ADDR=127.0.0.1:8080 cargo run -p portalis-nexus-server
 Then request `http://127.0.0.1:8080/health/live` or
 `http://127.0.0.1:8080/health/ready`.
 
+The server process requires MongoDB and refuses to start without
+`PORTALIS_NEXUS_MONGODB_URI`; identity and friendship state must survive every
+restart. In-memory storage remains an explicit test and development adapter,
+not a production fallback. Start a local server with:
+
+```sh
+PORTALIS_NEXUS_MONGODB_URI=mongodb://127.0.0.1:27017/?directConnection=true \
+  cargo run -p portalis-nexus-server
+```
+
+Registration writes a user and its first device in one transaction, so the
+server needs a replica set rather than a standalone. `PORTALIS_NEXUS_DATABASE`
+names the database and defaults to `portalis_nexus`. `docker/compose.yaml`
+brings up both the server and a single-node replica set already configured for
+this.
+
+The MongoDB tests start their own replica set through Docker and are skipped
+when Docker is unavailable. To run them against a server you already have:
+
+```sh
+PORTALIS_NEXUS_TEST_MONGODB_URI=mongodb://127.0.0.1:27017/?directConnection=true \
+  cargo test -p portalis-nexus-server --test mongo
+```
+
 The local server also exposes `ws://127.0.0.1:8080/v1/socket`. Clients must
 request the `portalis.protobuf.v1` subprotocol, receive a binary protobuf
 `ServerHello`, and can then exchange correlated `Ping`/`Pong` envelopes.

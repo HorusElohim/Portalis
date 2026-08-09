@@ -1,6 +1,8 @@
 use std::error::Error;
 
-use portalis_nexus_server::{AppState, GRACEFUL_DRAIN_TIMEOUT, ServerConfig, app};
+use portalis_nexus_server::{
+    AppState, GRACEFUL_DRAIN_TIMEOUT, MongoStore, NexusStore, ServerConfig, app,
+};
 use tokio::time::timeout;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
@@ -14,13 +16,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .json()
         .init();
 
-    let listen_value = std::env::var("PORTALIS_NEXUS_LISTEN_ADDR").ok();
-    let config = ServerConfig::from_listen_value(listen_value.as_deref())?;
+    let config = ServerConfig::from_environment()?;
+    let uri = config.require_mongodb_uri()?;
+    info!(database = %config.database, "connecting to MongoDB");
+    let store = NexusStore::mongo(MongoStore::connect(uri, &config.database).await?);
     let listener = tokio::net::TcpListener::bind(config.listen_addr).await?;
-    let state = AppState::default();
+    let state = AppState::with_store(store);
+    // Ready only once the store is reachable and its indexes exist.
     state.mark_ready();
 
-    info!(listen_addr = %config.listen_addr, "Portalis Nexus is ready");
+    info!(
+        listen_addr = %config.listen_addr,
+        store = state.store().kind(),
+        "Portalis Nexus is ready"
+    );
     axum::serve(listener, app(&state))
         .with_graceful_shutdown(shutdown_signal())
         .await?;

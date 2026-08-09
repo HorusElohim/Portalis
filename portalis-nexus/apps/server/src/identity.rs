@@ -1,11 +1,11 @@
 //! The concrete services this server runs.
 
 use portalis_nexus_server_core::{
-    FriendRepository, FriendService, IdentityRepository, IdentityService, InMemoryIdentities,
-    UserDirectory,
+    FriendRepository, FriendService, IdentityRepository, IdentityService, UserDirectory,
 };
 
 use crate::environment::{OsRandom, SystemClock};
+use crate::store::NexusStore;
 
 /// The identity rules bound to this server's clock and random source.
 ///
@@ -13,11 +13,11 @@ use crate::environment::{OsRandom, SystemClock};
 /// one without touching the socket, the session, or the protocol.
 pub type NexusIdentities<S> = IdentityService<S, SystemClock, OsRandom>;
 
-/// The store used until the durable adapter lands.
+/// The store both services read.
 ///
-/// Shared, because identity and friend rules must read the same users: two
+/// Shared, because identity and friend rules must see the same users: two
 /// stores would mean a registered user no one could befriend.
-pub type DefaultStore = std::sync::Arc<InMemoryIdentities>;
+pub type DefaultStore = std::sync::Arc<NexusStore>;
 
 #[must_use]
 pub fn identities<S: IdentityRepository>(store: S) -> NexusIdentities<S> {

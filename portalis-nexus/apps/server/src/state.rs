@@ -10,6 +10,7 @@ use crate::config::DEFAULT_SERVER_AUTHORITY;
 use crate::connections::Connections;
 use crate::identity::{DefaultStore, NexusFriends, NexusIdentities, friends, identities};
 use crate::shutdown::Shutdown;
+use crate::store::NexusStore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -62,6 +63,18 @@ impl Default for AppState {
 }
 
 impl AppState {
+    /// Builds a server over `store`, durable or otherwise.
+    #[must_use]
+    pub fn with_store(store: NexusStore) -> Self {
+        let store = Arc::new(store);
+        Self {
+            identities: Arc::new(identities(Arc::clone(&store))),
+            friends: Arc::new(friends(Arc::clone(&store))),
+            store,
+            ..Self::default()
+        }
+    }
+
     /// Binds this server to the authority clients sign against.
     #[must_use]
     pub fn with_server_authority(mut self, authority: &str) -> Self {
@@ -146,6 +159,17 @@ mod tests {
             state.friends().list([1; 16]).await.expect("listed"),
             Vec::new()
         );
+    }
+
+    #[test]
+    fn with_store_wires_identities_and_friends_to_the_given_backend() {
+        let state = AppState::with_store(NexusStore::default());
+
+        assert_eq!(state.store().kind(), "memory");
+        // The default's readiness and presence still apply; only the store
+        // and the services built over it are replaced.
+        assert!(!state.is_ready());
+        assert_eq!(state.presence().online_users(), 0);
     }
 
     #[test]

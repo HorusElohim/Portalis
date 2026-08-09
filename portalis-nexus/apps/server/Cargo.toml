@@ -6,9 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-getrandom.workspace = true
 axum.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
+mongodb.workspace = true
 portalis-nexus-protocol.workspace = true
 portalis-nexus-server-core.workspace = true
 serde.workspace = true
@@ -19,6 +20,7 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 ed25519-dalek.workspace = true
+testcontainers-modules.workspace = true
 serde_json.workspace = true
 tower.workspace = true
 

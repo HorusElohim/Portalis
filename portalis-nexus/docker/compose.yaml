@@ -1,10 +1,46 @@
 services:
+  # A single-node replica set rather than a standalone, because registration
+  # writes a user and its device in one transaction and transactions need one.
+  #
+  # The health check reports healthy only once this node is actually primary,
+  # and initiates the set on the way there. It must assert rather than just
+  # run a command: the shell exits 0 even when the command it ran returned an
+  # error, so a check that only calls `rs.status()` reports healthy on a
+  # server that never joined a set.
+  mongo:
+    image: mongo:5.0.6
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongo",
+          "--quiet",
+          "--eval",
+          "if (db.isMaster().ismaster) { quit(0) } try { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}) } catch (error) {} quit(1)",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 5s
+    volumes:
+      - mongo-data:/data/db
+
   nexus:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     environment:
       PORTALIS_NEXUS_LISTEN_ADDR: 0.0.0.0:8080
+      # Without this the server keeps identities in memory and loses them on
+      # restart, which is right for a local run and wrong here.
+      PORTALIS_NEXUS_MONGODB_URI: mongodb://mongo:27017/?directConnection=true
       RUST_LOG: portalis_nexus_server=info,tower_http=info
     ports:
       - "8080:8080"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

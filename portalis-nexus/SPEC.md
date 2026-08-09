@@ -639,10 +639,37 @@ unauthorized for a revoked device; invalid message for a rejected username.
 Storage failures report a generic internal error, keeping database detail in
 the logs rather than on the wire.
 
-Storage is still the in-memory adapter. The MongoDB adapter slots in behind
-`IdentityRepository` with unique indexes on `(normalized_username,
-discriminator)` and device ID, and a transaction around `insert_registration`.
-It needs a real database to verify, so it waits on Docker or a local `mongod`.
+Status: complete.
+
+Storage is now durable. `MongoStore` implements the same three ports the
+in-memory adapter does, with unique indexes on `(normalized_username,
+discriminator)`, on device ID, and on the friendship edge; a transaction around
+`insert_registration`, so a handle collision leaves no device behind; and a
+version filter on every friendship write, so a stale writer loses rather than
+overwrites. `NexusStore` chooses the backend at startup from
+`PORTALIS_NEXUS_MONGODB_URI`, and every layer above the ports is unchanged —
+which is what the port design was for. The server process refuses to start
+without that variable or when MongoDB cannot prepare its indexes. In-memory
+storage remains an explicit test and development adapter, never a production
+fallback.
+
+Duplicate-key failures are read as lost races rather than outages: a unique
+index rejecting a write is the store working. Everything else is an outage,
+including a server that goes away mid-write.
+
+`tests/mongo.rs` runs against a real replica set in Docker, covering the
+registration transaction and its rollback, index idempotence, compare-and-set,
+a device enrolled twice, a stopped server, a standalone server that cannot open
+a transaction, and malformed connection strings. Two tests carry the gate that
+only durable storage can meet: an identity registered by one process
+authenticates from a second one holding nothing but the database, and a revoked
+device stays revoked across the same restart. Docker's absence skips these;
+Docker present but failing is a failure, never a silent pass.
+
+Per section 18, `mongo/mod.rs` is excluded from the coverage gate as a platform
+adapter: what remains after those tests is driver-internal error propagation
+that cannot be triggered deterministically. Its decisions live in
+`mongo/documents.rs` and `store.rs`, which stay measured at 100%.
 
 ### M3: Friends and presence
 

@@ -17,9 +17,10 @@ license = "Apache-2.0"
 [workspace.dependencies]
 blake3 = "1.8.2"
 getrandom = "0.3.3"
+mongodb = "3.3.0"
+futures-util = "0.3.33"
 ed25519-dalek = "2.2.0"
 axum = { version = "0.8.9", features = ["http1", "json", "tokio", "ws"] }
-futures-util = "0.3.33"
 prost = "0.14.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -31,6 +32,7 @@ tower-http = { version = "0.7.0", features = ["trace"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1.24.0", features = ["v4", "v7"] }
+testcontainers-modules = { version = "0.13.0", features = ["mongo"] }
 
 portalis-nexus-client = { path = "crates/client" }
 portalis-nexus-server = { path = "apps/server" }
