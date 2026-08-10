@@ -18,12 +18,25 @@
 
 <!-- Bug fixes and regressions go here. -->
 
+- Fixed a Nexus key-envelope write that could drop a rotated share key while
+  reporting a storage outage: two devices pushing for the same share and
+  recipient at once made the unique index reject the loser, which is a lost
+  race to retry rather than a failure to report.
+
 - Hardened Nexus key envelopes against low-order X25519 keys and record
   transplanting, and bounded retrieval with deterministic cursor pagination.
 
 ### Engineering
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+- Closed the Nexus M2.5 coverage gap, restoring the 100% line and function
+  gate. Covers the durable key-envelope store against a real replica set
+  (rotation replacing its predecessor, listings scoped to the device they
+  name, and the page boundary where MongoDB's ordering of binary values has
+  to agree with the page type), the key-envelope handler, the client's
+  envelope builders and page parsing, and opening an envelope that names a
+  low-order ephemeral key.
 
 - Serialized Docker-backed Nexus MongoDB integration tests and bounded every
   Docker readiness, connection, and shutdown wait so an unhealthy daemon
