@@ -9,15 +9,16 @@ use std::time::{Duration, Instant};
 
 use ed25519_dalek::{Signer, SigningKey};
 use portalis_nexus_protocol::{
-    CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, derive_device_id, format_id,
-    link_device_payload, new_message_id, registration_payload,
+    CURRENT_PROTOCOL_VERSION, MAX_KEY_ENVELOPES_PER_PAGE, SHARE_ID_BYTES, SessionBinding,
+    authentication_payload, derive_device_id, format_id, link_device_payload, new_message_id,
+    registration_payload,
 };
 use portalis_nexus_server::{MongoStore, NexusStore};
 use portalis_nexus_server_core::{
-    AuthenticationRequest, DeviceRecord, FixedClock, FriendRepository, FriendshipEdge,
-    FriendshipRecord, FriendshipState, IdentityError, IdentityRepository, IdentityService,
-    LinkDeviceRequest, RegistrationRequest, RepositoryError, ScriptedRandom, UserDirectory, UserId,
-    UserRecord,
+    AuthenticationRequest, DeviceId, DeviceRecord, EnvelopeRepository, FixedClock,
+    FriendRepository, FriendshipEdge, FriendshipRecord, FriendshipState, IdentityError,
+    IdentityRepository, IdentityService, KeyEnvelopeRecord, LinkDeviceRequest, RegistrationRequest,
+    RepositoryError, ScriptedRandom, ShareId, UserDirectory, UserId, UserRecord,
 };
 use testcontainers_modules::mongo::Mongo;
 use testcontainers_modules::testcontainers::ContainerAsync;
@@ -43,6 +44,8 @@ const NOW: u64 = 1_700_000_000_000;
 const ADA: UserId = [1; 16];
 const GRACE: UserId = [2; 16];
 const ENCRYPTION_KEY: [u8; 32] = [6; 32];
+const RECIPIENT: DeviceId = [7; 32];
+const OTHER_RECIPIENT: DeviceId = [8; 32];
 
 /// Whether a Docker daemon is reachable at all.
 ///
@@ -255,6 +258,24 @@ fn device(seed: u8, owner: UserId) -> DeviceRecord {
         created_at_unix_ms: NOW,
         last_authenticated_at_unix_ms: None,
         revoked_at_unix_ms: None,
+    }
+}
+
+/// Share IDs that sort in the order they are created, so a page boundary can
+/// be asserted rather than guessed at.
+fn share_id(index: u16) -> ShareId {
+    let mut id = [0; SHARE_ID_BYTES];
+    id[SHARE_ID_BYTES - 2..].copy_from_slice(&index.to_be_bytes());
+    id
+}
+
+fn key_envelope(share: ShareId, recipient: DeviceId, ciphertext: &[u8]) -> KeyEnvelopeRecord {
+    KeyEnvelopeRecord {
+        share_id: share,
+        recipient_device_id: recipient,
+        ephemeral_public_key: ENCRYPTION_KEY,
+        ciphertext: ciphertext.to_vec(),
+        created_at_unix_ms: NOW,
     }
 }
 
@@ -474,6 +495,135 @@ async fn a_friendship_is_found_from_either_side() {
     });
 }
 
+/// One row per share and recipient device, enforced by the unique index.
+///
+/// Rotating a share key pushes a second envelope for the same pair; if that
+/// piled up beside its predecessor rather than replacing it, a device would
+/// fetch a stale key beside the current one with nothing to tell them apart.
+#[tokio::test]
+async fn a_rotated_key_replaces_the_envelope_it_supersedes() {
+    with_mongo!(store, {
+        let share = share_id(0);
+        store
+            .put_key_envelope(key_envelope(share, RECIPIENT, b"first"))
+            .await
+            .expect("envelope stored");
+
+        let page = store
+            .list_key_envelopes(RECIPIENT, None)
+            .await
+            .expect("listed");
+        assert_eq!(
+            page.envelopes,
+            vec![key_envelope(share, RECIPIENT, b"first")],
+            "binary identifiers and ciphertext survive the round trip"
+        );
+        assert_eq!(page.next_after_share_id, None);
+
+        store
+            .put_key_envelope(key_envelope(share, RECIPIENT, b"rotated"))
+            .await
+            .expect("rotated envelope stored");
+
+        let page = store
+            .list_key_envelopes(RECIPIENT, None)
+            .await
+            .expect("listed");
+        assert_eq!(
+            page.envelopes,
+            vec![key_envelope(share, RECIPIENT, b"rotated")],
+            "the rotated key replaced its predecessor rather than joining it"
+        );
+    });
+}
+
+#[tokio::test]
+async fn envelopes_are_listed_only_for_the_device_they_name() {
+    with_mongo!(store, {
+        let share = share_id(0);
+        store
+            .put_key_envelope(key_envelope(share, RECIPIENT, b"theirs"))
+            .await
+            .expect("stored");
+        store
+            .put_key_envelope(key_envelope(share, OTHER_RECIPIENT, b"someone else's"))
+            .await
+            .expect("stored");
+
+        let page = store
+            .list_key_envelopes(RECIPIENT, None)
+            .await
+            .expect("listed");
+        assert_eq!(
+            page.envelopes,
+            vec![key_envelope(share, RECIPIENT, b"theirs")]
+        );
+
+        // A device nobody has pushed to sees nothing rather than everything.
+        let page = store
+            .list_key_envelopes([9; 32], None)
+            .await
+            .expect("listed");
+        assert_eq!(page.envelopes, Vec::new());
+        assert_eq!(page.next_after_share_id, None);
+    });
+}
+
+/// The page boundary, against a server that does the sorting.
+///
+/// Listing orders by share ID in the database and resumes with a `$gt`
+/// cursor, so this is where `MongoDB`'s ordering of binary values has to agree
+/// with the bytewise order the page type assumes; `KeyEnvelopePage` debug
+/// asserts that agreement, and a debug build would trip on it here.
+#[tokio::test]
+async fn a_full_page_reports_where_the_next_one_starts() {
+    with_mongo!(store, {
+        let total = MAX_KEY_ENVELOPES_PER_PAGE + 1;
+        for index in 0..total {
+            let index = u16::try_from(index).expect("the page limit fits");
+            store
+                .put_key_envelope(key_envelope(share_id(index), RECIPIENT, b"cipher"))
+                .await
+                .expect("stored");
+        }
+
+        let first = store
+            .list_key_envelopes(RECIPIENT, None)
+            .await
+            .expect("listed");
+        assert_eq!(first.envelopes.len(), MAX_KEY_ENVELOPES_PER_PAGE);
+        assert_eq!(
+            first.envelopes.first().expect("a full page").share_id,
+            share_id(0),
+            "the page starts at the lowest share ID"
+        );
+        let last_on_page =
+            u16::try_from(MAX_KEY_ENVELOPES_PER_PAGE - 1).expect("the page limit fits");
+        assert_eq!(
+            first.envelopes.last().expect("a full page").share_id,
+            share_id(last_on_page),
+            "the page is ordered by share ID, not by insertion"
+        );
+        assert_eq!(first.next_after_share_id, Some(share_id(last_on_page)));
+
+        let second = store
+            .list_key_envelopes(RECIPIENT, first.next_after_share_id)
+            .await
+            .expect("listed");
+        let remaining = u16::try_from(MAX_KEY_ENVELOPES_PER_PAGE).expect("the page limit fits");
+        assert_eq!(
+            second.envelopes.len(),
+            1,
+            "the cursor resumes after the last row of the first page"
+        );
+        assert_eq!(
+            second.envelopes.first().expect("one row").share_id,
+            share_id(remaining)
+        );
+        assert_eq!(second.next_after_share_id, None, "nothing follows");
+    });
+}
+
 #[tokio::test]
 async fn indexes_are_created_more_than_once_without_complaint() {
     with_mongo!(store, {
@@ -620,6 +770,7 @@ async fn every_operation_reports_an_outage_once_the_server_is_gone() {
         "list_friendships: {list_friendships:?}"
     );
 
+    // Registration cannot even open the session its transaction needs.
     let insert_registration = store
         .insert_registration(user(GRACE, "Grace", "ABCDE"), device(2, GRACE))
         .await;
@@ -628,13 +779,18 @@ async fn every_operation_reports_an_outage_once_the_server_is_gone() {
         "insert_registration: {insert_registration:?}"
     );
 
-    // Registration cannot even open the session its transaction needs.
-    let insert_registration = store
-        .insert_registration(user(GRACE, "Grace", "ABCDE"), device(2, GRACE))
+    let put_key_envelope = store
+        .put_key_envelope(key_envelope(share_id(0), RECIPIENT, b"cipher"))
         .await;
     assert!(
-        unavailable(&insert_registration),
-        "insert_registration: {insert_registration:?}"
+        unavailable(&put_key_envelope),
+        "put_key_envelope: {put_key_envelope:?}"
+    );
+
+    let list_key_envelopes = store.list_key_envelopes(RECIPIENT, None).await;
+    assert!(
+        unavailable(&list_key_envelopes),
+        "list_key_envelopes: {list_key_envelopes:?}"
     );
 }
 

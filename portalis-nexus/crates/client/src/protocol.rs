@@ -818,6 +818,144 @@ mod tests {
     }
 
     #[test]
+    fn builds_the_key_envelope_commands() {
+        let client = ClientProtocol::default();
+
+        let put = client.put_key_envelope(&[3; SHARE_ID_BYTES], &[1; 32], &[9; 32], b"sealed", 5);
+        assert_eq!(put.sent_at_unix_ms, 5);
+        assert_eq!(put.validate(), Ok(()));
+        assert_eq!(
+            put.payload,
+            Some(Payload::PutKeyEnvelope(PutKeyEnvelope {
+                share_id: vec![3; SHARE_ID_BYTES],
+                recipient_device_id: vec![1; 32],
+                ephemeral_public_key: vec![9; 32],
+                ciphertext: b"sealed".to_vec(),
+            }))
+        );
+
+        // No cursor means the first page, carried as an empty field rather
+        // than a missing one.
+        let first = client.list_key_envelopes(None, 6);
+        assert_eq!(
+            first.payload,
+            Some(Payload::ListKeyEnvelopesRequest(ListKeyEnvelopesRequest {
+                after_share_id: Vec::new(),
+            }))
+        );
+        let resumed = client.list_key_envelopes(Some(&[3; SHARE_ID_BYTES]), 7);
+        assert_eq!(
+            resumed.payload,
+            Some(Payload::ListKeyEnvelopesRequest(ListKeyEnvelopesRequest {
+                after_share_id: vec![3; SHARE_ID_BYTES],
+            }))
+        );
+        assert_eq!(resumed.validate(), Ok(()));
+    }
+
+    #[test]
+    fn reads_a_stored_key_envelope_confirmation() {
+        let client = ClientProtocol::default();
+        let request = client.put_key_envelope(&[3; SHARE_ID_BYTES], &[1; 32], &[9; 32], b"c", 5);
+
+        let stored = answered_with(
+            &request,
+            Payload::KeyEnvelopePut(KeyEnvelopePut {
+                share_id: vec![3; SHARE_ID_BYTES],
+                recipient_device_id: vec![1; 32],
+            }),
+        );
+        assert_eq!(
+            validate_key_envelope_put(&request, &stored),
+            Ok(KeyEnvelopePut {
+                share_id: vec![3; SHARE_ID_BYTES],
+                recipient_device_id: vec![1; 32],
+            })
+        );
+
+        // An answer of the wrong shape is not a confirmation.
+        let wrong = answered_with(&request, Payload::FriendEvent(FriendEvent { friend: None }));
+        assert_eq!(
+            validate_key_envelope_put(&request, &wrong),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "KeyEnvelopePut",
+            })
+        );
+    }
+
+    #[test]
+    fn reads_a_page_of_key_envelopes() {
+        let client = ClientProtocol::default();
+        let request = client.list_key_envelopes(None, 5);
+        let envelope = KeyEnvelope {
+            share_id: vec![3; SHARE_ID_BYTES],
+            ephemeral_public_key: vec![9; 32],
+            ciphertext: b"sealed".to_vec(),
+        };
+
+        // A full page carries the cursor the next request resumes from.
+        let page = answered_with(
+            &request,
+            Payload::ListKeyEnvelopesResponse(ListKeyEnvelopesResponse {
+                envelopes: vec![envelope.clone()],
+                next_after_share_id: vec![3; SHARE_ID_BYTES],
+            }),
+        );
+        assert_eq!(
+            validate_key_envelopes(&request, &page),
+            Ok(KeyEnvelopePage {
+                envelopes: vec![envelope.clone()],
+                next_after_share_id: Some([3; SHARE_ID_BYTES]),
+            })
+        );
+
+        // A last page carries no cursor, which is an empty field on the wire.
+        let last = answered_with(
+            &request,
+            Payload::ListKeyEnvelopesResponse(ListKeyEnvelopesResponse {
+                envelopes: vec![envelope.clone()],
+                next_after_share_id: Vec::new(),
+            }),
+        );
+        assert_eq!(
+            validate_key_envelopes(&request, &last),
+            Ok(KeyEnvelopePage {
+                envelopes: vec![envelope],
+                next_after_share_id: None,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_a_key_envelope_page_that_cannot_be_resumed() {
+        let client = ClientProtocol::default();
+        let request = client.list_key_envelopes(None, 5);
+
+        // A cursor that is not a share ID would be sent back as one.
+        let truncated = answered_with(
+            &request,
+            Payload::ListKeyEnvelopesResponse(ListKeyEnvelopesResponse {
+                envelopes: Vec::new(),
+                next_after_share_id: vec![3; SHARE_ID_BYTES - 1],
+            }),
+        );
+        assert_eq!(
+            validate_key_envelopes(&request, &truncated),
+            Err(ClientError::InvalidField {
+                field: "next_after_share_id",
+            })
+        );
+
+        let wrong = answered_with(&request, Payload::FriendEvent(FriendEvent { friend: None }));
+        assert_eq!(
+            validate_key_envelopes(&request, &wrong),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "ListKeyEnvelopesResponse",
+            })
+        );
+    }
+
+    #[test]
     fn builds_the_friend_commands() {
         let client = ClientProtocol::default();
 

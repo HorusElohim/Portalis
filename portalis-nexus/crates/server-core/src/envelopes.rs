@@ -127,7 +127,7 @@ where
 mod tests {
     use super::*;
     use crate::memory::{FixedClock, InMemoryIdentities};
-    use crate::ports::{DeviceRecord, IdentityRepository};
+    use crate::ports::{DeviceRecord, IdentityRepository, UserDirectory, UserRecord};
 
     const NOW: u64 = 1_700_000_000_000;
     const SENDER: UserId = [1; 16];
@@ -191,6 +191,186 @@ mod tests {
         assert_eq!(listed.envelopes[0].ephemeral_public_key, EPHEMERAL_KEY);
         assert_eq!(listed.envelopes[0].ciphertext, b"sealed");
         assert_eq!(listed.envelopes[0].created_at_unix_ms, NOW);
+    }
+
+    fn outage(operation: &str) -> Result<(), EnvelopeError> {
+        Err(EnvelopeError::Repository(RepositoryError::Unavailable(
+            operation.to_owned(),
+        )))
+    }
+
+    /// Storage failures are reported rather than swallowed: a push that
+    /// looked stored but was not would leave a device unable to open a share
+    /// it was told it could.
+    ///
+    /// The recipient is read before the write, so an unavailable store fails
+    /// at the read. [`FailingWrites`] covers the write itself.
+    #[tokio::test]
+    async fn a_store_outage_is_reported_while_reading() {
+        let service = service();
+        service
+            .store
+            .enrol_device(device(SENDER_DEVICE, SENDER))
+            .expect("enrolled");
+        service
+            .store
+            .enrol_device(device(RECIPIENT_DEVICE, SENDER))
+            .expect("enrolled");
+        service.store.set_unavailable(true);
+
+        assert_eq!(
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            outage("the store is switched off")
+        );
+        assert_eq!(
+            service
+                .list_key_envelopes(&device(RECIPIENT_DEVICE, SENDER), None)
+                .await
+                .map(|_| ()),
+            outage("the store is switched off")
+        );
+    }
+
+    /// A store that answers every read and fails only the envelope write.
+    ///
+    /// `InMemoryIdentities` fails everything at once, which never reaches the
+    /// write: the recipient lookup fails first. This is the only way to
+    /// exercise a push that got past its checks and then lost its storage.
+    struct FailingWrites(InMemoryIdentities);
+
+    impl UserDirectory for FailingWrites {
+        fn find_user(
+            &self,
+            user_id: UserId,
+        ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send
+        {
+            self.0.find_user(user_id)
+        }
+
+        fn find_user_by_handle(
+            &self,
+            normalized_username: &str,
+            discriminator: &str,
+        ) -> impl std::future::Future<Output = Result<Option<UserRecord>, RepositoryError>> + Send
+        {
+            self.0
+                .find_user_by_handle(normalized_username, discriminator)
+        }
+    }
+
+    impl IdentityRepository for FailingWrites {
+        fn insert_registration(
+            &self,
+            user: UserRecord,
+            device: DeviceRecord,
+        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+            self.0.insert_registration(user, device)
+        }
+
+        fn find_device(
+            &self,
+            device_id: DeviceId,
+        ) -> impl std::future::Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send
+        {
+            self.0.find_device(device_id)
+        }
+
+        fn link_device(
+            &self,
+            device: DeviceRecord,
+        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+            self.0.link_device(device)
+        }
+
+        fn touch_device(
+            &self,
+            device_id: DeviceId,
+            at_unix_ms: u64,
+        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+            self.0.touch_device(device_id, at_unix_ms)
+        }
+
+        fn revoke_device(
+            &self,
+            device_id: DeviceId,
+            at_unix_ms: u64,
+        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+            self.0.revoke_device(device_id, at_unix_ms)
+        }
+    }
+
+    impl EnvelopeRepository for FailingWrites {
+        fn put_key_envelope(
+            &self,
+            _envelope: KeyEnvelopeRecord,
+        ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+            std::future::ready(Err(RepositoryError::Unavailable("put".to_owned())))
+        }
+
+        fn list_key_envelopes(
+            &self,
+            recipient_device_id: DeviceId,
+            after_share_id: Option<ShareId>,
+        ) -> impl std::future::Future<Output = Result<KeyEnvelopePage, RepositoryError>> + Send
+        {
+            self.0
+                .list_key_envelopes(recipient_device_id, after_share_id)
+        }
+    }
+
+    /// The double must be transparent apart from the write it fails, or a
+    /// test using it would be testing the double rather than the service.
+    #[tokio::test]
+    async fn the_double_passes_everything_but_the_write_through() {
+        let store = FailingWrites(InMemoryIdentities::default());
+        let user = UserRecord {
+            user_id: SENDER,
+            username: "Ada".to_owned(),
+            normalized_username: "ada".to_owned(),
+            discriminator: "7Q2XZ".to_owned(),
+            created_at_unix_ms: NOW,
+        };
+        let first = device(SENDER_DEVICE, SENDER);
+
+        assert_eq!(
+            store.insert_registration(user.clone(), first.clone()).await,
+            Ok(())
+        );
+        assert_eq!(store.find_user(SENDER).await, Ok(Some(user.clone())));
+        assert_eq!(
+            store.find_user_by_handle("ada", "7Q2XZ").await,
+            Ok(Some(user))
+        );
+        assert_eq!(store.find_device(SENDER_DEVICE).await, Ok(Some(first)));
+        assert_eq!(
+            store.link_device(device(RECIPIENT_DEVICE, SENDER)).await,
+            Ok(())
+        );
+        assert_eq!(store.touch_device(SENDER_DEVICE, NOW).await, Ok(()));
+        assert_eq!(store.revoke_device(SENDER_DEVICE, NOW).await, Ok(()));
+        assert_eq!(
+            store
+                .list_key_envelopes(RECIPIENT_DEVICE, None)
+                .await
+                .map(|page| page.envelopes),
+            Ok(Vec::new())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_store_outage_is_reported_while_writing() {
+        let store = FailingWrites(InMemoryIdentities::default());
+        store
+            .0
+            .enrol_device(device(RECIPIENT_DEVICE, SENDER))
+            .expect("enrolled");
+        let service = EnvelopeService::new(store, FixedClock::new(NOW));
+
+        assert_eq!(
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            outage("put"),
+            "the write failed after its checks passed"
+        );
     }
 
     #[tokio::test]

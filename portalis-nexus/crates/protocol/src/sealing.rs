@@ -309,6 +309,27 @@ mod tests {
         );
     }
 
+    /// The same check on the way back in. An envelope naming a low-order
+    /// ephemeral key would agree a shared secret of all zeros with anyone, so
+    /// opening it is refused before the ciphertext is touched — as a failure
+    /// to open, telling a caller nothing about why.
+    #[test]
+    fn an_envelope_naming_a_non_contributory_ephemeral_key_is_refused() {
+        let (secret, public) = keypair(7);
+        let context = context();
+        let envelope = seal(public.as_bytes(), &context, b"share key material").expect("seals");
+
+        let forged = SealedEnvelope {
+            ephemeral_public_key: [0; ENCRYPTION_KEY_BYTES],
+            ..envelope
+        };
+
+        assert_eq!(
+            open(secret.as_bytes(), &context, &forged),
+            Err(SealError::Rejected)
+        );
+    }
+
     #[test]
     fn an_envelope_cannot_be_transplanted_to_another_share_or_device() {
         let (secret, public) = keypair(7);

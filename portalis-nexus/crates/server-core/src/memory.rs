@@ -553,4 +553,46 @@ mod tests {
         assert_eq!(store.touch_device([9; 32], 1).await, Ok(()));
         assert_eq!(store.revoke_device([9; 32], 1).await, Ok(()));
     }
+
+    /// A refused write must not also land. The double reports the outage and
+    /// keeps the envelope out, so a test that switches the store off and back
+    /// on does not find writes it never accepted.
+    #[tokio::test]
+    async fn an_envelope_refused_by_an_outage_is_not_stored() {
+        let store = InMemoryIdentities::default();
+        let envelope = KeyEnvelopeRecord {
+            share_id: [7; 16],
+            recipient_device_id: [2; 32],
+            ephemeral_public_key: [9; 32],
+            ciphertext: b"sealed".to_vec(),
+            created_at_unix_ms: 1,
+        };
+
+        store.set_unavailable(true);
+        assert_eq!(
+            store.put_key_envelope(envelope.clone()).await,
+            Err(RepositoryError::Unavailable(
+                "the store is switched off".to_owned()
+            ))
+        );
+
+        store.set_unavailable(false);
+        assert_eq!(
+            store
+                .list_key_envelopes([2; 32], None)
+                .await
+                .map(|page| page.envelopes),
+            Ok(Vec::new()),
+            "the refused write left nothing behind"
+        );
+
+        assert_eq!(store.put_key_envelope(envelope.clone()).await, Ok(()));
+        assert_eq!(
+            store
+                .list_key_envelopes([2; 32], None)
+                .await
+                .map(|page| page.envelopes),
+            Ok(vec![envelope])
+        );
+    }
 }
