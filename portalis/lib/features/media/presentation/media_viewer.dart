@@ -7,6 +7,7 @@ import '../../collections/domain/collection.dart';
 import '../../collections/presentation/collection_presentation.dart';
 import '../domain/media_item.dart';
 import 'media_thumbnail.dart';
+import 'media_piece_frame.dart';
 
 /// Renders a collection item without owning navigation, backend state, or the
 /// video controller lifecycle.
@@ -80,11 +81,17 @@ class CollectionMediaViewer extends StatelessWidget {
                             SizedBox(
                               width: double.infinity,
                               height: previewHeight,
-                              child: MediaPreview(
+                              child: MediaPieceFrame(
                                 media: media,
-                                isPlayableVideo: isPlayableVideo,
-                                videoFailed: videoFailed,
-                                videoController: videoController,
+                                color: collection.hue,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.tight),
+                                child: MediaPreview(
+                                  media: media,
+                                  isPlayableVideo: isPlayableVideo,
+                                  videoFailed: videoFailed,
+                                  videoController: videoController,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 14),

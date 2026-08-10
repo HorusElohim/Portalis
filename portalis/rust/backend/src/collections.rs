@@ -139,6 +139,7 @@ pub struct MediaInfo {
     pub length_bytes: u64,
     pub downloaded_bytes: u64,
     pub progress: f64,
+    pub piece_runs: Vec<crate::torrent::PieceRun>,
     /// `false` when this stands for a whole manifest entry whose torrent
     /// isn't in the session yet — tap to fetch.
     pub fetched: bool,
@@ -584,6 +585,7 @@ mod native {
                     length_bytes: f.length_bytes,
                     downloaded_bytes: f.downloaded_bytes,
                     progress,
+                    piece_runs: f.piece_runs.clone(),
                     fetched: true,
                     added_by: added_by.clone(),
                 }
@@ -767,6 +769,7 @@ mod native {
                                 length_bytes: 0,
                                 downloaded_bytes: 0,
                                 progress: 0.0,
+                                piece_runs: Vec::new(),
                                 fetched: false,
                                 added_by: Some(entry.added_by.to_hex()),
                             });
@@ -1910,6 +1913,7 @@ mod native {
                         absolute_path: format!("/tmp/{name}"),
                         length_bytes: len,
                         downloaded_bytes: downloaded,
+                        piece_runs: Vec::new(),
                     })
                     .collect(),
             }

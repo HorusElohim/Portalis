@@ -28,7 +28,9 @@ use futures::Stream;
 #[cfg(feature = "tracing-subscriber-utils")]
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
-pub use crate::torrent_state::stats::{LiveStats, TorrentStats};
+pub use crate::torrent_state::stats::{
+    InflightPieceStats, LiveStats, PieceActivityStats, TorrentStats,
+};
 
 pub type Result<T> = std::result::Result<T, ApiError>;
 

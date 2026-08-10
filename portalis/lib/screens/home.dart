@@ -14,6 +14,7 @@ import '../features/collections/presentation/collection_join.dart';
 import '../features/collections/presentation/collection_library.dart';
 import '../features/collections/presentation/collection_share.dart';
 import '../features/collections/presentation/collection_removal.dart';
+import '../services/navigation.dart';
 
 /// App-shell adapter for the Collections library. Presentation lives in the
 /// feature; this screen only coordinates navigation and desktop file drops.
@@ -41,6 +42,35 @@ class _HomeState extends State<Home> {
   String _query = '';
   CollectionFilter _filter = CollectionFilter.all;
   bool _dropBusy = false;
+  int _welcomeCycle = 0;
+  late bool _homeVisible;
+
+  @override
+  void initState() {
+    super.initState();
+    _homeVisible = _isHomeVisible;
+    AppNavigation.tab.addListener(_onNavigationChanged);
+    AppNavigation.depth.addListener(_onNavigationChanged);
+  }
+
+  bool get _isHomeVisible =>
+      AppNavigation.tab.value == AppNavigation.homeTab &&
+      AppNavigation.depth.value == 0;
+
+  void _onNavigationChanged() {
+    final visible = _isHomeVisible;
+    if (visible && !_homeVisible && mounted) {
+      setState(() => _welcomeCycle++);
+    }
+    _homeVisible = visible;
+  }
+
+  @override
+  void dispose() {
+    AppNavigation.tab.removeListener(_onNavigationChanged);
+    AppNavigation.depth.removeListener(_onNavigationChanged);
+    super.dispose();
+  }
 
   void _push(Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
@@ -73,15 +103,7 @@ class _HomeState extends State<Home> {
   void _handleCommand((Collection, CollectionCommand) action) {
     final (collection, command) = action;
     if (command == CollectionCommand.delete) {
-      unawaited(confirmAndRemoveCollection(
-        context,
-        collection,
-        setBusy: (_) {},
-      ));
-      return;
-    }
-    if (command == CollectionCommand.deleteFiles) {
-      unawaited(confirmAndDeleteCollectionFiles(
+      unawaited(confirmAndDeleteCollection(
         context,
         collection,
         setBusy: (_) {},
@@ -102,10 +124,7 @@ class _HomeState extends State<Home> {
           await AppControllers.collections.restart(collection.id);
         case CollectionCommand.pause:
           await AppControllers.collections.pause(collection.id);
-        case CollectionCommand.forget:
-          await AppControllers.collections.stopCollection(collection.id);
         case CollectionCommand.delete:
-        case CollectionCommand.deleteFiles:
           return;
       }
       if (mounted) showToast(context, '${command.label} applied');
@@ -120,7 +139,8 @@ class _HomeState extends State<Home> {
     if (_query.isEmpty) return true;
     final query = _query.toLowerCase();
     return collection.name.toLowerCase().contains(query) ||
-        collection.media.any((media) => media.label.toLowerCase().contains(query));
+        collection.media
+            .any((media) => media.label.toLowerCase().contains(query));
   }
 
   List<Collection> get _shown => AppControllers.collections.collections
@@ -187,6 +207,7 @@ class _HomeState extends State<Home> {
           onShare: () => _openShare(),
           onJoin: _openJoin,
           onCommand: _handleCommand,
+          welcomeCycle: _welcomeCycle,
         );
         if (!widget.embedded) return library;
         return DropTarget(

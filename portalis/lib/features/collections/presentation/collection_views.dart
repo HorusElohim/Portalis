@@ -31,13 +31,19 @@ class CollectionRow extends StatefulWidget {
   final bool selected;
 
   /// Built for whichever [CollectionDetailLevel] this row has cycled to, and
-  /// shown under the row from [CollectionDetailLevel.mid] on. Where a window
-  /// is wide enough, opening a collection means this card growing to hold
-  /// it — not a second panel beside the list describing the same thing
+  /// shown from [CollectionDetailLevel.mid] on. The builder also receives the
+  /// row identity so expanded detail can compose it into one horizontal live
+  /// header rather than stacking another section underneath it. Where a
+  /// window is wide enough, opening a collection means this card growing to
+  /// hold it — not a second panel beside the list describing the same thing
   /// twice. `null` where there is nowhere to grow into (the compact list,
   /// which pushes a separate screen instead) — the row then keeps its older,
   /// simpler behaviour: a plain tap, and the command bar always showing.
-  final Widget Function(CollectionDetailLevel level)? detail;
+  final Widget Function(
+    CollectionDetailLevel level,
+    Widget inlineHeader,
+    Widget inlineStatus,
+  )? detail;
   final ValueChanged<CollectionCommand>? onCommand;
 
   @override
@@ -83,6 +89,8 @@ class _CollectionRowState extends State<CollectionRow> {
     final accent = torrent ? AppColors.ember : AppColors.signal;
     final showsExtras =
         widget.detail == null || _level != CollectionDetailLevel.collapsed;
+    final detailsOpen =
+        widget.detail != null && _level != CollectionDetailLevel.collapsed;
 
     return SurfaceCard(
       onTap: _handleTap,
@@ -99,7 +107,7 @@ class _CollectionRowState extends State<CollectionRow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _row(),
+          if (!detailsOpen) _row(),
           if (widget.onCommand != null &&
               widget.detail == null &&
               showsExtras) ...[
@@ -109,17 +117,18 @@ class _CollectionRowState extends State<CollectionRow> {
               busy: false,
             ),
           ],
-          if (widget.detail != null &&
-              _level != CollectionDetailLevel.collapsed) ...[
-            Divider(height: 26, color: AppColors.border),
-            widget.detail!(_level),
-          ],
+          if (detailsOpen)
+            widget.detail!(
+              _level,
+              _row(showStatus: false),
+              _status(),
+            ),
         ],
       ),
     );
   }
 
-  Widget _row() {
+  Widget _row({bool showStatus = true}) {
     final collection = widget.collection;
     final torrent = !collection.isShared;
     final accent = torrent ? AppColors.ember : AppColors.signal;
@@ -128,6 +137,17 @@ class _CollectionRowState extends State<CollectionRow> {
     // No metadata has arrived, so there is no total to measure against — an
     // indeterminate bar is the honest shape for "reaching out to a peer".
     final connecting = collection.isConnecting;
+    final detailsOpen =
+        widget.detail != null && _level != CollectionDetailLevel.collapsed;
+    final itemCount = collection.media.length;
+    final admins =
+        collection.collaborators.where((item) => item.isAdmin).length;
+    final subtitle = detailsOpen
+        ? [
+            '$itemCount item${itemCount == 1 ? '' : 's'}',
+            if (admins > 0) '$admins admin${admins == 1 ? '' : 's'}',
+          ].join(' · ')
+        : collection.subtitle;
     return Row(
       children: [
         SizedBox(
@@ -162,11 +182,11 @@ class _CollectionRowState extends State<CollectionRow> {
               ),
               const SizedBox(height: 4),
               Text(
-                collection.subtitle,
+                subtitle,
                 overflow: TextOverflow.ellipsis,
                 style: monoLabel(size: 11, letterSpacing: 0.2),
               ),
-              if (downloading || connecting) ...[
+              if ((downloading || connecting) && !detailsOpen) ...[
                 const SizedBox(height: 9),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -182,20 +202,32 @@ class _CollectionRowState extends State<CollectionRow> {
             ],
           ),
         ),
-        const SizedBox(width: 12),
-        if (downloading)
-          StatusBadge(
-            label: formatProgressPercent(collection.progress),
-            color: accent,
-          )
-        else if (collection.isSharing)
-          // Mint here is earned: this device is genuinely serving the
-          // collection right now.
-          StatusBadge(label: 'SHARING', color: accent)
-        else
-          StatusBadge(label: collection.state.toUpperCase()),
+        if (showStatus) ...[
+          const SizedBox(width: 12),
+          _status(),
+        ],
       ],
     );
+  }
+
+  Widget _status() {
+    final collection = widget.collection;
+    final accent = collection.isShared ? AppColors.signal : AppColors.ember;
+    final detailsOpen =
+        widget.detail != null && _level != CollectionDetailLevel.collapsed;
+    if (collection.state == 'downloading') {
+      return StatusBadge(
+        label: detailsOpen
+            ? 'DOWNLOADING'
+            : formatProgressPercent(collection.progress),
+        color: accent,
+      );
+    }
+    if (collection.isSharing) {
+      // Mint here is earned: this device is genuinely serving the collection.
+      return StatusBadge(label: 'SHARING', color: accent);
+    }
+    return StatusBadge(label: collection.state.toUpperCase());
   }
 }
 

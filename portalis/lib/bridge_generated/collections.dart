@@ -355,6 +355,7 @@ class MediaInfo {
   final BigInt lengthBytes;
   final BigInt downloadedBytes;
   final double progress;
+  final List<PieceRun> pieceRuns;
 
   /// `false` when this stands for a whole manifest entry whose torrent
   /// isn't in the session yet — tap to fetch.
@@ -371,6 +372,7 @@ class MediaInfo {
     required this.lengthBytes,
     required this.downloadedBytes,
     required this.progress,
+    required this.pieceRuns,
     required this.fetched,
     this.addedBy,
   });
@@ -384,6 +386,7 @@ class MediaInfo {
       lengthBytes.hashCode ^
       downloadedBytes.hashCode ^
       progress.hashCode ^
+      pieceRuns.hashCode ^
       fetched.hashCode ^
       addedBy.hashCode;
 
@@ -399,6 +402,7 @@ class MediaInfo {
           lengthBytes == other.lengthBytes &&
           downloadedBytes == other.downloadedBytes &&
           progress == other.progress &&
+          pieceRuns == other.pieceRuns &&
           fetched == other.fetched &&
           addedBy == other.addedBy;
 }

@@ -45,6 +45,19 @@ pub struct TorrentFile {
     pub absolute_path: String,
     pub length_bytes: u64,
     pub downloaded_bytes: u64,
+    /// File-relative intersections of verified and currently downloading
+    /// torrent pieces. Missing ranges are implicit.
+    pub piece_runs: Vec<PieceRun>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PieceRun {
+    pub offset_bytes: u64,
+    pub length_bytes: u64,
+    pub verified: bool,
+    /// Real peers assigned to the intersecting in-flight piece. Empty for a
+    /// verified run; peer identity is only its current network address.
+    pub peers: Vec<String>,
 }
 
 /// One native file Rust will publish as torrent content.
@@ -461,7 +474,7 @@ mod native {
     use tokio::sync::OnceCell;
 
     use super::{
-        PublishProgress, RawStorageEntry, SourceFile, TorrentFile, TorrentInfo,
+        PieceRun, PublishProgress, RawStorageEntry, SourceFile, TorrentFile, TorrentInfo,
         TORRENT_PIECE_LENGTH,
     };
 
@@ -1182,22 +1195,92 @@ mod native {
             return Vec::new();
         };
         let output_folder = std::path::Path::new(&details.output_folder);
+        let mut offset = 0u64;
         files
             .into_iter()
             .enumerate()
-            .map(|(i, f)| TorrentFile {
-                absolute_path: output_folder.join(&f.name).to_string_lossy().into_owned(),
-                name: f.name,
-                length_bytes: f.length,
-                // See `to_info`: file_progress isn't meaningful yet either
-                // while the startup integrity scan is still running.
-                downloaded_bytes: if initializing {
-                    0
-                } else {
-                    stats.file_progress.get(i).copied().unwrap_or(0)
-                },
+            .map(|(i, f)| {
+                let file_offset = offset;
+                offset = offset.saturating_add(f.length);
+                TorrentFile {
+                    absolute_path: output_folder.join(&f.name).to_string_lossy().into_owned(),
+                    name: f.name,
+                    length_bytes: f.length,
+                    // See `to_info`: file_progress isn't meaningful yet either
+                    // while the startup integrity scan is still running.
+                    downloaded_bytes: if initializing {
+                        0
+                    } else {
+                        stats.file_progress.get(i).copied().unwrap_or(0)
+                    },
+                    piece_runs: if initializing {
+                        Vec::new()
+                    } else {
+                        piece_runs_for_file(&stats.piece_activity, file_offset, f.length)
+                    },
+                }
             })
             .collect()
+    }
+
+    fn piece_runs_for_file(
+        activity: &librqbit::api::PieceActivityStats,
+        file_offset: u64,
+        file_length: u64,
+    ) -> Vec<PieceRun> {
+        if file_length == 0 || activity.piece_length == 0 || activity.piece_count == 0 {
+            return Vec::new();
+        }
+        let piece_length = u64::from(activity.piece_length);
+        let file_end = file_offset.saturating_add(file_length);
+        let first_piece = file_offset / piece_length;
+        let last_piece = file_end.saturating_sub(1) / piece_length;
+        let inflight = activity
+            .inflight_pieces
+            .iter()
+            .map(|assignment| (u64::from(assignment.piece_index), assignment.peer.clone()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut runs: Vec<PieceRun> = Vec::new();
+
+        for piece in first_piece..=last_piece {
+            if piece >= u64::from(activity.piece_count) {
+                break;
+            }
+            let byte = activity
+                .verified_piece_bitmap
+                .get((piece / 8) as usize)
+                .copied()
+                .unwrap_or(0);
+            let verified = byte & (1 << (7 - piece % 8)) != 0;
+            let peer = inflight.get(&piece);
+            if !verified && peer.is_none() {
+                continue;
+            }
+            let piece_start = piece.saturating_mul(piece_length);
+            let start = piece_start.max(file_offset);
+            let end = piece_start.saturating_add(piece_length).min(file_end);
+            if start >= end {
+                continue;
+            }
+            let peers = peer.into_iter().cloned().collect::<Vec<_>>();
+            let run = PieceRun {
+                offset_bytes: start - file_offset,
+                length_bytes: end - start,
+                verified,
+                peers,
+            };
+            if let Some(previous) = runs.last_mut() {
+                if previous.offset_bytes + previous.length_bytes == run.offset_bytes
+                    && previous.verified == run.verified
+                    && previous.peers == run.peers
+                {
+                    previous.length_bytes += run.length_bytes;
+                    continue;
+                }
+            }
+            runs.push(run);
+        }
+        runs
     }
 
     fn to_info(api: &Api, id: usize, handle: &Arc<librqbit::ManagedTorrent>) -> TorrentInfo {
@@ -1543,6 +1626,72 @@ mod native {
             .await
             .with_context(|| format!("adding torrent {info_hash_hex} with peer hints"))?;
         response_to_info(&api(session), response)
+    }
+
+    #[cfg(test)]
+    mod piece_activity_tests {
+        use super::piece_runs_for_file;
+        use librqbit::api::{InflightPieceStats, PieceActivityStats};
+
+        fn activity(bitmap: u8, inflight: Vec<InflightPieceStats>) -> PieceActivityStats {
+            PieceActivityStats {
+                piece_length: 4,
+                piece_count: 4,
+                verified_piece_bitmap: vec![bitmap],
+                inflight_pieces: inflight,
+            }
+        }
+
+        #[test]
+        fn verified_piece_runs_keep_sparse_relative_positions_and_merge_neighbors() {
+            let snapshot = activity(0b1101_0000, Vec::new());
+
+            assert_eq!(
+                piece_runs_for_file(&snapshot, 0, 16),
+                vec![
+                    super::PieceRun {
+                        offset_bytes: 0,
+                        length_bytes: 8,
+                        verified: true,
+                        peers: Vec::new(),
+                    },
+                    super::PieceRun {
+                        offset_bytes: 12,
+                        length_bytes: 4,
+                        verified: true,
+                        peers: Vec::new(),
+                    },
+                ]
+            );
+        }
+
+        #[test]
+        fn an_inflight_piece_is_intersected_truthfully_across_file_boundaries() {
+            let snapshot = activity(
+                0b1010_0000,
+                vec![InflightPieceStats {
+                    piece_index: 1,
+                    peer: "203.0.113.5:6881".into(),
+                }],
+            );
+
+            let first = piece_runs_for_file(&snapshot, 0, 6);
+            let second = piece_runs_for_file(&snapshot, 6, 10);
+
+            assert_eq!(first[0].offset_bytes, 0);
+            assert_eq!(first[0].length_bytes, 4);
+            assert!(first[0].verified);
+            assert_eq!(first[1].offset_bytes, 4);
+            assert_eq!(first[1].length_bytes, 2);
+            assert_eq!(first[1].peers, ["203.0.113.5:6881"]);
+
+            assert_eq!(second[0].offset_bytes, 0);
+            assert_eq!(second[0].length_bytes, 2);
+            assert_eq!(second[0].peers, ["203.0.113.5:6881"]);
+            assert_eq!(second[1].offset_bytes, 2);
+            assert_eq!(second[1].length_bytes, 4);
+            assert!(second[1].verified);
+        }
     }
 
     #[cfg(test)]

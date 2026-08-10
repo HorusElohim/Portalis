@@ -145,6 +145,16 @@ class Collection {
               m.progress,
               m.sizeBytes,
               m.downloadedBytes,
+              Object.hashAll(
+                m.pieceRuns.map(
+                  (run) => Object.hash(
+                    run.offsetBytes,
+                    run.lengthBytes,
+                    run.verified,
+                    Object.hashAll(run.peers),
+                  ),
+                ),
+              ),
               m.fetched,
               m.addedBy,
             ),

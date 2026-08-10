@@ -30,6 +30,8 @@ class CollectionDetail extends StatefulWidget {
     this.showCommands = true,
     this.level = CollectionDetailLevel.full,
     this.showTitle = true,
+    this.inlineHeader,
+    this.inlineStatus,
   });
 
   final Collection collection;
@@ -42,6 +44,8 @@ class CollectionDetail extends StatefulWidget {
   /// reason to ask for less.
   final CollectionDetailLevel level;
   final bool showTitle;
+  final Widget? inlineHeader;
+  final Widget? inlineStatus;
 
   @override
   State<CollectionDetail> createState() => _CollectionDetailState();
@@ -247,15 +251,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
         _toast('Fetching $started item${started == 1 ? '' : 's'}');
       });
 
-  Future<void> _delete() => confirmAndRemoveCollection(
-        context,
-        _collection,
-        setBusy: (busy) {
-          if (mounted) setState(() => _busy = busy);
-        },
-      );
-
-  Future<void> _deleteFiles() => confirmAndDeleteCollectionFiles(
+  Future<void> _delete() => confirmAndDeleteCollection(
         context,
         _collection,
         setBusy: (busy) {
@@ -303,6 +299,8 @@ class _CollectionDetailState extends State<CollectionDetail> {
           showCommands: widget.showCommands,
           level: widget.level,
           showTitle: widget.showTitle,
+          inlineHeader: widget.inlineHeader,
+          inlineStatus: widget.inlineStatus,
           onInvite: _showInvite,
           onAddMedia: _addMedia,
           onFetch: _fetchPending,
@@ -343,10 +341,6 @@ class _CollectionDetailState extends State<CollectionDetail> {
       unawaited(_delete());
       return;
     }
-    if (command == CollectionCommand.deleteFiles) {
-      unawaited(_deleteFiles());
-      return;
-    }
     unawaited(_run(() async {
       final id = _collection.id;
       switch (command) {
@@ -354,10 +348,7 @@ class _CollectionDetailState extends State<CollectionDetail> {
           await AppControllers.collections.restart(id);
         case CollectionCommand.pause:
           await AppControllers.collections.pause(id);
-        case CollectionCommand.forget:
-          await AppControllers.collections.stopCollection(id);
         case CollectionCommand.delete:
-        case CollectionCommand.deleteFiles:
           return;
       }
       _toast('${command.label} applied');

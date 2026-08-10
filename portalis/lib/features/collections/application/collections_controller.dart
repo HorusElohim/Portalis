@@ -200,6 +200,14 @@ class CollectionsController extends ChangeNotifier {
     await refresh();
   }
 
+  /// Removes local bytes first, then removes the collection in every case.
+  /// Keeping this sequence here makes the application workflow explicit and
+  /// prevents the UI from recreating the old "files only" behavior.
+  Future<void> deleteWithFiles(String collectionId) async {
+    await _repository.deleteFiles(collectionId);
+    await delete(collectionId);
+  }
+
   Future<void> pause(String collectionId) =>
       _refreshAfter(() => _repository.pause(collectionId));
 

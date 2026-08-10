@@ -9,6 +9,7 @@ class MediaItem {
     this.progress = 0.0,
     this.sizeBytes = 0,
     this.downloadedBytes = 0,
+    this.pieceRuns = const [],
     this.fetched = true,
     this.addedBy,
   }) : _entryLabel = entryLabel;
@@ -20,6 +21,7 @@ class MediaItem {
   final double progress;
   final int sizeBytes;
   final int downloadedBytes;
+  final List<MediaPieceRun> pieceRuns;
   final bool fetched;
   final String? addedBy;
 
@@ -30,4 +32,22 @@ class MediaItem {
   /// path is the readiness signal. This avoids a stale progress value hiding
   /// a valid local file.
   bool get isReady => localPath != null;
+}
+
+/// One exact file-relative intersection with torrent piece state. Missing
+/// byte ranges are intentionally absent.
+class MediaPieceRun {
+  const MediaPieceRun({
+    required this.offsetBytes,
+    required this.lengthBytes,
+    required this.verified,
+    this.peers = const [],
+  });
+
+  final int offsetBytes;
+  final int lengthBytes;
+  final bool verified;
+  final List<String> peers;
+
+  bool get isDownloading => !verified && peers.isNotEmpty;
 }

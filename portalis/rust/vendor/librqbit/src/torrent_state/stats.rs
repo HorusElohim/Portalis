@@ -70,12 +70,29 @@ impl std::fmt::Display for TorrentStatsState {
 pub struct TorrentStats {
     pub state: TorrentStatsState,
     pub file_progress: Vec<u64>,
+    /// Exact verified-piece and live assignment state. The bitmap is packed
+    /// MSB-first, matching the BitTorrent wire bitfield.
+    pub piece_activity: PieceActivityStats,
     pub error: Option<String>,
     pub progress_bytes: u64,
     pub uploaded_bytes: u64,
     pub total_bytes: u64,
     pub finished: bool,
     pub live: Option<LiveStats>,
+}
+
+#[derive(Default, Serialize, Debug)]
+pub struct PieceActivityStats {
+    pub piece_length: u32,
+    pub piece_count: u32,
+    pub verified_piece_bitmap: Vec<u8>,
+    pub inflight_pieces: Vec<InflightPieceStats>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct InflightPieceStats {
+    pub piece_index: u32,
+    pub peer: String,
 }
 
 impl std::fmt::Display for TorrentStats {

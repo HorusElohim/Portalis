@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `add_info_hash_with_peers`, `advance_hashing`, `advance`, `bt_listen_port_cached`, `bt_listen_port`, `cancel`, `complete_final_piece`, `delete_torrent_files`, `ensure_active`, `fail`, `forget_torrent`, `inspect_source_files`, `make_source_names_unique`, `new`, `numbered_source_name`, `pause_torrent`, `publish`, `restart_torrent`, `restore_linked_sources`, `session_started`, `set_rate_limits`, `set_stage`, `snapshot`, `storage_breakdown`, `validate_source_files`, `verify_linked_sources`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `PublishProgressState`, `PublishProgress`, `RawStorageEntry`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Create a new collection by linking local files into a torrent layout,
 /// building a `.torrent` from that layout and adding it back to the session at
@@ -51,6 +51,40 @@ Future<String> outputDir() => RustLib.instance.api.crateTorrentOutputDir();
 Future<BigInt> storageUsageBytes() =>
     RustLib.instance.api.crateTorrentStorageUsageBytes();
 
+class PieceRun {
+  final BigInt offsetBytes;
+  final BigInt lengthBytes;
+  final bool verified;
+
+  /// Real peers assigned to the intersecting in-flight piece. Empty for a
+  /// verified run; peer identity is only its current network address.
+  final List<String> peers;
+
+  const PieceRun({
+    required this.offsetBytes,
+    required this.lengthBytes,
+    required this.verified,
+    required this.peers,
+  });
+
+  @override
+  int get hashCode =>
+      offsetBytes.hashCode ^
+      lengthBytes.hashCode ^
+      verified.hashCode ^
+      peers.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PieceRun &&
+          runtimeType == other.runtimeType &&
+          offsetBytes == other.offsetBytes &&
+          lengthBytes == other.lengthBytes &&
+          verified == other.verified &&
+          peers == other.peers;
+}
+
 /// One native file Rust will publish as torrent content.
 ///
 /// Only the path crosses the Flutter boundary. Rust owns reading, hashing,
@@ -91,11 +125,16 @@ class TorrentFile {
   final BigInt lengthBytes;
   final BigInt downloadedBytes;
 
+  /// File-relative intersections of verified and currently downloading
+  /// torrent pieces. Missing ranges are implicit.
+  final List<PieceRun> pieceRuns;
+
   const TorrentFile({
     required this.name,
     required this.absolutePath,
     required this.lengthBytes,
     required this.downloadedBytes,
+    required this.pieceRuns,
   });
 
   @override
@@ -103,7 +142,8 @@ class TorrentFile {
       name.hashCode ^
       absolutePath.hashCode ^
       lengthBytes.hashCode ^
-      downloadedBytes.hashCode;
+      downloadedBytes.hashCode ^
+      pieceRuns.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -113,7 +153,8 @@ class TorrentFile {
           name == other.name &&
           absolutePath == other.absolutePath &&
           lengthBytes == other.lengthBytes &&
-          downloadedBytes == other.downloadedBytes;
+          downloadedBytes == other.downloadedBytes &&
+          pieceRuns == other.pieceRuns;
 }
 
 class TorrentInfo {

@@ -10,7 +10,7 @@ import 'package:portalis/features/collections/domain/transfer_history.dart';
 void main() {
   tearDown(resetTestState);
 
-group('how long is left', () {
+  group('how long is left', () {
     test('reads coarser the further out it is', () {
       // Seconds matter when there are seconds left and are noise when there
       // are hours.
@@ -54,7 +54,8 @@ group('how long is left', () {
       await pumpApp(
         tester,
         collections: [
-          buildCollection(state: 'downloading', totalBytes: 1000, downloadedBytes: 400),
+          buildCollection(
+              state: 'downloading', totalBytes: 1000, downloadedBytes: 400),
         ],
       );
 
@@ -63,12 +64,52 @@ group('how long is left', () {
     });
   });
 
-
-
   group('home holds both the welcome and the list', () {
     testWidgets('shows the welcome when there is nothing yet', (tester) async {
       await pumpApp(tester);
-      expect(find.textContaining('SEND ANYTHING'), findsOneWidget);
+      expect(find.text('SEND ANYTHING TO ANYBODY'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('puts every line of welcome copy in the same soft fade',
+        (tester) async {
+      await pumpApp(tester, size: desktopSize);
+
+      const fadeKey = Key('homeWelcomeMessage');
+      for (final copy in [
+        'SEND ANYTHING TO ANYBODY',
+        'No uploads, no size limits. Files move device to device — and stay on yours.',
+        'NO ACCOUNT · NOTHING LEAVES THIS DEVICE UNASKED',
+      ]) {
+        expect(
+          find.ancestor(
+            of: find.text(copy),
+            matching: find.byKey(fadeKey),
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('softly hides the welcome and replays it on every Home entry',
+        (tester) async {
+      await pumpApp(tester);
+
+      FadeTransition message() => tester.widget<FadeTransition>(
+            find.byKey(const Key('homeWelcomeMessage')),
+          );
+
+      expect(message().opacity.value, 1);
+      await tester.pump(const Duration(seconds: 7));
+      expect(message().opacity.value, 0);
+
+      await tester.tap(find.byKey(const Key('navTab1')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('navTab0')));
+      await tester.pump();
+
+      expect(message().opacity.value, 1);
       expect(tester.takeException(), isNull);
     });
 
@@ -88,8 +129,6 @@ group('how long is left', () {
       expect(tester.takeException(), isNull);
     });
   });
-
-
 
   group('home', () {
     testWidgets('shows an active collection once in the library',
@@ -185,25 +224,27 @@ group('how long is left', () {
     });
   });
 
-
-
   group('colour carries meaning', () {
     testWidgets('a torrent row is ember and a shared row is mint',
         (tester) async {
       // Tall enough that both rows are built â€” a SliverList doesn't
       // instantiate what it can't show, and the assertion is about both.
-      await pumpApp(tester, collections: [
-        buildCollection(
-            id: 'a', name: 'Shared thing', state: 'downloading',
-            downloadMbps: 1),
-        buildCollection(
-          id: 'b',
-          name: 'ubuntu.iso',
-          kind: CollectionKind.torrent,
-          state: 'downloading',
-          downloadMbps: 2,
-        ),
-      ], size: const Size(390, 1400));
+      await pumpApp(tester,
+          collections: [
+            buildCollection(
+                id: 'a',
+                name: 'Shared thing',
+                state: 'downloading',
+                downloadMbps: 1),
+            buildCollection(
+              id: 'b',
+              name: 'ubuntu.iso',
+              kind: CollectionKind.torrent,
+              state: 'downloading',
+              downloadMbps: 2,
+            ),
+          ],
+          size: const Size(390, 1400));
 
       final bars = tester
           .widgetList<LinearProgressIndicator>(
@@ -216,8 +257,6 @@ group('how long is left', () {
     });
   });
 
-
-
   group('sharing is stated, never implied', () {
     testWidgets('says so plainly while the engine is still starting',
         (tester) async {
@@ -226,8 +265,8 @@ group('how long is left', () {
       // broken.
       await pumpApp(tester, collections: [buildCollection(state: 'pending')]);
 
-      expect(find.textContaining('Starting the transfer engine'),
-          findsOneWidget);
+      expect(
+          find.textContaining('Starting the transfer engine'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -255,9 +294,21 @@ group('how long is left', () {
     });
   });
 
-
-
   group('polling cadence', () {
+    test('deleting with files removes bytes before the collection', () async {
+      final repository = _DeletionRepository();
+      final controller = CollectionsController(
+        repository: repository,
+        peerHistoryStore: _EmptyPeerHistoryStore(),
+        transferHistoryStore: _EmptyTransferHistoryStore(),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.deleteWithFiles('trip');
+
+      expect(repository.deletions, ['files:trip', 'collection:trip']);
+    });
+
     test('an unchanged poll notifies nobody', () async {
       // A settled app polls for minutes without anything moving. Every one of
       // those polls used to rebuild every widget listening to this.
@@ -297,8 +348,6 @@ group('how long is left', () {
     });
   });
 
-
-
   group('what is in flight', () {
     testWidgets('is a filter on Home, not a destination of its own',
         (tester) async {
@@ -335,6 +384,20 @@ class _EmptyCollectionsRepository implements CollectionsRepository {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       Future<dynamic>.error(UnimplementedError());
+}
+
+class _DeletionRepository extends _EmptyCollectionsRepository {
+  final deletions = <String>[];
+
+  @override
+  Future<void> deleteFiles(String collectionId) async {
+    deletions.add('files:$collectionId');
+  }
+
+  @override
+  Future<void> delete(String collectionId) async {
+    deletions.add('collection:$collectionId');
+  }
 }
 
 class _EmptyPeerHistoryStore implements PeerHistoryStore {

@@ -21,7 +21,12 @@ class CollectionsList extends StatelessWidget {
   final List<Collection> collections;
   final String? openId;
   final ValueChanged<Collection> onOpen;
-  final Widget Function(Collection collection, CollectionDetailLevel level) detailFor;
+  final Widget Function(
+    Collection collection,
+    CollectionDetailLevel level,
+    Widget inlineHeader,
+    Widget inlineStatus,
+  ) detailFor;
   final ValueChanged<(Collection, CollectionCommand)> onCommand;
   final Widget? footer;
 
@@ -48,7 +53,8 @@ class CollectionsList extends StatelessWidget {
             collection: collection,
             selected: isOpen,
             onTap: () => onOpen(collection),
-            detail: (level) => detailFor(collection, level),
+            detail: (level, inlineHeader, inlineStatus) =>
+                detailFor(collection, level, inlineHeader, inlineStatus),
             onCommand: (command) => onCommand((collection, command)),
           );
         },

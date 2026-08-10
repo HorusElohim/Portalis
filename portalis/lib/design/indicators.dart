@@ -1,5 +1,6 @@
 // Cross-feature indicator design primitive.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
@@ -176,12 +177,16 @@ class PerimeterProgress extends StatelessWidget {
     required this.color,
     required this.borderRadius,
     required this.child,
+    this.segments = const [],
+    this.activeColor,
   });
 
   final double progress;
   final Color color;
   final BorderRadius borderRadius;
   final Widget child;
+  final List<PerimeterSegment> segments;
+  final Color? activeColor;
 
   @override
   Widget build(BuildContext context) {
@@ -190,23 +195,56 @@ class PerimeterProgress extends StatelessWidget {
       foregroundPainter: _PerimeterProgressPainter(
         progress: progress,
         color: color,
+        activeColor: activeColor ?? AppColors.signalSoft,
         borderRadius: borderRadius,
+        segments: segments,
       ),
       child: child,
     );
   }
 }
 
+/// A truthful range on a perimeter. [start] and [extent] are normalized file
+/// byte positions; active ranges may carry one marker per assigned worker.
+class PerimeterSegment {
+  const PerimeterSegment({
+    required this.start,
+    required this.extent,
+    this.active = false,
+    this.workerCount = 0,
+  });
+
+  final double start;
+  final double extent;
+  final bool active;
+  final int workerCount;
+
+  @override
+  int get hashCode => Object.hash(start, extent, active, workerCount);
+
+  @override
+  bool operator ==(Object other) =>
+      other is PerimeterSegment &&
+      start == other.start &&
+      extent == other.extent &&
+      active == other.active &&
+      workerCount == other.workerCount;
+}
+
 class _PerimeterProgressPainter extends CustomPainter {
   _PerimeterProgressPainter({
     required this.progress,
     required this.color,
+    required this.activeColor,
     required this.borderRadius,
+    required this.segments,
   });
 
   final double progress;
   final Color color;
+  final Color activeColor;
   final BorderRadius borderRadius;
+  final List<PerimeterSegment> segments;
 
   static const _strokeWidth = 2.5;
 
@@ -231,21 +269,47 @@ class _PerimeterProgressPainter extends CustomPainter {
     final iterator = (Path()..addRRect(rrect)).computeMetrics().iterator;
     if (!iterator.moveNext()) return;
     final metric = iterator.current;
-    final extracted =
-        metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
-    canvas.drawPath(
-      extracted,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _strokeWidth
-        ..strokeCap = StrokeCap.round,
-    );
+    if (segments.isEmpty) {
+      final extracted =
+          metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
+      canvas.drawPath(extracted, _stroke(color));
+      return;
+    }
+    for (final segment in segments) {
+      final start = segment.start.clamp(0.0, 1.0) * metric.length;
+      final end =
+          (segment.start + segment.extent).clamp(0.0, 1.0) * metric.length;
+      if (end <= start) continue;
+      final segmentColor = segment.active ? activeColor : color;
+      canvas.drawPath(metric.extractPath(start, end), _stroke(segmentColor));
+      if (!segment.active || segment.workerCount == 0) continue;
+      final tangent = metric.getTangentForOffset((start + end) / 2);
+      if (tangent == null) continue;
+      final count = segment.workerCount.clamp(1, 3);
+      for (var index = 0; index < count; index++) {
+        final displacement = (index - (count - 1) / 2) * 4.0;
+        canvas.drawCircle(
+          tangent.position + tangent.vector * displacement,
+          2.2,
+          Paint()..color = activeColor,
+        );
+      }
+    }
   }
+
+  Paint _stroke(Color value) => Paint()
+    ..color = value
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = _strokeWidth
+    ..strokeCap = StrokeCap.round;
 
   @override
   bool shouldRepaint(covariant _PerimeterProgressPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.color != color;
+      oldDelegate.progress != progress ||
+      oldDelegate.color != color ||
+      oldDelegate.activeColor != activeColor ||
+      oldDelegate.borderRadius != borderRadius ||
+      !listEquals(oldDelegate.segments, segments);
 }
 
 /// The live numbers for one transfer: a bar, what is done, and what is

@@ -56,6 +56,15 @@ abstract final class CollectionMapper {
         progress: info.progress,
         sizeBytes: info.lengthBytes.toInt(),
         downloadedBytes: info.downloadedBytes.toInt(),
+        pieceRuns: [
+          for (final run in info.pieceRuns)
+            MediaPieceRun(
+              offsetBytes: run.offsetBytes.toInt(),
+              lengthBytes: run.lengthBytes.toInt(),
+              verified: run.verified,
+              peers: run.peers,
+            ),
+        ],
         fetched: info.fetched,
         addedBy: info.addedBy,
       );

@@ -44,7 +44,7 @@ use crate::session::TorrentId;
 use crate::spawn_utils::BlockingSpawner;
 use crate::storage::BoxStorageFactory;
 use crate::stream_connect::StreamConnector;
-use crate::torrent_state::stats::LiveStats;
+use crate::torrent_state::stats::{LiveStats, PieceActivityStats};
 use crate::type_aliases::DiskWorkQueueSender;
 use crate::type_aliases::FileInfos;
 use crate::type_aliases::PeerStream;
@@ -457,6 +457,7 @@ impl ManagedTorrent {
                 .map(|r| r.lengths.total_length())
                 .unwrap_or_default(),
             file_progress: Vec::new(),
+            piece_activity: PieceActivityStats::default(),
             state: S::Error,
             error: None,
             progress_bytes: 0,
@@ -478,6 +479,16 @@ impl ManagedTorrent {
                     resp.progress_bytes = hns.progress();
                     resp.finished = hns.finished();
                     resp.file_progress = p.chunk_tracker.per_file_have_bytes().to_owned();
+                    resp.piece_activity = PieceActivityStats {
+                        piece_length: p.chunk_tracker.get_lengths().default_piece_length(),
+                        piece_count: p.chunk_tracker.get_lengths().total_pieces(),
+                        verified_piece_bitmap: p
+                            .chunk_tracker
+                            .get_have_pieces()
+                            .as_bytes()
+                            .to_vec(),
+                        inflight_pieces: Vec::new(),
+                    };
                 }
                 ManagedTorrentState::Live(l) => {
                     resp.state = S::Live;
@@ -493,6 +504,7 @@ impl ManagedTorrent {
                         .ok()
                         .map(|c| c.per_file_have_bytes().to_owned())
                         .unwrap_or_default();
+                    resp.piece_activity = l.piece_activity_snapshot();
                     resp.live = Some(live_stats);
                 }
                 ManagedTorrentState::Error(e) => {

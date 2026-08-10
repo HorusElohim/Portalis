@@ -37,6 +37,7 @@ class CollectionLibrary extends StatelessWidget {
     required this.onShare,
     required this.onJoin,
     required this.onCommand,
+    required this.welcomeCycle,
   });
 
   final bool wide;
@@ -55,6 +56,7 @@ class CollectionLibrary extends StatelessWidget {
   final VoidCallback onShare;
   final ValueChanged<String> onJoin;
   final ValueChanged<(Collection, CollectionCommand)> onCommand;
+  final int welcomeCycle;
 
   @override
   Widget build(BuildContext context) => wide ? _wide() : _compact();
@@ -114,12 +116,15 @@ class CollectionLibrary extends StatelessWidget {
         onOpen: onOpen,
         onCommand: onCommand,
         footer: ShareCollectionAction(onTap: onShare),
-        detailFor: (collection, level) => CollectionDetail(
+        detailFor: (collection, level, inlineHeader, inlineStatus) =>
+            CollectionDetail(
           key: ValueKey(collection.id),
           collection: collection,
           showCommands: true,
           level: level,
           showTitle: false,
+          inlineHeader: inlineHeader,
+          inlineStatus: inlineStatus,
         ),
       );
     }
@@ -132,7 +137,10 @@ class CollectionLibrary extends StatelessWidget {
             : 'Nothing is being received right now.',
       );
     }
-    return EmptyCollectionsWelcome(onShare: onShare);
+    return EmptyCollectionsWelcome(
+      onShare: onShare,
+      welcomeCycle: welcomeCycle,
+    );
   }
 
   Widget _compact() {
@@ -185,8 +193,7 @@ class CollectionLibrary extends StatelessWidget {
                   itemBuilder: (context, index) => CollectionRow(
                     collection: shown[index],
                     onTap: () => onOpen(shown[index]),
-                    onCommand: (command) =>
-                        onCommand((shown[index], command)),
+                    onCommand: (command) => onCommand((shown[index], command)),
                   ),
                 ),
               ),
@@ -194,7 +201,10 @@ class CollectionLibrary extends StatelessWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(34, 26, 34, 0),
-                child: EmptyCollectionsCallToAction(onShare: onShare),
+                child: EmptyCollectionsCallToAction(
+                  onShare: onShare,
+                  welcomeCycle: welcomeCycle,
+                ),
               ),
             ),
           if (collections.isNotEmpty)

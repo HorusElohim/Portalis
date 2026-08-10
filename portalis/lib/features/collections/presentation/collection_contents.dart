@@ -4,6 +4,7 @@ import '../../../design/design.dart';
 import '../../../theme.dart';
 import '../../media/domain/media_item.dart';
 import '../../media/presentation/media_thumbnail.dart';
+import '../../media/presentation/media_piece_frame.dart';
 import '../domain/collection.dart';
 import 'collection_presentation.dart';
 
@@ -138,8 +139,8 @@ class _MediaGrid extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: PerimeterProgress(
-                  progress: item.progress,
+                child: MediaPieceFrame(
+                  media: item,
                   color: collection.hue,
                   borderRadius: BorderRadius.circular(AppRadius.tight),
                   child: Container(
@@ -158,7 +159,8 @@ class _MediaGrid extends StatelessWidget {
                             MediaThumbnail(media: item, borderRadius: 6),
                             if (!item.fetched)
                               Container(
-                                color: AppColors.surfaceDeep.withValues(alpha: 0.55),
+                                color: AppColors.surfaceDeep
+                                    .withValues(alpha: 0.55),
                                 alignment: Alignment.center,
                                 child: Icon(
                                   Icons.cloud_download_outlined,

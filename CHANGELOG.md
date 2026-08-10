@@ -6,6 +6,12 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+- Added truthful per-media torrent piece activity. Verified byte ranges now
+  appear at their real relative positions around media previews, while live
+  worker markers appear only for peers the engine has actually assigned to
+  in-flight pieces; sequential downloads remain sequential instead of being
+  visually spread across unrelated files.
+
 - Started Nexus M4 with the share publication rules: a share's owner is fixed
   by its first publication, revisions only ever move forward one at a time and
   must follow the snapshot the share is on, and an identical retry succeeds
@@ -32,6 +38,30 @@
 ### Fixed
 
 <!-- Bug fixes and regressions go here. -->
+
+- Replaced the ambiguous transfer-history sparkline with a labeled speed
+  chart: download and upload now state whether a value is current or a peak,
+  the vertical scale has units, the session duration and endpoints are
+  explicit, and completed transfers no longer present `0.0 MB/s` as though it
+  explained the historical line. Expanded collection cards now let progress,
+  peers, remaining time, and history sit directly in the collection without a
+  nested panel or empty-chart frame. Completed histories label their final
+  timestamp as `END`, including older records without an explicit completion
+  time. Expanded collection identity, progress, current/peak speed, and actions
+  now share one responsive header above the graph instead of occupying separate
+  vertical sections. Its action dock uses compact icon controls for lifecycle
+  and destructive commands plus short labeled collection actions, keeping the
+  full command set on one line at desktop widths. The progress track now closes
+  the transfer visualization beneath the graph instead of separating its
+  header from the chart. Transfer plots now use a logarithmic vertical scale
+  so simultaneous upload and download remain visible despite large speed
+  differences, and either direction keeps the temporal graph on screen.
+  Collection actions no longer expose `Forget` or a files-only deletion;
+  one `Delete` confirmation now offers `Cancel`, `Delete`, and `Delete with
+  files`, with both destructive choices removing the collection.
+- Shortened the empty Home welcome to `Send anything to anybody`; all welcome
+  copy now lingers briefly, then softly fades and collapses, replaying whenever
+  Home is entered again while the logo remains available.
 
 - Fixed the Settings efficiency benchmark reporting `0 ms`. The run is
   sub-millisecond, and whole milliseconds rounded it away, which reads as a

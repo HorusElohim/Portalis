@@ -1369,6 +1369,18 @@ impl SseDecode for Vec<crate::collections::MediaInfo> {
     }
 }
 
+impl SseDecode for Vec<crate::torrent::PieceRun> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::torrent::PieceRun>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1439,6 +1451,7 @@ impl SseDecode for crate::collections::MediaInfo {
         let mut var_lengthBytes = <u64>::sse_decode(deserializer);
         let mut var_downloadedBytes = <u64>::sse_decode(deserializer);
         let mut var_progress = <f64>::sse_decode(deserializer);
+        let mut var_pieceRuns = <Vec<crate::torrent::PieceRun>>::sse_decode(deserializer);
         let mut var_fetched = <bool>::sse_decode(deserializer);
         let mut var_addedBy = <Option<String>>::sse_decode(deserializer);
         return crate::collections::MediaInfo {
@@ -1449,6 +1462,7 @@ impl SseDecode for crate::collections::MediaInfo {
             length_bytes: var_lengthBytes,
             downloaded_bytes: var_downloadedBytes,
             progress: var_progress,
+            piece_runs: var_pieceRuns,
             fetched: var_fetched,
             added_by: var_addedBy,
         };
@@ -1499,6 +1513,22 @@ impl SseDecode for Option<u64> {
     }
 }
 
+impl SseDecode for crate::torrent::PieceRun {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_offsetBytes = <u64>::sse_decode(deserializer);
+        let mut var_lengthBytes = <u64>::sse_decode(deserializer);
+        let mut var_verified = <bool>::sse_decode(deserializer);
+        let mut var_peers = <Vec<String>>::sse_decode(deserializer);
+        return crate::torrent::PieceRun {
+            offset_bytes: var_offsetBytes,
+            length_bytes: var_lengthBytes,
+            verified: var_verified,
+            peers: var_peers,
+        };
+    }
+}
+
 impl SseDecode for crate::torrent::SourceFile {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1538,11 +1568,13 @@ impl SseDecode for crate::torrent::TorrentFile {
         let mut var_absolutePath = <String>::sse_decode(deserializer);
         let mut var_lengthBytes = <u64>::sse_decode(deserializer);
         let mut var_downloadedBytes = <u64>::sse_decode(deserializer);
+        let mut var_pieceRuns = <Vec<crate::torrent::PieceRun>>::sse_decode(deserializer);
         return crate::torrent::TorrentFile {
             name: var_name,
             absolute_path: var_absolutePath,
             length_bytes: var_lengthBytes,
             downloaded_bytes: var_downloadedBytes,
+            piece_runs: var_pieceRuns,
         };
     }
 }
@@ -1882,6 +1914,7 @@ impl flutter_rust_bridge::IntoDart for crate::collections::MediaInfo {
             self.length_bytes.into_into_dart().into_dart(),
             self.downloaded_bytes.into_into_dart().into_dart(),
             self.progress.into_into_dart().into_dart(),
+            self.piece_runs.into_into_dart().into_dart(),
             self.fetched.into_into_dart().into_dart(),
             self.added_by.into_into_dart().into_dart(),
         ]
@@ -1893,6 +1926,24 @@ impl flutter_rust_bridge::IntoIntoDart<crate::collections::MediaInfo>
     for crate::collections::MediaInfo
 {
     fn into_into_dart(self) -> crate::collections::MediaInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::torrent::PieceRun {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.offset_bytes.into_into_dart().into_dart(),
+            self.length_bytes.into_into_dart().into_dart(),
+            self.verified.into_into_dart().into_dart(),
+            self.peers.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::torrent::PieceRun {}
+impl flutter_rust_bridge::IntoIntoDart<crate::torrent::PieceRun> for crate::torrent::PieceRun {
+    fn into_into_dart(self) -> crate::torrent::PieceRun {
         self
     }
 }
@@ -1945,6 +1996,7 @@ impl flutter_rust_bridge::IntoDart for crate::torrent::TorrentFile {
             self.absolute_path.into_into_dart().into_dart(),
             self.length_bytes.into_into_dart().into_dart(),
             self.downloaded_bytes.into_into_dart().into_dart(),
+            self.piece_runs.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2157,6 +2209,16 @@ impl SseEncode for Vec<crate::collections::MediaInfo> {
     }
 }
 
+impl SseEncode for Vec<crate::torrent::PieceRun> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::torrent::PieceRun>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2217,6 +2279,7 @@ impl SseEncode for crate::collections::MediaInfo {
         <u64>::sse_encode(self.length_bytes, serializer);
         <u64>::sse_encode(self.downloaded_bytes, serializer);
         <f64>::sse_encode(self.progress, serializer);
+        <Vec<crate::torrent::PieceRun>>::sse_encode(self.piece_runs, serializer);
         <bool>::sse_encode(self.fetched, serializer);
         <Option<String>>::sse_encode(self.added_by, serializer);
     }
@@ -2262,6 +2325,16 @@ impl SseEncode for Option<u64> {
     }
 }
 
+impl SseEncode for crate::torrent::PieceRun {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.offset_bytes, serializer);
+        <u64>::sse_encode(self.length_bytes, serializer);
+        <bool>::sse_encode(self.verified, serializer);
+        <Vec<String>>::sse_encode(self.peers, serializer);
+    }
+}
+
 impl SseEncode for crate::torrent::SourceFile {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2289,6 +2362,7 @@ impl SseEncode for crate::torrent::TorrentFile {
         <String>::sse_encode(self.absolute_path, serializer);
         <u64>::sse_encode(self.length_bytes, serializer);
         <u64>::sse_encode(self.downloaded_bytes, serializer);
+        <Vec<crate::torrent::PieceRun>>::sse_encode(self.piece_runs, serializer);
     }
 }
 

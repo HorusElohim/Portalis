@@ -21,6 +21,8 @@ class CollectionOverview extends StatelessWidget {
     this.showCommands = true,
     this.level = CollectionDetailLevel.full,
     this.showTitle = true,
+    this.inlineHeader,
+    this.inlineStatus,
     required this.onInvite,
     required this.onAddMedia,
     required this.onFetch,
@@ -35,6 +37,8 @@ class CollectionOverview extends StatelessWidget {
   final bool showCommands;
   final CollectionDetailLevel level;
   final bool showTitle;
+  final Widget? inlineHeader;
+  final Widget? inlineStatus;
   final VoidCallback onInvite;
   final VoidCallback onAddMedia;
   final VoidCallback onFetch;
@@ -53,43 +57,80 @@ class CollectionOverview extends StatelessWidget {
     ];
     final ingestion = collection.ingestion;
     final commandBusy = busy || (ingestion != null && !ingestion.failed);
+    final commandBar = CollectionCommandBar(
+      busy: commandBusy,
+      onCommand: onCommand,
+      trailingActions: [
+        if (collection.isShared)
+          PillButton(
+            label: 'Invite',
+            icon: Icon(
+              Icons.people_alt_outlined,
+              size: 16,
+              color: AppColors.signalSoft,
+            ),
+            onTap: commandBusy ? null : onInvite,
+          ),
+        if (collection.isShared)
+          PillButton(
+            label: 'Add media',
+            dim: true,
+            onTap: commandBusy ? null : onAddMedia,
+          ),
+        if (collection.pendingMedia > 0)
+          PillButton(
+            label: 'Fetch ${collection.pendingMedia}',
+            onTap: commandBusy ? null : onFetch,
+          ),
+      ],
+    );
+    final actionDock = CollectionActionDock(
+      busy: commandBusy,
+      onCommand: onCommand,
+      onInvite: collection.isShared ? onInvite : null,
+      onAddMedia: collection.isShared ? onAddMedia : null,
+      onFetch: collection.pendingMedia > 0 ? onFetch : null,
+      pendingMedia: collection.pendingMedia,
+    );
+    final hasTransfer = collection.totalBytes > 0 ||
+        collection.downloadMbps > 0 ||
+        collection.uploadMbps > 0 ||
+        transferHistory.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _CollectionControls(
-          collection: collection,
-        ),
+        if (inlineHeader == null)
+          _CollectionControls(
+            collection: collection,
+          ),
         if (showTitle) ...[
           Text(
             collection.name,
             style: displayText(size: 23, weight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-        ],
-        Text(
-          collection.isShared
-              ? 'Shared collection - ${collection.subtitle}'
-              : 'Torrent - ${collection.subtitle}',
-          style: monoLabel(
-            size: 12,
-            color: AppColors.textDim,
-            letterSpacing: 0,
+          Text(
+            collection.isShared
+                ? 'Shared collection - ${collection.subtitle}'
+                : 'Torrent - ${collection.subtitle}',
+            style: monoLabel(
+              size: 12,
+              color: AppColors.textDim,
+              letterSpacing: 0,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        CopiesIndicator(
-          color: collection.hue,
-          label: collection.copiesLabel,
-          fontSize: 13,
-        ),
+          const SizedBox(height: 6),
+          CopiesIndicator(
+            color: collection.hue,
+            label: collection.copiesLabel,
+            fontSize: 13,
+          ),
+        ],
         if (ingestion != null) ...[
           const SizedBox(height: 10),
           CollectionImportProgress(ingestion: ingestion),
         ],
-        if (collection.totalBytes > 0 ||
-            collection.downloadMbps > 0 ||
-            collection.uploadMbps > 0 ||
-            transferHistory.isNotEmpty) ...[
+        if (inlineHeader != null || hasTransfer) ...[
           const SizedBox(height: 10),
           TransferPanel(
             progress: collection.progress,
@@ -103,37 +144,14 @@ class CollectionOverview extends StatelessWidget {
             livePeers: collection.livePeers,
             etaLabel: collection.etaLabel,
             color: collection.hue,
+            leading: inlineHeader,
+            status: inlineStatus,
+            actions: inlineHeader != null && showCommands ? actionDock : null,
           ),
         ],
-        if (showCommands) ...[
+        if (showCommands && inlineHeader == null) ...[
           const SizedBox(height: 14),
-          CollectionCommandBar(
-            busy: commandBusy,
-            onCommand: onCommand,
-            trailingActions: [
-              if (collection.isShared)
-                PillButton(
-                  label: 'Invite',
-                  icon: Icon(
-                    Icons.people_alt_outlined,
-                    size: 16,
-                    color: AppColors.signalSoft,
-                  ),
-                  onTap: commandBusy ? null : onInvite,
-                ),
-              if (collection.isShared)
-                PillButton(
-                  label: 'Add media',
-                  dim: true,
-                  onTap: commandBusy ? null : onAddMedia,
-                ),
-              if (collection.pendingMedia > 0)
-                PillButton(
-                  label: 'Fetch ${collection.pendingMedia}',
-                  onTap: commandBusy ? null : onFetch,
-                ),
-            ],
-          ),
+          commandBar,
           const SizedBox(height: 12),
         ],
         if (level == CollectionDetailLevel.full) ...[

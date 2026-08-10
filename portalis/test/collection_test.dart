@@ -3,7 +3,7 @@ import 'test_support.dart';
 void main() {
   tearDown(resetTestState);
 
-group('collection', () {
+  group('collection', () {
     test('only active native imports keep real-time polling enabled', () {
       final active = buildCollection(
         ingestion: const CollectionImport(
@@ -27,7 +27,8 @@ group('collection', () {
       expect(failed.isMoving, isFalse);
     });
 
-    testWidgets('a shared collection shows its own invite code', (tester) async {
+    testWidgets('a shared collection shows its own invite code',
+        (tester) async {
       // The invite code travels *with* the collection, so showing it needs no
       // round trip â€” this used to mint a throwaway collection on every tap.
       const collection = Collection(
@@ -82,6 +83,31 @@ group('collection', () {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('deletion is one command with collection-or-files choices',
+        (tester) async {
+      final collection = buildCollection(name: 'Trip archive');
+      await tester.binding.setSurfaceSize(const Size(390, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(home: CollectionScreen(collection: collection)),
+      );
+      await tester.pump();
+
+      expect(find.text('Forget'), findsNothing);
+      expect(find.text('Delete files'), findsNothing);
+      await tester.tap(find.byKey(const Key('collectionCommanddelete')));
+      await pumpTransition(tester);
+
+      expect(find.text('Delete "Trip archive"?'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.byKey(const Key('deleteCollectionOnly')), findsOneWidget);
+      expect(
+        find.byKey(const Key('deleteCollectionWithFiles')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     test('media regroups into the manifest entries it was flattened from', () {
       // The grid renders a flat file list, but the unit a collection *grows*
       // by is the manifest entry â€” the details screen shows that structure.
@@ -92,14 +118,25 @@ group('collection', () {
         collaborators: [],
         media: [
           MediaItem(
-              label: 'a.mp4', entryLabel: 'Beach day', infoHash: 'aa',
-              sizeBytes: 100, downloadedBytes: 100, addedBy: 'dev1'),
+              label: 'a.mp4',
+              entryLabel: 'Beach day',
+              infoHash: 'aa',
+              sizeBytes: 100,
+              downloadedBytes: 100,
+              addedBy: 'dev1'),
           MediaItem(
-              label: 'b.mp4', entryLabel: 'Beach day', infoHash: 'aa',
-              sizeBytes: 100, downloadedBytes: 50, addedBy: 'dev1'),
+              label: 'b.mp4',
+              entryLabel: 'Beach day',
+              infoHash: 'aa',
+              sizeBytes: 100,
+              downloadedBytes: 50,
+              addedBy: 'dev1'),
           MediaItem(
-              label: 'later', entryLabel: 'later', infoHash: 'bb',
-              fetched: false, addedBy: 'dev2'),
+              label: 'later',
+              entryLabel: 'later',
+              infoHash: 'bb',
+              fetched: false,
+              addedBy: 'dev2'),
         ],
         state: 'downloading',
       );
@@ -238,14 +275,27 @@ group('collection', () {
         collaborators: const [Collaborator(deviceId: 'dev1', name: 'Mark')],
         media: const [
           MediaItem(
-              label: 'a.jpg', entryLabel: 'Beach day', infoHash: 'aa',
-              sizeBytes: 2000, downloadedBytes: 2000, progress: 1, addedBy: 'dev1'),
+              label: 'a.jpg',
+              entryLabel: 'Beach day',
+              infoHash: 'aa',
+              sizeBytes: 2000,
+              downloadedBytes: 2000,
+              progress: 1,
+              addedBy: 'dev1'),
           MediaItem(
-              label: 'b.jpg', entryLabel: 'Beach day', infoHash: 'aa',
-              sizeBytes: 2000, downloadedBytes: 2000, progress: 1, addedBy: 'dev1'),
+              label: 'b.jpg',
+              entryLabel: 'Beach day',
+              infoHash: 'aa',
+              sizeBytes: 2000,
+              downloadedBytes: 2000,
+              progress: 1,
+              addedBy: 'dev1'),
           MediaItem(
-              label: 'later', entryLabel: 'Sunday', infoHash: 'bb',
-              fetched: false, addedBy: 'dev1'),
+              label: 'later',
+              entryLabel: 'Sunday',
+              infoHash: 'bb',
+              fetched: false,
+              addedBy: 'dev1'),
         ],
       );
       AppControllers.collections.debugSeed([collection]);
