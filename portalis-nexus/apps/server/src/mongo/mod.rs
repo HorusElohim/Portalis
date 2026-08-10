@@ -26,6 +26,11 @@ use documents::{
 /// The duplicate-key code every unique index reports.
 const DUPLICATE_KEY: i32 = 11_000;
 
+/// How many times an envelope upsert retries a lost insert race before
+/// reporting it. One retry is enough: the row exists after the first loss, so
+/// the second attempt replaces it rather than inserting again.
+const PUT_ENVELOPE_ATTEMPTS: u8 = 2;
+
 const USERS: &str = "users";
 const DEVICES: &str = "devices";
 const FRIENDSHIPS: &str = "friendships";
@@ -429,19 +434,32 @@ impl EnvelopeRepository for MongoStore {
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
         let store = self.clone();
         async move {
-            let filter = doc! {
-                "share_id": binary(&envelope.share_id),
-                "recipient_device_id": binary(&envelope.recipient_device_id),
-            };
-            store
-                .key_envelopes()
-                .replace_one(filter, KeyEnvelopeDocument::from_record(&envelope))
-                // A rotated key replaces its predecessor, and the first push
-                // for a device has nothing to replace.
-                .upsert(true)
-                .await
-                .map(|_| ())
-                .map_err(unavailable)
+            let mut remaining = PUT_ENVELOPE_ATTEMPTS;
+            loop {
+                let filter = doc! {
+                    "share_id": binary(&envelope.share_id),
+                    "recipient_device_id": binary(&envelope.recipient_device_id),
+                };
+                let outcome = store
+                    .key_envelopes()
+                    .replace_one(filter, KeyEnvelopeDocument::from_record(&envelope))
+                    // A rotated key replaces its predecessor, and the first
+                    // push for a device has nothing to replace.
+                    .upsert(true)
+                    .await;
+                let Err(error) = outcome else {
+                    return Ok(());
+                };
+                remaining -= 1;
+                // Two writers can both find no row and both insert, and the
+                // unique index rejects the loser. Retrying finds the row the
+                // winner wrote and replaces it, which is what the caller
+                // asked for either way. Reporting an outage instead would
+                // lose a rotated key while telling the caller it was stored.
+                if remaining == 0 || !is_duplicate_key(&error) {
+                    return Err(unavailable(error));
+                }
+            }
         }
     }
 
