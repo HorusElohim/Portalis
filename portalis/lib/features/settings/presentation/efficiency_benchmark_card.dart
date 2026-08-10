@@ -85,7 +85,7 @@ class EfficiencyBenchmarkCard extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(
-          'Local check complete. Refreshed whenever Settings opens.',
+          '${result!.perOperationLabel} · refreshed whenever Settings opens.',
           style: AppText.caption(color: AppColors.textDim),
         ),
       ],

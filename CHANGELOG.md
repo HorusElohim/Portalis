@@ -28,6 +28,14 @@
 
 <!-- Bug fixes and regressions go here. -->
 
+- Fixed the Settings efficiency benchmark reporting `0 ms`. The run is
+  sub-millisecond, and whole milliseconds rounded it away, which reads as a
+  broken benchmark rather than a fast one. It now measures in nanoseconds
+  like the rest of Portalis — `Stopwatch` ticks that finely, and it was
+  `Duration` discarding the precision — and scales the label to the run. The
+  card also shows the cost of one operation, and a run too fast for the clock
+  no longer reports an infinite rate.
+
 - Fixed a Nexus key-envelope write that could drop a rotated share key while
   reporting a storage outage: two devices pushing for the same share and
   recipient at once made the unique index reject the loser, which is a lost
