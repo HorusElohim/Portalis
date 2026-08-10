@@ -125,16 +125,16 @@ where
             return Err(IdentityError::DeviceAlreadyRegistered);
         }
 
-        let now = self.clock.now_unix_ms();
+        let now = self.clock.now_unix_ns();
         let user_id = self.new_user_id(now);
         let device = DeviceRecord {
             device_id,
             user_id,
             public_key,
             encryption_public_key,
-            created_at_unix_ms: now,
-            last_authenticated_at_unix_ms: Some(now),
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: now,
+            last_authenticated_at_unix_ns: Some(now),
+            revoked_at_unix_ns: None,
         };
 
         self.allocate_handle(request.requested_username, user_id, device, now)
@@ -171,9 +171,9 @@ where
             .await?
             .ok_or(IdentityError::MissingUser)?;
 
-        let now = self.clock.now_unix_ms();
+        let now = self.clock.now_unix_ns();
         self.store.touch_device(device_id, now).await?;
-        device.last_authenticated_at_unix_ms = Some(now);
+        device.last_authenticated_at_unix_ns = Some(now);
 
         Ok(Identity { user, device })
     }
@@ -231,15 +231,15 @@ where
             return Err(IdentityError::DeviceAlreadyRegistered);
         }
 
-        let now = self.clock.now_unix_ms();
+        let now = self.clock.now_unix_ns();
         let device = DeviceRecord {
             device_id,
             user_id: approver.user_id,
             public_key: candidate_signing_public_key,
             encryption_public_key: candidate_encryption_public_key,
-            created_at_unix_ms: now,
-            last_authenticated_at_unix_ms: None,
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: now,
+            last_authenticated_at_unix_ns: None,
+            revoked_at_unix_ns: None,
         };
         self.store.link_device(device.clone()).await?;
 
@@ -260,7 +260,7 @@ where
         if self.store.find_device(device_id).await?.is_none() {
             return Err(IdentityError::UnknownDevice);
         }
-        let now = self.clock.now_unix_ms();
+        let now = self.clock.now_unix_ns();
         self.store.revoke_device(device_id, now).await?;
         Ok(())
     }
@@ -294,10 +294,10 @@ where
         Ok(key)
     }
 
-    fn new_user_id(&self, now_unix_ms: u64) -> UserId {
+    fn new_user_id(&self, now_unix_ns: u64) -> UserId {
         let mut entropy = [0_u8; UUID_V7_ENTROPY_BYTES];
         self.random.fill(&mut entropy);
-        user_id_from(now_unix_ms, &entropy)
+        user_id_from(now_unix_ns, &entropy)
     }
 
     /// Retries random discriminators against the unique index.
@@ -309,7 +309,7 @@ where
         username: &str,
         user_id: UserId,
         device: DeviceRecord,
-        now_unix_ms: u64,
+        now_unix_ns: u64,
     ) -> Result<Identity, IdentityError> {
         for _ in 0..HANDLE_ALLOCATION_ATTEMPTS {
             let mut entropy = [0_u8; DISCRIMINATOR_CHARS];
@@ -322,7 +322,7 @@ where
                 username: username.to_owned(),
                 normalized_username: normalize_username(username),
                 discriminator: discriminator_from_entropy(&entropy),
-                created_at_unix_ms: now_unix_ms,
+                created_at_unix_ns: now_unix_ns,
             };
             match self
                 .store
@@ -347,7 +347,7 @@ mod tests {
     use crate::memory::{FixedClock, InMemoryIdentities, ScriptedRandom};
     use crate::ports::UserDirectory;
 
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
     const AUTHORITY: &str = "nexus.portalis.test";
 
     /// One service type across every test. `IdentityService` is generic, so a
@@ -495,10 +495,10 @@ mod tests {
         fn touch_device(
             &self,
             device_id: crate::ports::DeviceId,
-            at_unix_ms: u64,
+            at_unix_ns: u64,
         ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
             let failure = self.fault.hits(Fault::Touch);
-            let inner = self.inner.touch_device(device_id, at_unix_ms);
+            let inner = self.inner.touch_device(device_id, at_unix_ns);
             async move {
                 match failure {
                     Some(error) => Err(error),
@@ -510,10 +510,10 @@ mod tests {
         fn revoke_device(
             &self,
             device_id: crate::ports::DeviceId,
-            at_unix_ms: u64,
+            at_unix_ns: u64,
         ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
             let failure = self.fault.hits(Fault::Revoke);
-            let inner = self.inner.revoke_device(device_id, at_unix_ms);
+            let inner = self.inner.revoke_device(device_id, at_unix_ns);
             async move {
                 match failure {
                     Some(error) => Err(error),
@@ -545,7 +545,7 @@ mod tests {
             server_authority: AUTHORITY,
             connection_id: &[4; 16],
             challenge,
-            server_time_unix_ms: NOW,
+            server_time_unix_ns: NOW,
         }
     }
 
@@ -631,7 +631,7 @@ mod tests {
         assert_eq!(identity.user.username, "Ada");
         assert_eq!(identity.user.normalized_username, "ada");
         assert_eq!(identity.user.discriminator.len(), DISCRIMINATOR_CHARS);
-        assert_eq!(identity.user.created_at_unix_ms, NOW);
+        assert_eq!(identity.user.created_at_unix_ns, NOW);
         assert_eq!(identity.device.device_id, derive_device_id(&public));
         assert_eq!(identity.device.user_id, identity.user.user_id);
         assert_eq!(identity.device.public_key, public);
@@ -668,7 +668,7 @@ mod tests {
         assert_eq!(identity.user, registered.user);
         assert_eq!(identity.device.device_id, registered.device.device_id);
         assert_eq!(
-            identity.device.last_authenticated_at_unix_ms,
+            identity.device.last_authenticated_at_unix_ns,
             Some(NOW + 5_000)
         );
     }
@@ -855,7 +855,7 @@ mod tests {
         assert_eq!(linked.device.public_key, candidate_public);
         assert_eq!(linked.device.encryption_public_key, ENCRYPTION_KEY);
         assert!(!linked.device.is_revoked());
-        assert_eq!(linked.device.last_authenticated_at_unix_ms, None);
+        assert_eq!(linked.device.last_authenticated_at_unix_ns, None);
 
         // The linked device can now authenticate on its own.
         let (mut public, mut signature) = (candidate_public, [0; 64]);
@@ -1365,9 +1365,9 @@ mod tests {
             user_id: [9; 16],
             public_key: public,
             encryption_public_key: ENCRYPTION_KEY,
-            created_at_unix_ms: NOW,
-            last_authenticated_at_unix_ms: None,
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: NOW,
+            last_authenticated_at_unix_ns: None,
+            revoked_at_unix_ns: None,
         }
     }
 
@@ -1395,7 +1395,7 @@ mod tests {
                 username: "Ada".to_owned(),
                 normalized_username: "ada".to_owned(),
                 discriminator: "7Q2XZ".to_owned(),
-                created_at_unix_ms: NOW,
+                created_at_unix_ns: NOW,
             })
             .expect("user stored");
         service

@@ -2,13 +2,13 @@
 
 use portalis_nexus_server_core::{Clock, RandomSource};
 
-/// Wall-clock time in milliseconds since the Unix epoch.
+/// Wall-clock time in nanoseconds since the Unix epoch.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SystemClock;
 
 impl Clock for SystemClock {
-    fn now_unix_ms(&self) -> u64 {
-        now_unix_ms()
+    fn now_unix_ns(&self) -> u64 {
+        now_unix_ns()
     }
 }
 
@@ -24,13 +24,13 @@ impl RandomSource for OsRandom {
 
 /// Reads the wall clock, saturating rather than panicking on a broken clock.
 #[must_use]
-pub fn now_unix_ms() -> u64 {
+pub fn now_unix_ns() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
+    u64::try_from(since_epoch.as_nanos()).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]
@@ -41,11 +41,17 @@ mod tests {
     fn the_clock_reads_a_plausible_time() {
         // Later than 2020 and before 2100, which is enough to prove it is
         // reading the real clock without pinning a moment.
-        let now = SystemClock.now_unix_ms();
+        let now = SystemClock.now_unix_ns();
 
-        assert!(now > 1_577_836_800_000, "{now} should be after 2020");
-        assert!(now < 4_102_444_800_000, "{now} should be before 2100");
-        assert!(now_unix_ms() >= now, "the clock must not run backwards");
+        assert!(
+            now > 1_577_836_800_000_000_000,
+            "{now} should be after 2020"
+        );
+        assert!(
+            now < 4_102_444_800_000_000_000,
+            "{now} should be before 2100"
+        );
+        assert!(now_unix_ns() >= now, "the clock must not run backwards");
     }
 
     #[test]

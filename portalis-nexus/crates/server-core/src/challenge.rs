@@ -5,15 +5,15 @@
 //! about that connection, not a lookup that has to be coordinated between
 //! server processes.
 
-use portalis_nexus_protocol::{CHALLENGE_BYTES, CHALLENGE_LIFETIME_MS, CONNECTION_ID_BYTES};
+use portalis_nexus_protocol::{CHALLENGE_BYTES, CHALLENGE_LIFETIME_NS, CONNECTION_ID_BYTES};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ChallengeError {
     #[error("this challenge was already used")]
     AlreadyUsed,
-    #[error("this challenge expired {age_ms}ms after it was issued")]
-    Expired { age_ms: u64 },
+    #[error("this challenge expired {age_ns}ns after it was issued")]
+    Expired { age_ns: u64 },
     #[error("this challenge is dated in the future")]
     NotYetIssued,
     #[error("the signed challenge does not match the one issued")]
@@ -25,7 +25,7 @@ pub enum ChallengeError {
 pub struct IssuedChallenge {
     connection_id: [u8; CONNECTION_ID_BYTES],
     challenge: [u8; CHALLENGE_BYTES],
-    issued_at_unix_ms: u64,
+    issued_at_unix_ns: u64,
     consumed: bool,
 }
 
@@ -34,12 +34,12 @@ impl IssuedChallenge {
     pub fn new(
         connection_id: [u8; CONNECTION_ID_BYTES],
         challenge: [u8; CHALLENGE_BYTES],
-        issued_at_unix_ms: u64,
+        issued_at_unix_ns: u64,
     ) -> Self {
         Self {
             connection_id,
             challenge,
-            issued_at_unix_ms,
+            issued_at_unix_ns,
             consumed: false,
         }
     }
@@ -55,8 +55,8 @@ impl IssuedChallenge {
     }
 
     #[must_use]
-    pub fn issued_at_unix_ms(&self) -> u64 {
-        self.issued_at_unix_ms
+    pub fn issued_at_unix_ns(&self) -> u64 {
+        self.issued_at_unix_ns
     }
 
     #[must_use]
@@ -73,15 +73,15 @@ impl IssuedChallenge {
     ///
     /// Returns [`ChallengeError`] when the challenge was already spent, has
     /// expired, is dated in the future, or does not match what was signed.
-    pub fn consume(&mut self, signed: &[u8], now_unix_ms: u64) -> Result<(), ChallengeError> {
+    pub fn consume(&mut self, signed: &[u8], now_unix_ns: u64) -> Result<(), ChallengeError> {
         if self.consumed {
             return Err(ChallengeError::AlreadyUsed);
         }
-        let Some(age_ms) = now_unix_ms.checked_sub(self.issued_at_unix_ms) else {
+        let Some(age_ns) = now_unix_ns.checked_sub(self.issued_at_unix_ns) else {
             return Err(ChallengeError::NotYetIssued);
         };
-        if age_ms > CHALLENGE_LIFETIME_MS {
-            return Err(ChallengeError::Expired { age_ms });
+        if age_ns > CHALLENGE_LIFETIME_NS {
+            return Err(ChallengeError::Expired { age_ns });
         }
         self.consumed = true;
         if signed != self.challenge {
@@ -95,7 +95,7 @@ impl IssuedChallenge {
 mod tests {
     use super::*;
 
-    const ISSUED_AT: u64 = 1_700_000_000_000;
+    const ISSUED_AT: u64 = 1_700_000_000_000_000_000;
 
     fn issued() -> IssuedChallenge {
         IssuedChallenge::new([1; CONNECTION_ID_BYTES], [2; CHALLENGE_BYTES], ISSUED_AT)
@@ -107,7 +107,7 @@ mod tests {
 
         assert_eq!(challenge.connection_id(), &[1; CONNECTION_ID_BYTES]);
         assert_eq!(challenge.challenge(), &[2; CHALLENGE_BYTES]);
-        assert_eq!(challenge.issued_at_unix_ms(), ISSUED_AT);
+        assert_eq!(challenge.issued_at_unix_ns(), ISSUED_AT);
         assert!(!challenge.is_consumed());
     }
 
@@ -149,15 +149,15 @@ mod tests {
         assert_eq!(
             challenge
                 .clone()
-                .consume(&[2; CHALLENGE_BYTES], ISSUED_AT + CHALLENGE_LIFETIME_MS),
+                .consume(&[2; CHALLENGE_BYTES], ISSUED_AT + CHALLENGE_LIFETIME_NS),
             Ok(()),
             "the boundary itself is still valid"
         );
 
         assert_eq!(
-            challenge.consume(&[2; CHALLENGE_BYTES], ISSUED_AT + CHALLENGE_LIFETIME_MS + 1),
+            challenge.consume(&[2; CHALLENGE_BYTES], ISSUED_AT + CHALLENGE_LIFETIME_NS + 1),
             Err(ChallengeError::Expired {
-                age_ms: CHALLENGE_LIFETIME_MS + 1
+                age_ns: CHALLENGE_LIFETIME_NS + 1
             })
         );
         assert!(

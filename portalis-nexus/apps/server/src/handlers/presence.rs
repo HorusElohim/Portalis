@@ -15,13 +15,13 @@ use crate::state::AppState;
 ///
 /// Their own other devices are told too, so a phone reflects what a laptop
 /// just did.
-pub(crate) async fn announce(state: &AppState, user: UserId, online: bool, now_unix_ms: u64) {
+pub(crate) async fn announce(state: &AppState, user: UserId, online: bool, now_unix_ns: u64) {
     let last_seen = if online {
         None
     } else {
         state.presence().last_seen(user)
     };
-    let event = binary_frame(&presence_event(user, online, last_seen, now_unix_ms));
+    let event = binary_frame(&presence_event(user, online, last_seen, now_unix_ns));
 
     for audience in accepted_friends(state, user).await {
         for connection in state.presence().connections_of(audience) {
@@ -38,7 +38,7 @@ pub(crate) async fn greet(
     state: &AppState,
     user: UserId,
     connection: ConnectionId,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) {
     for friend in accepted_friends(state, user).await {
         let online = state.presence().is_online(friend);
@@ -50,7 +50,7 @@ pub(crate) async fn greet(
             } else {
                 state.presence().last_seen(friend)
             },
-            now_unix_ms,
+            now_unix_ns,
         );
         state.connections().send(connection, binary_frame(&event));
     }
@@ -88,7 +88,7 @@ mod tests {
     const ADA: UserId = [1; 16];
     const GRACE: UserId = [2; 16];
     const GRACE_PHONE: ConnectionId = [20; 16];
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
 
     fn user(id: UserId, username: &str) -> UserRecord {
         UserRecord {
@@ -96,7 +96,7 @@ mod tests {
             username: username.to_owned(),
             normalized_username: username.to_owned(),
             discriminator: "7Q2XZ".to_owned(),
-            created_at_unix_ms: NOW,
+            created_at_unix_ns: NOW,
         }
     }
 
@@ -114,9 +114,9 @@ mod tests {
                         user_id: id,
                         public_key: [id[0]; 32],
                         encryption_public_key: [id[0]; 32],
-                        created_at_unix_ms: NOW,
-                        last_authenticated_at_unix_ms: Some(NOW),
-                        revoked_at_unix_ms: None,
+                        created_at_unix_ns: NOW,
+                        last_authenticated_at_unix_ns: Some(NOW),
+                        revoked_at_unix_ns: None,
                     },
                 )
                 .await
@@ -146,11 +146,11 @@ mod tests {
     }
 
     /// The payload a presence announcement should carry.
-    fn presence_of(user: UserId, online: bool, last_seen_unix_ms: Option<u64>) -> Payload {
+    fn presence_of(user: UserId, online: bool, last_seen_unix_ns: Option<u64>) -> Payload {
         Payload::PresenceEvent(PresenceEvent {
             user_id: user.to_vec(),
             online,
-            last_seen_unix_ms,
+            last_seen_unix_ns,
         })
     }
 

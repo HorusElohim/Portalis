@@ -100,7 +100,7 @@ where
                 recipient_device_id: request.recipient_device_id,
                 ephemeral_public_key,
                 ciphertext: request.ciphertext.to_vec(),
-                created_at_unix_ms: self.clock.now_unix_ms(),
+                created_at_unix_ns: self.clock.now_unix_ns(),
             })
             .await?;
         Ok(())
@@ -129,7 +129,7 @@ mod tests {
     use crate::memory::{FixedClock, InMemoryIdentities};
     use crate::ports::{DeviceRecord, IdentityRepository, UserDirectory, UserRecord};
 
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
     const SENDER: UserId = [1; 16];
     const OTHER_USER: UserId = [2; 16];
     const SENDER_DEVICE: DeviceId = [1; 32];
@@ -149,9 +149,9 @@ mod tests {
             user_id: owner,
             public_key: [0; 32],
             encryption_public_key: [0; 32],
-            created_at_unix_ms: NOW,
-            last_authenticated_at_unix_ms: None,
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: NOW,
+            last_authenticated_at_unix_ns: None,
+            revoked_at_unix_ns: None,
         }
     }
 
@@ -190,7 +190,7 @@ mod tests {
         assert_eq!(listed.envelopes[0].recipient_device_id, RECIPIENT_DEVICE);
         assert_eq!(listed.envelopes[0].ephemeral_public_key, EPHEMERAL_KEY);
         assert_eq!(listed.envelopes[0].ciphertext, b"sealed");
-        assert_eq!(listed.envelopes[0].created_at_unix_ms, NOW);
+        assert_eq!(listed.envelopes[0].created_at_unix_ns, NOW);
     }
 
     fn outage(operation: &str) -> Result<(), EnvelopeError> {
@@ -285,17 +285,17 @@ mod tests {
         fn touch_device(
             &self,
             device_id: DeviceId,
-            at_unix_ms: u64,
+            at_unix_ns: u64,
         ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-            self.0.touch_device(device_id, at_unix_ms)
+            self.0.touch_device(device_id, at_unix_ns)
         }
 
         fn revoke_device(
             &self,
             device_id: DeviceId,
-            at_unix_ms: u64,
+            at_unix_ns: u64,
         ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
-            self.0.revoke_device(device_id, at_unix_ms)
+            self.0.revoke_device(device_id, at_unix_ns)
         }
     }
 
@@ -328,7 +328,7 @@ mod tests {
             username: "Ada".to_owned(),
             normalized_username: "ada".to_owned(),
             discriminator: "7Q2XZ".to_owned(),
-            created_at_unix_ms: NOW,
+            created_at_unix_ns: NOW,
         };
         let first = device(SENDER_DEVICE, SENDER);
 

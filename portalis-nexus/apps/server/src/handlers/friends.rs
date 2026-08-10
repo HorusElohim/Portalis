@@ -17,10 +17,10 @@ pub(crate) async fn resolve(
     friends: &NexusFriends<DefaultStore>,
     request: &Envelope,
     lookup: &ResolveHandleRequest,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
     if actor(session).is_none() {
-        return unauthenticated(request, now_unix_ms);
+        return unauthenticated(request, now_unix_ns);
     }
     match friends.resolve_handle(&lookup.handle).await {
         Ok(found) => reply_with(
@@ -30,9 +30,9 @@ pub(crate) async fn resolve(
                 username: found.username,
                 discriminator: found.discriminator,
             }),
-            now_unix_ms,
+            now_unix_ns,
         ),
-        Err(error) => rejection(request, &error, now_unix_ms),
+        Err(error) => rejection(request, &error, now_unix_ns),
     }
 }
 
@@ -42,17 +42,17 @@ pub(crate) async fn command(
     friends: &NexusFriends<DefaultStore>,
     request: &Envelope,
     command: &FriendCommand,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
     let Some(actor) = actor(session) else {
-        return unauthenticated(request, now_unix_ms);
+        return unauthenticated(request, now_unix_ns);
     };
     let Ok(peer) = UserId::try_from(command.peer_user_id.as_slice()) else {
         return protocol_error(
             ProtocolErrorCode::InvalidMessage,
             request.message_id.clone(),
             "peer_user_id must name a user".to_owned(),
-            now_unix_ms,
+            now_unix_ns,
         );
     };
 
@@ -62,9 +62,9 @@ pub(crate) async fn command(
             Payload::FriendEvent(FriendEvent {
                 friend: Some(friend_of(&summary)),
             }),
-            now_unix_ms,
+            now_unix_ns,
         ),
-        Err(error) => rejection(request, &error, now_unix_ms),
+        Err(error) => rejection(request, &error, now_unix_ns),
     }
 }
 
@@ -73,10 +73,10 @@ pub(crate) async fn list(
     session: &Session,
     friends: &NexusFriends<DefaultStore>,
     request: &Envelope,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
     let Some(actor) = actor(session) else {
-        return unauthenticated(request, now_unix_ms);
+        return unauthenticated(request, now_unix_ns);
     };
     match friends.list(actor).await {
         Ok(summaries) => reply_with(
@@ -84,9 +84,9 @@ pub(crate) async fn list(
             Payload::ListFriendsResponse(ListFriendsResponse {
                 friends: summaries.iter().map(friend_of).collect(),
             }),
-            now_unix_ms,
+            now_unix_ns,
         ),
-        Err(error) => rejection(request, &error, now_unix_ms),
+        Err(error) => rejection(request, &error, now_unix_ns),
     }
 }
 
@@ -99,12 +99,12 @@ fn actor(session: &Session) -> Option<UserId> {
 }
 
 /// Refuses a command from a connection that has not proved who it is.
-fn unauthenticated(request: &Envelope, now_unix_ms: u64) -> Envelope {
+fn unauthenticated(request: &Envelope, now_unix_ns: u64) -> Envelope {
     protocol_error(
         ProtocolErrorCode::Unauthenticated,
         request.message_id.clone(),
         "authenticate before using friends".to_owned(),
-        now_unix_ms,
+        now_unix_ns,
     )
 }
 
@@ -120,7 +120,7 @@ fn friend_of(summary: &FriendSummary) -> Friend {
 }
 
 /// Maps a friend failure onto the wire, keeping storage detail off it.
-fn rejection(request: &Envelope, error: &FriendError, now_unix_ms: u64) -> Envelope {
+fn rejection(request: &Envelope, error: &FriendError, now_unix_ns: u64) -> Envelope {
     let code = match error {
         FriendError::Repository(_) => ProtocolErrorCode::Internal,
         // Losing every retry means the edge is being hammered, not that the
@@ -134,7 +134,7 @@ fn rejection(request: &Envelope, error: &FriendError, now_unix_ms: u64) -> Envel
         FriendError::Repository(_) => "the friend store is unavailable".to_owned(),
         other => other.to_string(),
     };
-    protocol_error(code, request.message_id.clone(), message, now_unix_ms)
+    protocol_error(code, request.message_id.clone(), message, now_unix_ns)
 }
 
 #[cfg(test)]
@@ -148,13 +148,13 @@ mod tests {
     use super::*;
     use crate::state::AppState;
 
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
 
     fn request() -> Envelope {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::Ping(Ping { nonce: 1 })),
         }
     }
@@ -238,7 +238,7 @@ mod tests {
                 username: "Grace".to_owned(),
                 normalized_username: "grace".to_owned(),
                 discriminator: "ABCDE".to_owned(),
-                created_at_unix_ms: NOW,
+                created_at_unix_ns: NOW,
             },
             state: FriendshipState::Accepted,
             requested_by_me: true,
@@ -262,16 +262,16 @@ mod tests {
             username: username.to_owned(),
             normalized_username: username.to_lowercase(),
             discriminator: "7Q2XZ".to_owned(),
-            created_at_unix_ms: NOW,
+            created_at_unix_ns: NOW,
         };
         let device = DeviceRecord {
             device_id: [seed; 32],
             user_id: [seed; 16],
             public_key: [seed; 32],
             encryption_public_key: [seed; 32],
-            created_at_unix_ms: NOW,
-            last_authenticated_at_unix_ms: Some(NOW),
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: NOW,
+            last_authenticated_at_unix_ns: Some(NOW),
+            revoked_at_unix_ns: None,
         };
         state
             .store()

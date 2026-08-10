@@ -20,7 +20,7 @@ use tracing::debug;
 mod documents;
 
 use documents::{
-    DeviceDocument, FriendshipDocument, KeyEnvelopeDocument, UserDocument, binary, millis,
+    DeviceDocument, FriendshipDocument, KeyEnvelopeDocument, UserDocument, binary, signed,
 };
 
 /// The duplicate-key code every unique index reports.
@@ -108,7 +108,7 @@ impl MongoStore {
             (
                 DEVICES,
                 IndexModel::builder()
-                    .keys(doc! { "user_id": 1, "revoked_at_unix_ms": 1 })
+                    .keys(doc! { "user_id": 1, "revoked_at_unix_ns": 1 })
                     .build(),
             ),
             // One row per friendship, whichever side asked.
@@ -312,7 +312,7 @@ impl IdentityRepository for MongoStore {
     fn touch_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
         let store = self.clone();
         async move {
@@ -320,7 +320,7 @@ impl IdentityRepository for MongoStore {
                 .devices()
                 .update_one(
                     doc! { "_id": binary(&device_id) },
-                    doc! { "$set": { "last_authenticated_at_unix_ms": millis(at_unix_ms) } },
+                    doc! { "$set": { "last_authenticated_at_unix_ns": signed(at_unix_ns) } },
                 )
                 .await
                 .map_err(unavailable)?;
@@ -331,7 +331,7 @@ impl IdentityRepository for MongoStore {
     fn revoke_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
         let store = self.clone();
         async move {
@@ -339,7 +339,7 @@ impl IdentityRepository for MongoStore {
                 .devices()
                 .update_one(
                     doc! { "_id": binary(&device_id) },
-                    doc! { "$set": { "revoked_at_unix_ms": millis(at_unix_ms) } },
+                    doc! { "$set": { "revoked_at_unix_ns": signed(at_unix_ns) } },
                 )
                 .await
                 .map_err(unavailable)?;
@@ -384,7 +384,7 @@ impl FriendRepository for MongoStore {
             }
 
             let mut filter = edge_filter(record.edge);
-            filter.insert("version", millis(expected_version));
+            filter.insert("version", signed(expected_version));
             let outcome = store
                 .friendships()
                 .replace_one(filter, document)

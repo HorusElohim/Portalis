@@ -112,22 +112,22 @@ impl IdentityRepository for NexusStore {
     async fn touch_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> Result<(), RepositoryError> {
         match self {
-            Self::Memory(store) => store.touch_device(device_id, at_unix_ms).await,
-            Self::Mongo(store) => store.touch_device(device_id, at_unix_ms).await,
+            Self::Memory(store) => store.touch_device(device_id, at_unix_ns).await,
+            Self::Mongo(store) => store.touch_device(device_id, at_unix_ns).await,
         }
     }
 
     async fn revoke_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> Result<(), RepositoryError> {
         match self {
-            Self::Memory(store) => store.revoke_device(device_id, at_unix_ms).await,
-            Self::Mongo(store) => store.revoke_device(device_id, at_unix_ms).await,
+            Self::Memory(store) => store.revoke_device(device_id, at_unix_ns).await,
+            Self::Mongo(store) => store.revoke_device(device_id, at_unix_ns).await,
         }
     }
 }
@@ -206,7 +206,7 @@ mod tests {
             username: "Ada".to_owned(),
             normalized_username: "ada".to_owned(),
             discriminator: "7Q2XZ".to_owned(),
-            created_at_unix_ms: 0,
+            created_at_unix_ns: 0,
         }
     }
 
@@ -216,9 +216,9 @@ mod tests {
             user_id: ADA,
             public_key: [1; 32],
             encryption_public_key: [2; 32],
-            created_at_unix_ms: 0,
-            last_authenticated_at_unix_ms: None,
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: 0,
+            last_authenticated_at_unix_ns: None,
+            revoked_at_unix_ns: None,
         }
     }
 
@@ -228,7 +228,7 @@ mod tests {
             recipient_device_id: [1; 32],
             ephemeral_public_key: [4; 32],
             ciphertext: b"sealed".to_vec(),
-            created_at_unix_ms: 0,
+            created_at_unix_ns: 0,
         }
     }
 

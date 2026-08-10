@@ -11,7 +11,8 @@ import "portalis/protocol/v1/shares.proto";
 message ServerHello {
   bytes connection_id = 1;
   bytes challenge = 2;
-  uint64 server_time_unix_ms = 3;
+  // Nanoseconds since the Unix epoch, like every timestamp on this wire.
+  uint64 server_time_unix_ns = 3;
   ProtocolRange supported_protocols = 4;
 }
 
@@ -26,7 +27,8 @@ message Pong {
 message Envelope {
   bytes message_id = 1;
   bytes correlation_id = 2;
-  uint64 sent_at_unix_ms = 3;
+  // Nanoseconds since the Unix epoch.
+  uint64 timestamp_unix_ns = 3;
 
   oneof payload {
     ServerHello server_hello = 10;

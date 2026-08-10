@@ -20,19 +20,19 @@ pub(crate) async fn put(
     envelopes: &NexusEnvelopes<DefaultStore>,
     request: &Envelope,
     put: &PutKeyEnvelope,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
     let Some(identity) = session.identity() else {
-        return unauthenticated(request, now_unix_ms);
+        return unauthenticated(request, now_unix_ns);
     };
     let Ok(share_id) = <[u8; SHARE_ID_BYTES]>::try_from(put.share_id.as_slice()) else {
-        return malformed(request, "share_id must name a share", now_unix_ms);
+        return malformed(request, "share_id must name a share", now_unix_ns);
     };
     let Ok(recipient_device_id) = DeviceId::try_from(put.recipient_device_id.as_slice()) else {
         return malformed(
             request,
             "recipient_device_id must name a device",
-            now_unix_ms,
+            now_unix_ns,
         );
     };
 
@@ -54,9 +54,9 @@ pub(crate) async fn put(
                 share_id: share_id.to_vec(),
                 recipient_device_id: recipient_device_id.to_vec(),
             }),
-            now_unix_ms,
+            now_unix_ns,
         ),
-        Err(error) => rejection(request, &error, now_unix_ms),
+        Err(error) => rejection(request, &error, now_unix_ns),
     }
 }
 
@@ -70,17 +70,17 @@ pub(crate) async fn list(
     envelopes: &NexusEnvelopes<DefaultStore>,
     request: &Envelope,
     list: &ListKeyEnvelopesRequest,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
     let Some(identity) = session.identity() else {
-        return unauthenticated(request, now_unix_ms);
+        return unauthenticated(request, now_unix_ns);
     };
     let after_share_id = if list.after_share_id.is_empty() {
         None
     } else {
         let Ok(after_share_id) = <[u8; SHARE_ID_BYTES]>::try_from(list.after_share_id.as_slice())
         else {
-            return malformed(request, "after_share_id must name a share", now_unix_ms);
+            return malformed(request, "after_share_id must name a share", now_unix_ns);
         };
         Some(after_share_id)
     };
@@ -96,9 +96,9 @@ pub(crate) async fn list(
                     .next_after_share_id
                     .map_or_else(Vec::new, |share_id| share_id.to_vec()),
             }),
-            now_unix_ms,
+            now_unix_ns,
         ),
-        Err(error) => rejection(request, &error, now_unix_ms),
+        Err(error) => rejection(request, &error, now_unix_ns),
     }
 }
 
@@ -110,26 +110,26 @@ fn sealed(record: KeyEnvelopeRecord) -> KeyEnvelope {
     }
 }
 
-fn unauthenticated(request: &Envelope, now_unix_ms: u64) -> Envelope {
+fn unauthenticated(request: &Envelope, now_unix_ns: u64) -> Envelope {
     protocol_error(
         ProtocolErrorCode::Unauthenticated,
         request.message_id.clone(),
         "authenticate before using key envelopes".to_owned(),
-        now_unix_ms,
+        now_unix_ns,
     )
 }
 
-fn malformed(request: &Envelope, message: &str, now_unix_ms: u64) -> Envelope {
+fn malformed(request: &Envelope, message: &str, now_unix_ns: u64) -> Envelope {
     protocol_error(
         ProtocolErrorCode::InvalidMessage,
         request.message_id.clone(),
         message.to_owned(),
-        now_unix_ms,
+        now_unix_ns,
     )
 }
 
 /// Maps an envelope failure onto the wire, keeping storage detail off it.
-fn rejection(request: &Envelope, error: &EnvelopeError, now_unix_ms: u64) -> Envelope {
+fn rejection(request: &Envelope, error: &EnvelopeError, now_unix_ns: u64) -> Envelope {
     let code = match error {
         EnvelopeError::InvalidEphemeralKeyLength { .. }
         | EnvelopeError::CiphertextTooLarge { .. } => ProtocolErrorCode::InvalidMessage,
@@ -142,7 +142,7 @@ fn rejection(request: &Envelope, error: &EnvelopeError, now_unix_ms: u64) -> Env
         EnvelopeError::Repository(_) => "the identity store is unavailable".to_owned(),
         other => other.to_string(),
     };
-    protocol_error(code, request.message_id.clone(), message, now_unix_ms)
+    protocol_error(code, request.message_id.clone(), message, now_unix_ns)
 }
 
 #[cfg(test)]
@@ -158,7 +158,7 @@ mod tests {
     use super::*;
     use crate::state::AppState;
 
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
     const ADA: [u8; 16] = [1; 16];
     const SHARE: [u8; SHARE_ID_BYTES] = [3; SHARE_ID_BYTES];
 
@@ -166,7 +166,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::Ping(Ping { nonce: 1 })),
         }
     }
@@ -195,16 +195,16 @@ mod tests {
             username: "Ada".to_owned(),
             normalized_username: "ada".to_owned(),
             discriminator: "7Q2XZ".to_owned(),
-            created_at_unix_ms: NOW,
+            created_at_unix_ns: NOW,
         };
         let device = DeviceRecord {
             device_id: [seed; 32],
             user_id: ADA,
             public_key: [seed; 32],
             encryption_public_key: [seed; 32],
-            created_at_unix_ms: NOW,
-            last_authenticated_at_unix_ms: Some(NOW),
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: NOW,
+            last_authenticated_at_unix_ns: Some(NOW),
+            revoked_at_unix_ns: None,
         };
         state
             .store()

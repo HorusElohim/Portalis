@@ -68,7 +68,7 @@ impl PresenceRegistry {
         &self,
         user: UserId,
         connection: ConnectionId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> Option<PresenceChange> {
         let mut state = self.lock();
         let devices = state.connections.get_mut(&user)?;
@@ -76,7 +76,7 @@ impl PresenceRegistry {
             return None;
         }
         state.connections.remove(&user);
-        state.last_seen.insert(user, at_unix_ms);
+        state.last_seen.insert(user, at_unix_ns);
         Some(PresenceChange::WentOffline)
     }
 
@@ -134,7 +134,7 @@ mod tests {
     const GRACE: UserId = [2; 16];
     const PHONE: ConnectionId = [10; 16];
     const LAPTOP: ConnectionId = [11; 16];
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
 
     #[test]
     fn the_first_device_brings_a_user_online() {

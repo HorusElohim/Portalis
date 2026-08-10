@@ -186,7 +186,7 @@ impl NexusClient {
             &binding(&hello, self.authority()),
             username,
             signer,
-            now_unix_ms(),
+            now_unix_ns(),
         );
         let response = self.request(&request).await?;
         Ok(validate_authenticated(&request, &response)?)
@@ -206,7 +206,7 @@ impl NexusClient {
         let request = self.shared.protocol.authenticate(
             &binding(&hello, self.authority()),
             signer,
-            now_unix_ms(),
+            now_unix_ns(),
         );
         let response = self.request(&request).await?;
         Ok(validate_authenticated(&request, &response)?)
@@ -234,7 +234,7 @@ impl NexusClient {
             candidate_signing_public_key,
             candidate_encryption_public_key,
             approver,
-            now_unix_ms(),
+            now_unix_ns(),
         );
         let response = self.request(&request).await?;
         Ok(validate_device_linked(&request, &response)?)
@@ -257,7 +257,7 @@ impl NexusClient {
             recipient_device_id,
             ephemeral_public_key,
             ciphertext,
-            now_unix_ms(),
+            now_unix_ns(),
         );
         let response = self.request(&request).await?;
         Ok(validate_key_envelope_put(&request, &response)?)
@@ -275,7 +275,7 @@ impl NexusClient {
         let request = self
             .shared
             .protocol
-            .list_key_envelopes(after_share_id, now_unix_ms());
+            .list_key_envelopes(after_share_id, now_unix_ns());
         let response = self.request(&request).await?;
         Ok(validate_key_envelopes(&request, &response)?)
     }
@@ -295,7 +295,7 @@ impl NexusClient {
         &self,
         handle: &str,
     ) -> Result<ResolveHandleResponse, TransportError> {
-        let request = self.shared.protocol.resolve_handle(handle, now_unix_ms());
+        let request = self.shared.protocol.resolve_handle(handle, now_unix_ns());
         let response = self.request(&request).await?;
         Ok(validate_resolved(&request, &response)?)
     }
@@ -313,7 +313,7 @@ impl NexusClient {
         let request = self
             .shared
             .protocol
-            .friend_command(action, peer, now_unix_ms());
+            .friend_command(action, peer, now_unix_ns());
         let response = self.request(&request).await?;
         Ok(validate_friend_event(&request, &response)?)
     }
@@ -324,7 +324,7 @@ impl NexusClient {
     ///
     /// Returns [`TransportError`] when the server refuses or cannot answer.
     pub async fn list_friends(&self) -> Result<Vec<Friend>, TransportError> {
-        let request = self.shared.protocol.list_friends(now_unix_ms());
+        let request = self.shared.protocol.list_friends(now_unix_ns());
         let response = self.request(&request).await?;
         Ok(validate_friend_list(&request, &response)?)
     }
@@ -335,7 +335,7 @@ impl NexusClient {
     ///
     /// Returns [`TransportError`] when sending or validating the response fails.
     pub async fn ping(&self, nonce: u64) -> Result<Envelope, TransportError> {
-        let request = self.shared.protocol.ping(nonce, now_unix_ms());
+        let request = self.shared.protocol.ping(nonce, now_unix_ns());
         let response = self.request(&request).await?;
         validate_pong(&request, &response)?;
         Ok(response)
@@ -371,14 +371,14 @@ impl Drop for NexusClient {
     }
 }
 
-fn now_unix_ms() -> u64 {
+fn now_unix_ns() -> u64 {
     u64::try_from(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock is after the Unix epoch")
-            .as_millis(),
+            .as_nanos(),
     )
-    .expect("milliseconds since the Unix epoch fit in u64")
+    .expect("nanoseconds since the Unix epoch fit in u64 until 2554")
 }
 
 /// Builds the session binding a signature is scoped to, from the hello the
@@ -389,7 +389,7 @@ fn binding<'a>(hello: &'a ServerHello, server_authority: &'a str) -> SessionBind
         server_authority,
         connection_id: &hello.connection_id,
         challenge: &hello.challenge,
-        server_time_unix_ms: hello.server_time_unix_ms,
+        server_time_unix_ns: hello.server_time_unix_ns,
     }
 }
 

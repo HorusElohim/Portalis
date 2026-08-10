@@ -18,14 +18,14 @@ use crate::ports::{
 /// A clock that stands still until a test advances it.
 #[derive(Debug)]
 pub struct FixedClock {
-    now_unix_ms: Mutex<u64>,
+    now_unix_ns: Mutex<u64>,
 }
 
 impl FixedClock {
     #[must_use]
-    pub fn new(now_unix_ms: u64) -> Self {
+    pub fn new(now_unix_ns: u64) -> Self {
         Self {
-            now_unix_ms: Mutex::new(now_unix_ms),
+            now_unix_ns: Mutex::new(now_unix_ns),
         }
     }
 
@@ -33,19 +33,19 @@ impl FixedClock {
         *self.lock() += millis;
     }
 
-    pub fn set(&self, now_unix_ms: u64) {
-        *self.lock() = now_unix_ms;
+    pub fn set(&self, now_unix_ns: u64) {
+        *self.lock() = now_unix_ns;
     }
 
     fn lock(&self) -> MutexGuard<'_, u64> {
-        self.now_unix_ms
+        self.now_unix_ns
             .lock()
             .expect("the test clock is not poisoned")
     }
 }
 
 impl Clock for FixedClock {
-    fn now_unix_ms(&self) -> u64 {
+    fn now_unix_ns(&self) -> u64 {
         *self.lock()
     }
 }
@@ -262,11 +262,11 @@ impl IdentityRepository for InMemoryIdentities {
     fn touch_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
         let outage = self.outage();
         if let Some(device) = self.lock().devices.get_mut(&device_id) {
-            device.last_authenticated_at_unix_ms = Some(at_unix_ms);
+            device.last_authenticated_at_unix_ns = Some(at_unix_ns);
         }
         async move { outage.map_or(Ok(()), Err) }
     }
@@ -274,11 +274,11 @@ impl IdentityRepository for InMemoryIdentities {
     fn revoke_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
         let outage = self.outage();
         if let Some(device) = self.lock().devices.get_mut(&device_id) {
-            device.revoked_at_unix_ms = Some(at_unix_ms);
+            device.revoked_at_unix_ns = Some(at_unix_ns);
         }
         async move { outage.map_or(Ok(()), Err) }
     }
@@ -382,7 +382,7 @@ mod tests {
             username: "Ada".to_owned(),
             normalized_username: "ada".to_owned(),
             discriminator: discriminator.to_owned(),
-            created_at_unix_ms: 1,
+            created_at_unix_ns: 1,
         }
     }
 
@@ -392,9 +392,9 @@ mod tests {
             user_id: [1; 16],
             public_key: [3; 32],
             encryption_public_key: [4; 32],
-            created_at_unix_ms: 1,
-            last_authenticated_at_unix_ms: None,
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: 1,
+            last_authenticated_at_unix_ns: None,
+            revoked_at_unix_ns: None,
         }
     }
 
@@ -402,11 +402,11 @@ mod tests {
     fn the_clock_only_moves_when_told_to() {
         let clock = FixedClock::new(10);
 
-        assert_eq!(clock.now_unix_ms(), 10);
+        assert_eq!(clock.now_unix_ns(), 10);
         clock.advance(5);
-        assert_eq!(clock.now_unix_ms(), 15);
+        assert_eq!(clock.now_unix_ns(), 15);
         clock.set(1);
-        assert_eq!(clock.now_unix_ms(), 1);
+        assert_eq!(clock.now_unix_ns(), 1);
     }
 
     #[test]
@@ -545,8 +545,8 @@ mod tests {
             .await
             .expect("stored")
             .expect("present");
-        assert_eq!(stored.last_authenticated_at_unix_ms, Some(42));
-        assert_eq!(stored.revoked_at_unix_ms, Some(43));
+        assert_eq!(stored.last_authenticated_at_unix_ns, Some(42));
+        assert_eq!(stored.revoked_at_unix_ns, Some(43));
         assert!(stored.is_revoked());
 
         // Updating a device that is not there is a no-op, not an error.
@@ -565,7 +565,7 @@ mod tests {
             recipient_device_id: [2; 32],
             ephemeral_public_key: [9; 32],
             ciphertext: b"sealed".to_vec(),
-            created_at_unix_ms: 1,
+            created_at_unix_ns: 1,
         };
 
         store.set_unavailable(true);

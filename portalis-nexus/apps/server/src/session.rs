@@ -22,7 +22,7 @@ impl Session {
     /// The challenge's issue time is read from the hello rather than the clock,
     /// because the client signs the timestamp the hello carried. Taking a
     /// second clock reading here would make every signature on this connection
-    /// fail whenever the two readings straddled a millisecond.
+    /// fail whenever the two readings differed at all.
     ///
     /// # Panics
     ///
@@ -41,7 +41,7 @@ impl Session {
             .try_into()
             .expect("a server-built hello has a fixed-size challenge");
         Self {
-            challenge: IssuedChallenge::new(connection_id, challenge, hello.server_time_unix_ms),
+            challenge: IssuedChallenge::new(connection_id, challenge, hello.server_time_unix_ns),
             identity: None,
         }
     }
@@ -77,12 +77,12 @@ impl Session {
     ///
     /// Returns [`ChallengeError`] when the challenge was already spent, has
     /// expired, or the request carried no signature at all.
-    pub fn spend(&mut self, signature: &[u8], now_unix_ms: u64) -> Result<(), ChallengeError> {
+    pub fn spend(&mut self, signature: &[u8], now_unix_ns: u64) -> Result<(), ChallengeError> {
         if signature.is_empty() {
             return Err(ChallengeError::Mismatch);
         }
         let issued = *self.challenge.challenge();
-        self.challenge.consume(&issued, now_unix_ms)
+        self.challenge.consume(&issued, now_unix_ns)
     }
 
     /// The facts a signature on this connection is bound to.
@@ -93,26 +93,26 @@ impl Session {
             server_authority,
             connection_id: self.challenge.connection_id(),
             challenge: self.challenge.challenge(),
-            server_time_unix_ms: self.challenge.issued_at_unix_ms(),
+            server_time_unix_ns: self.challenge.issued_at_unix_ns(),
         }
     }
 
     #[cfg(test)]
     pub(crate) fn challenge_issued_at(&self) -> u64 {
-        self.challenge.issued_at_unix_ms()
+        self.challenge.issued_at_unix_ns()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use portalis_nexus_protocol::CHALLENGE_LIFETIME_MS;
+    use portalis_nexus_protocol::CHALLENGE_LIFETIME_NS;
     use portalis_nexus_protocol::v1::ProtocolRange;
     use portalis_nexus_server_core::ProtocolPolicy;
 
     use super::*;
     use crate::messages::hello_payload;
 
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
 
     fn greeting() -> ServerHello {
         let policy = ProtocolPolicy::new(CURRENT_PROTOCOL_VERSION, CURRENT_PROTOCOL_VERSION)
@@ -128,7 +128,7 @@ mod tests {
 
         // The client signs the hello's timestamp, so the session must verify
         // against that exact value rather than a second clock reading.
-        assert_eq!(session.challenge_issued_at(), hello.server_time_unix_ms);
+        assert_eq!(session.challenge_issued_at(), hello.server_time_unix_ns);
         assert!(!session.is_authenticated());
         assert!(session.identity().is_none());
     }
@@ -142,7 +142,7 @@ mod tests {
 
         assert_eq!(binding.connection_id, hello.connection_id.as_slice());
         assert_eq!(binding.challenge, hello.challenge.as_slice());
-        assert_eq!(binding.server_time_unix_ms, NOW);
+        assert_eq!(binding.server_time_unix_ns, NOW);
         assert_eq!(binding.protocol_version, CURRENT_PROTOCOL_VERSION);
         assert_eq!(binding.server_authority, "nexus.portalis.test");
         assert_eq!(
@@ -152,7 +152,7 @@ mod tests {
                 server_authority: "nexus.portalis.test",
                 connection_id: &hello.connection_id,
                 challenge: &hello.challenge,
-                server_time_unix_ms: NOW,
+                server_time_unix_ns: NOW,
             }
         );
         let _ = ProtocolRange::default();
@@ -168,9 +168,9 @@ mod tests {
 
         let mut fresh = Session::new(&hello);
         assert_eq!(
-            fresh.spend(&[1], NOW + CHALLENGE_LIFETIME_MS + 1),
+            fresh.spend(&[1], NOW + CHALLENGE_LIFETIME_NS + 1),
             Err(ChallengeError::Expired {
-                age_ms: CHALLENGE_LIFETIME_MS + 1
+                age_ns: CHALLENGE_LIFETIME_NS + 1
             })
         );
 

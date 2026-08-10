@@ -156,7 +156,7 @@ fn future_greeting() -> Message {
         ServerHello {
             connection_id: new_message_id(),
             challenge: new_challenge(),
-            server_time_unix_ms: 0,
+            server_time_unix_ns: 0,
             supported_protocols: Some(ProtocolRange {
                 minimum: 99,
                 maximum: 99,
@@ -170,7 +170,7 @@ pub fn unsolicited_ping(nonce: u64) -> Envelope {
     Envelope {
         message_id: new_message_id(),
         correlation_id: Vec::new(),
-        sent_at_unix_ms: 1,
+        timestamp_unix_ns: 1,
         payload: Some(Payload::Ping(Ping { nonce })),
     }
 }
@@ -249,7 +249,7 @@ async fn misanswer_upgrade(websocket: WebSocketUpgrade) -> Response {
                 let pong = Envelope {
                     message_id: new_message_id(),
                     correlation_id: request.message_id,
-                    sent_at_unix_ms: 1,
+                    timestamp_unix_ns: 1,
                     payload: Some(Payload::Pong(portalis_nexus_protocol::v1::Pong {
                         nonce: 0,
                     })),

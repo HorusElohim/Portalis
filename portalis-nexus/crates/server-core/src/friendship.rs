@@ -92,21 +92,21 @@ pub struct FriendshipRecord {
     /// Bumped on every accepted transition, so a concurrent write that read an
     /// older value is rejected rather than silently overwriting it.
     pub version: u64,
-    pub created_at_unix_ms: u64,
-    pub updated_at_unix_ms: u64,
+    pub created_at_unix_ns: u64,
+    pub updated_at_unix_ns: u64,
 }
 
 impl FriendshipRecord {
     /// Starts a friendship at its first request.
     #[must_use]
-    pub fn requested(edge: FriendshipEdge, requested_by: UserId, at_unix_ms: u64) -> Self {
+    pub fn requested(edge: FriendshipEdge, requested_by: UserId, at_unix_ns: u64) -> Self {
         Self {
             edge,
             requested_by,
             state: FriendshipState::Pending,
             version: 1,
-            created_at_unix_ms: at_unix_ms,
-            updated_at_unix_ms: at_unix_ms,
+            created_at_unix_ns: at_unix_ns,
+            updated_at_unix_ns: at_unix_ns,
         }
     }
 
@@ -252,7 +252,7 @@ mod tests {
 
     const ADA: UserId = [1; 16];
     const GRACE: UserId = [2; 16];
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
 
     fn edge() -> FriendshipEdge {
         FriendshipEdge::between(ADA, GRACE).expect("distinct users")
@@ -264,8 +264,8 @@ mod tests {
             requested_by,
             state,
             version,
-            created_at_unix_ms: NOW,
-            updated_at_unix_ms: NOW,
+            created_at_unix_ns: NOW,
+            updated_at_unix_ns: NOW,
         }
     }
 

@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::limits::{CHALLENGE_BYTES, DEVICE_ID_BYTES, USER_ID_BYTES};
+use crate::limits::{CHALLENGE_BYTES, DEVICE_ID_BYTES, NANOS_PER_MILLI, USER_ID_BYTES};
 
 /// Bytes of entropy a `UUIDv7` needs beside its timestamp.
 pub const UUID_V7_ENTROPY_BYTES: usize = 10;
@@ -15,12 +15,16 @@ pub const UUID_V7_ENTROPY_BYTES: usize = 10;
 /// Time-ordered identifiers also keep `MongoDB` index writes local.
 #[must_use]
 pub fn user_id_from(
-    now_unix_ms: u64,
+    now_unix_ns: u64,
     entropy: &[u8; UUID_V7_ENTROPY_BYTES],
 ) -> [u8; USER_ID_BYTES] {
     let mut id = [0_u8; USER_ID_BYTES];
-    // 48-bit big-endian millisecond timestamp.
-    id[..6].copy_from_slice(&now_unix_ms.to_be_bytes()[2..]);
+    // UUIDv7 defines this field as a 48-bit big-endian *millisecond*
+    // timestamp, so the nanoseconds every other timestamp here carries are
+    // converted rather than truncated: 48 bits of nanoseconds wrap every
+    // three days, which would destroy the time ordering v7 exists for.
+    let millis_since_epoch = now_unix_ns / NANOS_PER_MILLI;
+    id[..6].copy_from_slice(&millis_since_epoch.to_be_bytes()[2..]);
     // Version 7 in the high nibble, then entropy.
     id[6] = 0x70 | (entropy[0] & 0x0f);
     id[7] = entropy[1];
@@ -92,20 +96,28 @@ mod tests {
     #[test]
     fn builds_time_ordered_user_ids_from_injected_inputs() {
         let entropy = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let id = user_id_from(1_700_000_000_000, &entropy);
+        let id = user_id_from(1_700_000_000_000_000_000, &entropy);
 
         let parsed = Uuid::from_slice(&id).expect("a valid UUID");
         assert_eq!(parsed.get_version_num(), 7);
         assert_eq!(parsed.get_variant(), uuid::Variant::RFC4122);
         assert_eq!(
             id,
-            user_id_from(1_700_000_000_000, &entropy),
+            user_id_from(1_700_000_000_000_000_000, &entropy),
             "generation must be deterministic"
         );
 
         // Time ordering: a later timestamp sorts after an earlier one.
-        let later = user_id_from(1_700_000_000_001, &entropy);
+        let later = user_id_from(1_700_000_000_000_000_000 + NANOS_PER_MILLI, &entropy);
         assert!(later > id);
+
+        // Below the resolution UUIDv7 records, so the same millisecond gives
+        // the same identifier rather than a differently-ordered one.
+        assert_eq!(
+            user_id_from(1_700_000_000_000_000_001, &entropy),
+            id,
+            "sub-millisecond differences do not move the timestamp field"
+        );
     }
 
     #[test]

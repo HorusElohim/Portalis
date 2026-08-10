@@ -48,7 +48,7 @@ impl ClientProtocol {
         binding: &SessionBinding<'_>,
         username: &str,
         signer: &S,
-        sent_at_unix_ms: u64,
+        timestamp_unix_ns: u64,
     ) -> Envelope {
         let public_key = signer.public_key();
         let encryption_public_key = signer.encryption_public_key();
@@ -56,7 +56,7 @@ impl ClientProtocol {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
             payload: Some(Payload::RegisterUser(RegisterUser {
                 requested_username: username.to_owned(),
                 device_public_key: public_key.to_vec(),
@@ -79,7 +79,7 @@ impl ClientProtocol {
         candidate_signing_public_key: &[u8],
         candidate_encryption_public_key: &[u8],
         approver: &S,
-        sent_at_unix_ms: u64,
+        timestamp_unix_ns: u64,
     ) -> Envelope {
         let payload = link_device_payload(
             server_authority,
@@ -89,7 +89,7 @@ impl ClientProtocol {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
             payload: Some(Payload::LinkDevice(LinkDevice {
                 candidate_signing_public_key: candidate_signing_public_key.to_vec(),
                 candidate_encryption_public_key: candidate_encryption_public_key.to_vec(),
@@ -104,14 +104,14 @@ impl ClientProtocol {
         &self,
         binding: &SessionBinding<'_>,
         signer: &S,
-        sent_at_unix_ms: u64,
+        timestamp_unix_ns: u64,
     ) -> Envelope {
         let public_key = signer.public_key();
         let payload = authentication_payload(binding, &public_key);
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
             payload: Some(Payload::AuthenticateDevice(AuthenticateDevice {
                 device_public_key: public_key.to_vec(),
                 signature: signer.sign(&payload).to_vec(),
@@ -121,12 +121,12 @@ impl ClientProtocol {
 
     /// Builds a request for the user behind a handle.
     #[must_use]
-    pub fn resolve_handle(&self, handle: &str, sent_at_unix_ms: u64) -> Envelope {
+    pub fn resolve_handle(&self, handle: &str, timestamp_unix_ns: u64) -> Envelope {
         Self::envelope(
             Payload::ResolveHandleRequest(ResolveHandleRequest {
                 handle: handle.to_owned(),
             }),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
         )
     }
 
@@ -136,14 +136,14 @@ impl ClientProtocol {
         &self,
         action: FriendAction,
         peer: &[u8],
-        sent_at_unix_ms: u64,
+        timestamp_unix_ns: u64,
     ) -> Envelope {
         Self::envelope(
             Payload::FriendCommand(FriendCommand {
                 action: action as i32,
                 peer_user_id: peer.to_vec(),
             }),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
         )
     }
 
@@ -159,7 +159,7 @@ impl ClientProtocol {
         recipient_device_id: &[u8],
         ephemeral_public_key: &[u8],
         ciphertext: &[u8],
-        sent_at_unix_ms: u64,
+        timestamp_unix_ns: u64,
     ) -> Envelope {
         Self::envelope(
             Payload::PutKeyEnvelope(PutKeyEnvelope {
@@ -168,7 +168,7 @@ impl ClientProtocol {
                 ephemeral_public_key: ephemeral_public_key.to_vec(),
                 ciphertext: ciphertext.to_vec(),
             }),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
         )
     }
 
@@ -177,40 +177,40 @@ impl ClientProtocol {
     pub fn list_key_envelopes(
         &self,
         after_share_id: Option<&[u8]>,
-        sent_at_unix_ms: u64,
+        timestamp_unix_ns: u64,
     ) -> Envelope {
         Self::envelope(
             Payload::ListKeyEnvelopesRequest(ListKeyEnvelopesRequest {
                 after_share_id: after_share_id.unwrap_or_default().to_vec(),
             }),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
         )
     }
 
     /// Builds a request for every friendship this user is part of.
     #[must_use]
-    pub fn list_friends(&self, sent_at_unix_ms: u64) -> Envelope {
+    pub fn list_friends(&self, timestamp_unix_ns: u64) -> Envelope {
         Self::envelope(
             Payload::ListFriendsRequest(ListFriendsRequest {}),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
         )
     }
 
-    fn envelope(payload: Payload, sent_at_unix_ms: u64) -> Envelope {
+    fn envelope(payload: Payload, timestamp_unix_ns: u64) -> Envelope {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
             payload: Some(payload),
         }
     }
 
     #[must_use]
-    pub fn ping(&self, nonce: u64, sent_at_unix_ms: u64) -> Envelope {
+    pub fn ping(&self, nonce: u64, timestamp_unix_ns: u64) -> Envelope {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
             payload: Some(Payload::Ping(Ping { nonce })),
         }
     }
@@ -459,11 +459,11 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::ServerHello(ServerHello {
                 connection_id: new_message_id(),
                 challenge: new_challenge(),
-                server_time_unix_ms: 1,
+                server_time_unix_ns: 1,
                 supported_protocols: Some(range),
             })),
         }
@@ -477,7 +477,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: request.message_id.clone(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::Pong(Pong { nonce })),
         }
     }
@@ -490,7 +490,7 @@ mod tests {
         assert_eq!(client.version(), CURRENT_PROTOCOL_VERSION);
         assert_eq!(client, client.clone());
         assert!(!format!("{client:?}").is_empty());
-        assert_eq!(envelope.sent_at_unix_ms, 1000);
+        assert_eq!(envelope.timestamp_unix_ns, 1000);
         assert_eq!(envelope.validate(), Ok(()));
         assert_eq!(envelope.payload, Some(Payload::Ping(Ping { nonce: 42 })));
     }
@@ -517,11 +517,11 @@ mod tests {
         let invalid = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::ServerHello(ServerHello {
                 connection_id: vec![0; 15],
                 challenge: new_challenge(),
-                server_time_unix_ms: 1,
+                server_time_unix_ns: 1,
                 supported_protocols: Some(ProtocolRange {
                     minimum: CURRENT_PROTOCOL_VERSION,
                     maximum: CURRENT_PROTOCOL_VERSION,
@@ -577,7 +577,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: request.message_id.clone(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::Authenticated(Authenticated {
                 user_id: vec![1; 16],
                 device_id: vec![2; 32],
@@ -640,7 +640,7 @@ mod tests {
             server_authority: "nexus.portalis.test",
             connection_id,
             challenge,
-            server_time_unix_ms: 1,
+            server_time_unix_ns: 1,
         }
     }
 
@@ -654,7 +654,7 @@ mod tests {
         assert_eq!(claim.requested_username, "Ada");
         assert_eq!(claim.device_public_key, vec![7; 32]);
         assert_eq!(claim.encryption_public_key, vec![8; 32]);
-        assert_eq!(register.sent_at_unix_ms, 5);
+        assert_eq!(register.timestamp_unix_ns, 5);
         assert_eq!(register.validate(), Ok(()));
 
         let authenticate = client.authenticate(&session, &FixedSigner, 6);
@@ -686,7 +686,7 @@ mod tests {
         let link = link_of(&request).expect("a link-device request");
         assert_eq!(link.candidate_signing_public_key, vec![9; 32]);
         assert_eq!(link.candidate_encryption_public_key, vec![10; 32]);
-        assert_eq!(request.sent_at_unix_ms, 7);
+        assert_eq!(request.timestamp_unix_ns, 7);
         assert_eq!(request.validate(), Ok(()));
         assert!(link_of(&ping_envelope(1)).is_none());
     }
@@ -734,7 +734,7 @@ mod tests {
         let response = Envelope {
             message_id: new_message_id(),
             correlation_id: request.message_id.clone(),
-            sent_at_unix_ms: 2,
+            timestamp_unix_ns: 2,
             payload: Some(Payload::DeviceLinked(DeviceLinked {
                 user_id: vec![1; 16],
                 device_id: vec![2; 32],
@@ -799,7 +799,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: request.message_id.clone(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::ResolveHandleResponse(ResolveHandleResponse {
                 user_id: vec![2; 16],
                 username: "Grace".to_owned(),
@@ -812,7 +812,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: request.message_id.clone(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(payload),
         }
     }
@@ -822,7 +822,7 @@ mod tests {
         let client = ClientProtocol::default();
 
         let put = client.put_key_envelope(&[3; SHARE_ID_BYTES], &[1; 32], &[9; 32], b"sealed", 5);
-        assert_eq!(put.sent_at_unix_ms, 5);
+        assert_eq!(put.timestamp_unix_ns, 5);
         assert_eq!(put.validate(), Ok(()));
         assert_eq!(
             put.payload,
@@ -960,7 +960,7 @@ mod tests {
         let client = ClientProtocol::default();
 
         let lookup = client.resolve_handle("grace#ABCDE", 5);
-        assert_eq!(lookup.sent_at_unix_ms, 5);
+        assert_eq!(lookup.timestamp_unix_ns, 5);
         assert_eq!(lookup.validate(), Ok(()));
         assert_eq!(
             lookup.payload,

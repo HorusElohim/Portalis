@@ -30,7 +30,7 @@ pub struct SessionBinding<'a> {
     pub server_authority: &'a str,
     pub connection_id: &'a [u8],
     pub challenge: &'a [u8],
-    pub server_time_unix_ms: u64,
+    pub server_time_unix_ns: u64,
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -134,7 +134,7 @@ impl SessionBinding<'_> {
         push_field(&mut payload, self.server_authority.as_bytes());
         push_field(&mut payload, self.connection_id);
         push_field(&mut payload, self.challenge);
-        push_field(&mut payload, &self.server_time_unix_ms.to_be_bytes());
+        push_field(&mut payload, &self.server_time_unix_ns.to_be_bytes());
         payload
     }
 }
@@ -162,7 +162,7 @@ mod tests {
             server_authority: "nexus.portalis.test",
             connection_id,
             challenge,
-            server_time_unix_ms: 1_700_000_000_000,
+            server_time_unix_ns: 1_700_000_000_000_000_000,
         }
     }
 
@@ -233,7 +233,7 @@ mod tests {
         elsewhere.server_authority = "nexus.attacker.test";
         let other_server = registration_payload(&elsewhere, "ada", &public, &ENCRYPTION_KEY);
         let mut later = session;
-        later.server_time_unix_ms += 1;
+        later.server_time_unix_ns += 1;
         let other_time = registration_payload(&later, "ada", &public, &ENCRYPTION_KEY);
         let mut downgraded = session;
         downgraded.protocol_version = 2;

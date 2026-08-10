@@ -20,10 +20,10 @@ pub(crate) async fn claim(
     server_authority: &str,
     request: &Envelope,
     register: &RegisterUser,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
-    if let Err(error) = session.spend(&register.signature, now_unix_ms) {
-        return challenge_rejection(request, &error, now_unix_ms);
+    if let Err(error) = session.spend(&register.signature, now_unix_ns) {
+        return challenge_rejection(request, &error, now_unix_ns);
     }
     let outcome = identities
         .register(RegistrationRequest {
@@ -34,7 +34,7 @@ pub(crate) async fn claim(
             signature: &register.signature,
         })
         .await;
-    settle(session, request, outcome, now_unix_ms)
+    settle(session, request, outcome, now_unix_ns)
 }
 
 /// Proves this connection holds the key of an authorized device.
@@ -44,10 +44,10 @@ pub(crate) async fn prove(
     server_authority: &str,
     request: &Envelope,
     authenticate: &AuthenticateDevice,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
-    if let Err(error) = session.spend(&authenticate.signature, now_unix_ms) {
-        return challenge_rejection(request, &error, now_unix_ms);
+    if let Err(error) = session.spend(&authenticate.signature, now_unix_ns) {
+        return challenge_rejection(request, &error, now_unix_ns);
     }
     let outcome = identities
         .authenticate(AuthenticationRequest {
@@ -56,7 +56,7 @@ pub(crate) async fn prove(
             signature: &authenticate.signature,
         })
         .await;
-    settle(session, request, outcome, now_unix_ms)
+    settle(session, request, outcome, now_unix_ns)
 }
 
 /// An already-authenticated device approves a new one.
@@ -71,10 +71,10 @@ pub(crate) async fn link(
     server_authority: &str,
     request: &Envelope,
     link_device: &LinkDevice,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
     let Some(approver) = session.identity() else {
-        return unauthenticated(request, now_unix_ms);
+        return unauthenticated(request, now_unix_ns);
     };
     let outcome = identities
         .link_device(
@@ -94,19 +94,19 @@ pub(crate) async fn link(
                 user_id: identity.user.user_id.to_vec(),
                 device_id: identity.device.device_id.to_vec(),
             }),
-            now_unix_ms,
+            now_unix_ns,
         ),
-        Err(error) => identity_rejection(request, &error, now_unix_ms),
+        Err(error) => identity_rejection(request, &error, now_unix_ns),
     }
 }
 
 /// Refuses a command from a connection that has not proved who it is.
-fn unauthenticated(request: &Envelope, now_unix_ms: u64) -> Envelope {
+fn unauthenticated(request: &Envelope, now_unix_ns: u64) -> Envelope {
     protocol_error(
         ProtocolErrorCode::Unauthenticated,
         request.message_id.clone(),
         "authenticate before linking a device".to_owned(),
-        now_unix_ms,
+        now_unix_ns,
     )
 }
 
@@ -115,31 +115,31 @@ fn settle(
     session: &mut Session,
     request: &Envelope,
     outcome: Result<Identity, IdentityError>,
-    now_unix_ms: u64,
+    now_unix_ns: u64,
 ) -> Envelope {
     match outcome {
         Ok(identity) => {
-            let reply = authenticated_reply(request, &identity, now_unix_ms);
+            let reply = authenticated_reply(request, &identity, now_unix_ns);
             session.bind(identity);
             reply
         }
-        Err(error) => identity_rejection(request, &error, now_unix_ms),
+        Err(error) => identity_rejection(request, &error, now_unix_ns),
     }
 }
 
 /// Maps a challenge failure onto the wire.
-fn challenge_rejection(request: &Envelope, error: &ChallengeError, now_unix_ms: u64) -> Envelope {
+fn challenge_rejection(request: &Envelope, error: &ChallengeError, now_unix_ns: u64) -> Envelope {
     protocol_error(
         ProtocolErrorCode::Unauthenticated,
         request.message_id.clone(),
         error.to_string(),
-        now_unix_ms,
+        now_unix_ns,
     )
 }
 
 /// Maps an identity failure onto the wire, without revealing more than the
 /// caller already knows.
-fn identity_rejection(request: &Envelope, error: &IdentityError, now_unix_ms: u64) -> Envelope {
+fn identity_rejection(request: &Envelope, error: &IdentityError, now_unix_ns: u64) -> Envelope {
     let code = match error {
         IdentityError::Signature(_) | IdentityError::UnknownDevice => {
             ProtocolErrorCode::Unauthenticated
@@ -157,7 +157,7 @@ fn identity_rejection(request: &Envelope, error: &IdentityError, now_unix_ms: u6
         }
         other => other.to_string(),
     };
-    protocol_error(code, request.message_id.clone(), message, now_unix_ms)
+    protocol_error(code, request.message_id.clone(), message, now_unix_ns)
 }
 
 #[cfg(test)]
@@ -169,7 +169,7 @@ mod tests {
         Authenticated, DeviceLinked, LinkDevice, Ping, Pong, ProtocolError, ServerHello,
     };
     use portalis_nexus_protocol::{
-        CHALLENGE_LIFETIME_MS, SessionBinding, authentication_payload, derive_device_id,
+        CHALLENGE_LIFETIME_NS, SessionBinding, authentication_payload, derive_device_id,
         link_device_payload, new_message_id, registration_payload,
     };
     use portalis_nexus_server_core::HandleError;
@@ -180,7 +180,7 @@ mod tests {
     use crate::messages::hello_payload;
     use crate::state::AppState;
 
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
     const AUTHORITY: &str = "nexus.portalis.test";
     const ENCRYPTION_KEY: [u8; 32] = [6; 32];
 
@@ -213,7 +213,7 @@ mod tests {
             server_authority: AUTHORITY,
             connection_id: &hello.connection_id,
             challenge: &hello.challenge,
-            server_time_unix_ms: NOW,
+            server_time_unix_ns: NOW,
         }
     }
 
@@ -228,7 +228,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::RegisterUser(RegisterUser {
                 requested_username: username.to_owned(),
                 device_public_key: public.to_vec(),
@@ -245,7 +245,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::AuthenticateDevice(AuthenticateDevice {
                 device_public_key: public.to_vec(),
                 signature: signer.sign(&payload).to_bytes().to_vec(),
@@ -265,7 +265,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::LinkDevice(LinkDevice {
                 candidate_signing_public_key: candidate_signing_public_key.to_vec(),
                 candidate_encryption_public_key: ENCRYPTION_KEY.to_vec(),
@@ -434,7 +434,7 @@ mod tests {
             &mut session,
             &state,
             &register_envelope(&hello, "Ada", &key(7)),
-            NOW + CHALLENGE_LIFETIME_MS + 1,
+            NOW + CHALLENGE_LIFETIME_NS + 1,
         )
         .await;
 
@@ -450,7 +450,7 @@ mod tests {
         let request = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::RegisterUser(RegisterUser {
                 requested_username: "Ada".to_owned(),
                 device_public_key: key(7).verifying_key().to_bytes().to_vec(),
@@ -576,7 +576,7 @@ mod tests {
         let ping = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::Ping(Ping { nonce: 5 })),
         };
 
@@ -591,7 +591,7 @@ mod tests {
         let request = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::Ping(Ping { nonce: 1 })),
         };
 
@@ -634,7 +634,7 @@ mod tests {
         let request = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: NOW,
+            timestamp_unix_ns: NOW,
             payload: Some(Payload::Ping(Ping { nonce: 1 })),
         };
         let outage = IdentityError::Repository(RepositoryError::Unavailable(

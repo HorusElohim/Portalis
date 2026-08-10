@@ -18,8 +18,12 @@ pub const SIGNATURE_BYTES: usize = 64;
 pub const MIN_USERNAME_CHARS: usize = 3;
 pub const MAX_USERNAME_CHARS: usize = 24;
 pub const DISCRIMINATOR_CHARS: usize = 5;
-/// How long a `ServerHello` challenge may be used to sign.
-pub const CHALLENGE_LIFETIME_MS: u64 = 60_000;
+/// Nanoseconds in one millisecond, for the few places that still need
+/// milliseconds: `UUIDv7` timestamps and anything speaking to a system that
+/// defines its own unit.
+pub const NANOS_PER_MILLI: u64 = 1_000_000;
+/// How long a `ServerHello` challenge may be used to sign: one minute.
+pub const CHALLENGE_LIFETIME_NS: u64 = 60 * 1_000 * NANOS_PER_MILLI;
 pub const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_PENDING_REQUESTS: usize = 128;
 pub const MAX_OUTBOUND_QUEUE: usize = 256;

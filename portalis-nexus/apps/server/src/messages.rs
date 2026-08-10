@@ -23,48 +23,48 @@ pub enum SocketReply {
 }
 
 #[must_use]
-pub fn server_hello(protocol_policy: &ProtocolPolicy, server_time_unix_ms: u64) -> Envelope {
+pub fn server_hello(protocol_policy: &ProtocolPolicy, server_time_unix_ns: u64) -> Envelope {
     hello_envelope(
-        hello_payload(protocol_policy, server_time_unix_ms),
-        server_time_unix_ms,
+        hello_payload(protocol_policy, server_time_unix_ns),
+        server_time_unix_ns,
     )
 }
 
 /// Wraps an already-built hello, so a caller can read its connection ID first.
 #[must_use]
-pub fn hello_envelope(hello: ServerHello, sent_at_unix_ms: u64) -> Envelope {
+pub fn hello_envelope(hello: ServerHello, timestamp_unix_ns: u64) -> Envelope {
     Envelope {
         message_id: new_message_id(),
         correlation_id: Vec::new(),
-        sent_at_unix_ms,
+        timestamp_unix_ns,
         payload: Some(Payload::ServerHello(hello)),
     }
 }
 
 #[must_use]
-pub fn hello_payload(protocol_policy: &ProtocolPolicy, server_time_unix_ms: u64) -> ServerHello {
+pub fn hello_payload(protocol_policy: &ProtocolPolicy, server_time_unix_ns: u64) -> ServerHello {
     ServerHello {
         connection_id: new_message_id(),
         challenge: new_challenge(),
-        server_time_unix_ms,
+        server_time_unix_ns,
         supported_protocols: Some(*protocol_policy.supported()),
     }
 }
 
 #[must_use]
-pub fn response_for(envelope: &Envelope, sent_at_unix_ms: u64) -> Envelope {
+pub fn response_for(envelope: &Envelope, timestamp_unix_ns: u64) -> Envelope {
     match &envelope.payload {
         Some(Payload::Ping(Ping { nonce })) => Envelope {
             message_id: new_message_id(),
             correlation_id: envelope.message_id.clone(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
             payload: Some(Payload::Pong(Pong { nonce: *nonce })),
         },
         _ => protocol_error(
             ProtocolErrorCode::InvalidMessage,
             envelope.message_id.clone(),
             "only Ping is accepted before authentication".to_owned(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
         ),
     }
 }
@@ -74,12 +74,12 @@ pub fn protocol_error(
     code: ProtocolErrorCode,
     correlation_id: Vec<u8>,
     message: String,
-    sent_at_unix_ms: u64,
+    timestamp_unix_ns: u64,
 ) -> Envelope {
     Envelope {
         message_id: new_message_id(),
         correlation_id,
-        sent_at_unix_ms,
+        timestamp_unix_ns,
         payload: Some(Payload::ProtocolError(ProtocolError {
             code: code as i32,
             message,
@@ -91,11 +91,11 @@ pub fn protocol_error(
 
 /// Answers `request` with `payload`, correlated to it.
 #[must_use]
-pub fn reply_with(request: &Envelope, payload: Payload, sent_at_unix_ms: u64) -> Envelope {
+pub fn reply_with(request: &Envelope, payload: Payload, timestamp_unix_ns: u64) -> Envelope {
     Envelope {
         message_id: new_message_id(),
         correlation_id: request.message_id.clone(),
-        sent_at_unix_ms,
+        timestamp_unix_ns,
         payload: Some(payload),
     }
 }
@@ -105,12 +105,12 @@ pub fn reply_with(request: &Envelope, payload: Payload, sent_at_unix_ms: u64) ->
 pub fn authenticated_reply(
     request: &Envelope,
     identity: &Identity,
-    sent_at_unix_ms: u64,
+    timestamp_unix_ns: u64,
 ) -> Envelope {
     Envelope {
         message_id: new_message_id(),
         correlation_id: request.message_id.clone(),
-        sent_at_unix_ms,
+        timestamp_unix_ns,
         payload: Some(Payload::Authenticated(Authenticated {
             user_id: identity.user.user_id.to_vec(),
             device_id: identity.device.device_id.to_vec(),
@@ -126,17 +126,17 @@ pub fn authenticated_reply(
 pub fn presence_event(
     user_id: UserId,
     online: bool,
-    last_seen_unix_ms: Option<u64>,
-    sent_at_unix_ms: u64,
+    last_seen_unix_ns: Option<u64>,
+    timestamp_unix_ns: u64,
 ) -> Envelope {
     Envelope {
         message_id: new_message_id(),
         correlation_id: Vec::new(),
-        sent_at_unix_ms,
+        timestamp_unix_ns,
         payload: Some(Payload::PresenceEvent(PresenceEvent {
             user_id: user_id.to_vec(),
             online,
-            last_seen_unix_ms,
+            last_seen_unix_ns,
         })),
     }
 }
@@ -155,16 +155,16 @@ pub fn binary_frame(envelope: &Envelope) -> Message {
 
 /// Maps one inbound WebSocket message to the reply queued for its peer.
 #[must_use]
-pub fn reply_to(message: &Message, sent_at_unix_ms: u64) -> SocketReply {
+pub fn reply_to(message: &Message, timestamp_unix_ns: u64) -> SocketReply {
     match message {
         Message::Binary(frame) => {
             let response = match decode_frame(frame) {
-                Ok(envelope) => response_for(&envelope, sent_at_unix_ms),
+                Ok(envelope) => response_for(&envelope, timestamp_unix_ns),
                 Err(error) => protocol_error(
                     ProtocolErrorCode::InvalidMessage,
                     Vec::new(),
                     error.to_string(),
-                    sent_at_unix_ms,
+                    timestamp_unix_ns,
                 ),
             };
             SocketReply::Send(binary_frame(&response))
@@ -173,7 +173,7 @@ pub fn reply_to(message: &Message, sent_at_unix_ms: u64) -> SocketReply {
             ProtocolErrorCode::InvalidMessage,
             Vec::new(),
             "expected a binary protobuf envelope".to_owned(),
-            sent_at_unix_ms,
+            timestamp_unix_ns,
         ))),
         Message::Ping(payload) => SocketReply::Send(Message::Pong(payload.clone())),
         Message::Pong(_) => SocketReply::Idle,
@@ -213,12 +213,12 @@ mod tests {
     fn server_hello_is_valid_for_the_current_protocol() {
         let hello = hello_payload(&policy(), 42);
 
-        assert_eq!(hello.server_time_unix_ms, 42);
+        assert_eq!(hello.server_time_unix_ns, 42);
         assert_eq!(
             portalis_nexus_protocol::validate_server_hello(&hello),
             Ok(())
         );
-        assert_eq!(server_hello(&policy(), 42).sent_at_unix_ms, 42);
+        assert_eq!(server_hello(&policy(), 42).timestamp_unix_ns, 42);
     }
 
     #[test]
@@ -226,12 +226,12 @@ mod tests {
         let request = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::Ping(Ping { nonce: 7 })),
         };
         let response = response_for(&request, 2);
         assert_eq!(response.correlation_id, request.message_id);
-        assert_eq!(response.sent_at_unix_ms, 2);
+        assert_eq!(response.timestamp_unix_ns, 2);
         assert_eq!(response.payload, Some(Payload::Pong(Pong { nonce: 7 })));
 
         let rejected = response_for(&response, 3);
@@ -247,7 +247,7 @@ mod tests {
         let ping = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::Ping(Ping { nonce: 7 })),
         };
         assert_eq!(

@@ -77,7 +77,7 @@ async fn friends_see_each_other_go_offline_and_come_back() {
     let offline = next_presence(&mut grace_events, &ada_id).await;
     assert!(!offline.online);
     assert!(
-        offline.last_seen_unix_ms.is_some(),
+        offline.last_seen_unix_ns.is_some(),
         "someone offline was last seen at a time"
     );
 
@@ -93,7 +93,7 @@ async fn friends_see_each_other_go_offline_and_come_back() {
     let online = next_presence(&mut grace_events, &ada_id).await;
     assert!(online.online);
     assert_eq!(
-        online.last_seen_unix_ms, None,
+        online.last_seen_unix_ns, None,
         "someone online has no last-seen time"
     );
 

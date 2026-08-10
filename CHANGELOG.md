@@ -14,6 +14,16 @@
 
 <!-- Behaviour and UX changes go here before the next release. -->
 
+- Moved every Nexus timestamp to nanoseconds since the Unix epoch, on the
+  wire, in the domain, and in storage. `Envelope.sent_at_unix_ms` is now
+  `timestamp_unix_ns`, and `server_time_unix_ms` and `last_seen_unix_ms`
+  follow the same `*_unix_ns` naming. Field numbers are unchanged, so this
+  breaks the protocol without breaking binary decoding: a client built
+  against the old schema still reads the field and interprets nanoseconds as
+  milliseconds. Nexus is not deployed, so no compatibility window applies.
+  `UUIDv7` keeps milliseconds internally, since its 48-bit timestamp is
+  defined in them and nanoseconds would wrap it every three days.
+
 ### Fixed
 
 <!-- Bug fixes and regressions go here. -->
@@ -114,6 +124,16 @@
 
 <!-- Behaviour and UX changes go here before the next release. -->
 
+- Moved every Nexus timestamp to nanoseconds since the Unix epoch, on the
+  wire, in the domain, and in storage. `Envelope.sent_at_unix_ms` is now
+  `timestamp_unix_ns`, and `server_time_unix_ms` and `last_seen_unix_ms`
+  follow the same `*_unix_ns` naming. Field numbers are unchanged, so this
+  breaks the protocol without breaking binary decoding: a client built
+  against the old schema still reads the field and interprets nanoseconds as
+  milliseconds. Nexus is not deployed, so no compatibility window applies.
+  `UUIDv7` keeps milliseconds internally, since its 48-bit timestamp is
+  defined in them and nanoseconds would wrap it every three days.
+
 - Restyled shared collection rows with the same visual energy as torrent rows,
   including an accented preview tile and a clear shared-state fallback.
 
@@ -135,6 +155,16 @@
 ### Changed
 
 <!-- Behaviour and UX changes go here before the next release. -->
+
+- Moved every Nexus timestamp to nanoseconds since the Unix epoch, on the
+  wire, in the domain, and in storage. `Envelope.sent_at_unix_ms` is now
+  `timestamp_unix_ns`, and `server_time_unix_ms` and `last_seen_unix_ms`
+  follow the same `*_unix_ns` naming. Field numbers are unchanged, so this
+  breaks the protocol without breaking binary decoding: a client built
+  against the old schema still reads the field and interprets nanoseconds as
+  milliseconds. Nexus is not deployed, so no compatibility window applies.
+  `UUIDv7` keeps milliseconds internally, since its 48-bit timestamp is
+  defined in them and nanoseconds would wrap it every three days.
 
 - Removed the misleading iOS Photos import promise. iOS now offers Files as
   the no-copy source and never stages picker content in the app cache.

@@ -40,7 +40,7 @@ const CONTAINER_STOP_TIMEOUT: Duration = Duration::from_secs(10);
 const STORE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const DOCKER_INFO_TIMEOUT: Duration = Duration::from_secs(2);
 
-const NOW: u64 = 1_700_000_000_000;
+const NOW: u64 = 1_700_000_000_000_000_000;
 const ADA: UserId = [1; 16];
 const GRACE: UserId = [2; 16];
 const ENCRYPTION_KEY: [u8; 32] = [6; 32];
@@ -245,7 +245,7 @@ fn user(id: UserId, username: &str, discriminator: &str) -> UserRecord {
         username: username.to_owned(),
         normalized_username: username.to_lowercase(),
         discriminator: discriminator.to_owned(),
-        created_at_unix_ms: NOW,
+        created_at_unix_ns: NOW,
     }
 }
 
@@ -255,9 +255,9 @@ fn device(seed: u8, owner: UserId) -> DeviceRecord {
         user_id: owner,
         public_key: [seed; 32],
         encryption_public_key: [seed; 32],
-        created_at_unix_ms: NOW,
-        last_authenticated_at_unix_ms: None,
-        revoked_at_unix_ms: None,
+        created_at_unix_ns: NOW,
+        last_authenticated_at_unix_ns: None,
+        revoked_at_unix_ns: None,
     }
 }
 
@@ -275,7 +275,7 @@ fn key_envelope(share: ShareId, recipient: DeviceId, ciphertext: &[u8]) -> KeyEn
         recipient_device_id: recipient,
         ephemeral_public_key: ENCRYPTION_KEY,
         ciphertext: ciphertext.to_vec(),
-        created_at_unix_ms: NOW,
+        created_at_unix_ns: NOW,
     }
 }
 
@@ -427,8 +427,8 @@ async fn authentication_and_revocation_are_recorded() {
             .await
             .expect("stored")
             .expect("present");
-        assert_eq!(stored.last_authenticated_at_unix_ms, Some(NOW + 5));
-        assert_eq!(stored.revoked_at_unix_ms, Some(NOW + 9));
+        assert_eq!(stored.last_authenticated_at_unix_ns, Some(NOW + 5));
+        assert_eq!(stored.revoked_at_unix_ns, Some(NOW + 9));
         assert!(stored.is_revoked());
 
         // Updating a device that is not there is a no-op, not an error.
@@ -453,7 +453,7 @@ async fn a_friendship_write_must_match_the_stored_version() {
         let accepted = FriendshipRecord {
             state: FriendshipState::Accepted,
             version: 2,
-            updated_at_unix_ms: NOW + 1,
+            updated_at_unix_ns: NOW + 1,
             ..requested
         };
         assert_eq!(store.save_friendship(accepted.clone(), 1).await, Ok(()));
@@ -755,7 +755,7 @@ async fn every_operation_reports_an_outage_once_the_server_is_gone() {
     let accepted = FriendshipRecord {
         state: FriendshipState::Accepted,
         version: 2,
-        updated_at_unix_ms: NOW + 1,
+        updated_at_unix_ns: NOW + 1,
         ..FriendshipRecord::requested(edge, ADA, NOW)
     };
     let save_friendship = store.save_friendship(accepted, 1).await;
@@ -875,7 +875,7 @@ fn binding(challenge: &[u8; 32]) -> SessionBinding<'_> {
         server_authority: AUTHORITY,
         connection_id: &[4; 16],
         challenge,
-        server_time_unix_ms: NOW,
+        server_time_unix_ns: NOW,
     }
 }
 

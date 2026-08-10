@@ -10,5 +10,6 @@ message PresenceEvent {
   bytes user_id = 1;
   bool online = 2;
   // When the user was last seen online, absent while they still are.
-  optional uint64 last_seen_unix_ms = 3;
+  // Nanoseconds since the Unix epoch.
+  optional uint64 last_seen_unix_ns = 3;
 }

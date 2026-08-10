@@ -185,7 +185,7 @@ package portalis.protocol.v1;
 message Envelope {
   bytes message_id = 1;       // UUIDv7, exactly 16 bytes
   bytes correlation_id = 2;   // Request message_id for responses
-  uint64 sent_at_unix_ms = 3;
+  uint64 timestamp_unix_ns = 3;
 
   oneof payload {
     ServerHello server_hello = 10;
@@ -222,6 +222,21 @@ message Envelope {
 ```
 
 Field allocation is grouped by subsystem and finalized before implementation.
+
+### Time
+
+Every timestamp on this wire, in the domain, and in storage is **nanoseconds
+since the Unix epoch** in a `u64`, named `*_unix_ns`. One unit everywhere means
+no conversion seams to get wrong; `u64` nanoseconds run out in 2554 and the
+`i64` MongoDB stores them in runs out in 2262.
+
+The single exception is inside `UUIDv7`, whose 48-bit timestamp field is
+defined as milliseconds. `user_id_from` converts rather than truncating,
+because 48 bits of nanoseconds wrap every three days and would destroy the
+time ordering v7 exists for. `NANOS_PER_MILLI` marks every such boundary.
+
+Precision is whatever the host clock offers — microseconds on macOS — so the
+unit is a promise about scale, not about resolution.
 
 ### Identifiers
 

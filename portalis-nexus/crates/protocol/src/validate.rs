@@ -96,7 +96,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::Ping(Ping { nonce: 7 })),
         }
     }
@@ -105,7 +105,7 @@ mod tests {
         ServerHello {
             connection_id: new_message_id(),
             challenge: new_challenge(),
-            server_time_unix_ms: 1,
+            server_time_unix_ns: 1,
             supported_protocols: Some(ProtocolRange {
                 minimum: 1,
                 maximum: 1,

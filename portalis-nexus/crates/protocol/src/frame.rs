@@ -67,7 +67,7 @@ mod tests {
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::Ping(Ping { nonce: 7 })),
         }
     }
@@ -116,7 +116,7 @@ mod tests {
         let oversized = Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
-            sent_at_unix_ms: 1,
+            timestamp_unix_ns: 1,
             payload: Some(Payload::ProtocolError(ProtocolError {
                 code: ProtocolErrorCode::InvalidMessage as i32,
                 message: "x".repeat(MAX_FRAME_BYTES),

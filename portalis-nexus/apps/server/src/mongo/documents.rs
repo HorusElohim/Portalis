@@ -1,9 +1,9 @@
 //! How durable records are shaped in `MongoDB`.
 //!
 //! Binary identifiers are stored as BSON binary rather than hex strings, so an
-//! index keeps their natural size and ordering. Timestamps are `i64` because
-//! BSON has no unsigned integer; every value the server writes is a
-//! millisecond count that fits comfortably.
+//! index keeps their natural size and ordering. Counts are `i64` because BSON
+//! has no unsigned integer. Nanoseconds since the epoch fit with room to
+//! spare: `i64` runs out in 2262.
 
 use mongodb::bson::{Binary, spec::BinarySubtype};
 use portalis_nexus_protocol::v1::FriendshipState;
@@ -23,7 +23,7 @@ pub(crate) struct UserDocument {
     pub username: String,
     pub normalized_username: String,
     pub discriminator: String,
-    pub created_at_unix_ms: i64,
+    pub created_at_unix_ns: i64,
     pub schema_version: i32,
 }
 
@@ -34,9 +34,9 @@ pub(crate) struct DeviceDocument {
     pub user_id: Binary,
     pub public_key: Binary,
     pub encryption_public_key: Binary,
-    pub created_at_unix_ms: i64,
-    pub last_authenticated_at_unix_ms: Option<i64>,
-    pub revoked_at_unix_ms: Option<i64>,
+    pub created_at_unix_ns: i64,
+    pub last_authenticated_at_unix_ns: Option<i64>,
+    pub revoked_at_unix_ns: Option<i64>,
     pub schema_version: i32,
 }
 
@@ -47,8 +47,8 @@ pub(crate) struct FriendshipDocument {
     pub requested_by: Binary,
     pub state: i32,
     pub version: i64,
-    pub created_at_unix_ms: i64,
-    pub updated_at_unix_ms: i64,
+    pub created_at_unix_ns: i64,
+    pub updated_at_unix_ns: i64,
     pub schema_version: i32,
 }
 
@@ -66,13 +66,14 @@ pub(crate) fn fixed<const N: usize>(value: &Binary) -> Option<[u8; N]> {
     value.bytes.as_slice().try_into().ok()
 }
 
-/// Clamps a millisecond count into the signed range BSON stores.
-pub(crate) fn millis(value: u64) -> i64 {
+/// Clamps a count into the signed range BSON stores. Unit-neutral: this
+/// carries nanosecond timestamps and friendship versions alike.
+pub(crate) fn signed(value: u64) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 
-/// Reads a stored millisecond count, treating a negative value as zero.
-pub(crate) fn unsigned_millis(value: i64) -> u64 {
+/// Reads a stored count back, treating a negative value as zero.
+pub(crate) fn unsigned(value: i64) -> u64 {
     u64::try_from(value).unwrap_or_default()
 }
 
@@ -83,7 +84,7 @@ impl UserDocument {
             username: user.username.clone(),
             normalized_username: user.normalized_username.clone(),
             discriminator: user.discriminator.clone(),
-            created_at_unix_ms: millis(user.created_at_unix_ms),
+            created_at_unix_ns: signed(user.created_at_unix_ns),
             schema_version: SCHEMA_VERSION,
         }
     }
@@ -94,7 +95,7 @@ impl UserDocument {
             username: self.username,
             normalized_username: self.normalized_username,
             discriminator: self.discriminator,
-            created_at_unix_ms: unsigned_millis(self.created_at_unix_ms),
+            created_at_unix_ns: unsigned(self.created_at_unix_ns),
         })
     }
 }
@@ -106,9 +107,9 @@ impl DeviceDocument {
             user_id: binary(&device.user_id),
             public_key: binary(&device.public_key),
             encryption_public_key: binary(&device.encryption_public_key),
-            created_at_unix_ms: millis(device.created_at_unix_ms),
-            last_authenticated_at_unix_ms: device.last_authenticated_at_unix_ms.map(millis),
-            revoked_at_unix_ms: device.revoked_at_unix_ms.map(millis),
+            created_at_unix_ns: signed(device.created_at_unix_ns),
+            last_authenticated_at_unix_ns: device.last_authenticated_at_unix_ns.map(signed),
+            revoked_at_unix_ns: device.revoked_at_unix_ns.map(signed),
             schema_version: SCHEMA_VERSION,
         }
     }
@@ -119,9 +120,9 @@ impl DeviceDocument {
             user_id: fixed(&self.user_id)?,
             public_key: fixed(&self.public_key)?,
             encryption_public_key: fixed(&self.encryption_public_key)?,
-            created_at_unix_ms: unsigned_millis(self.created_at_unix_ms),
-            last_authenticated_at_unix_ms: self.last_authenticated_at_unix_ms.map(unsigned_millis),
-            revoked_at_unix_ms: self.revoked_at_unix_ms.map(unsigned_millis),
+            created_at_unix_ns: unsigned(self.created_at_unix_ns),
+            last_authenticated_at_unix_ns: self.last_authenticated_at_unix_ns.map(unsigned),
+            revoked_at_unix_ns: self.revoked_at_unix_ns.map(unsigned),
         })
     }
 }
@@ -133,9 +134,9 @@ impl FriendshipDocument {
             user_high: binary(&friendship.edge.user_high()),
             requested_by: binary(&friendship.requested_by),
             state: friendship.state as i32,
-            version: millis(friendship.version),
-            created_at_unix_ms: millis(friendship.created_at_unix_ms),
-            updated_at_unix_ms: millis(friendship.updated_at_unix_ms),
+            version: signed(friendship.version),
+            created_at_unix_ns: signed(friendship.created_at_unix_ns),
+            updated_at_unix_ns: signed(friendship.updated_at_unix_ns),
             schema_version: SCHEMA_VERSION,
         }
     }
@@ -145,9 +146,9 @@ impl FriendshipDocument {
             edge: FriendshipEdge::between(fixed(&self.user_low)?, fixed(&self.user_high)?).ok()?,
             requested_by: fixed(&self.requested_by)?,
             state: FriendshipState::try_from(self.state).ok()?,
-            version: unsigned_millis(self.version),
-            created_at_unix_ms: unsigned_millis(self.created_at_unix_ms),
-            updated_at_unix_ms: unsigned_millis(self.updated_at_unix_ms),
+            version: unsigned(self.version),
+            created_at_unix_ns: unsigned(self.created_at_unix_ns),
+            updated_at_unix_ns: unsigned(self.updated_at_unix_ns),
         })
     }
 }
@@ -158,7 +159,7 @@ pub(crate) struct KeyEnvelopeDocument {
     pub recipient_device_id: Binary,
     pub ephemeral_public_key: Binary,
     pub ciphertext: Binary,
-    pub created_at_unix_ms: i64,
+    pub created_at_unix_ns: i64,
     pub schema_version: i32,
 }
 
@@ -169,7 +170,7 @@ impl KeyEnvelopeDocument {
             recipient_device_id: binary(&envelope.recipient_device_id),
             ephemeral_public_key: binary(&envelope.ephemeral_public_key),
             ciphertext: binary(&envelope.ciphertext),
-            created_at_unix_ms: millis(envelope.created_at_unix_ms),
+            created_at_unix_ns: signed(envelope.created_at_unix_ns),
             schema_version: SCHEMA_VERSION,
         }
     }
@@ -180,7 +181,7 @@ impl KeyEnvelopeDocument {
             recipient_device_id: fixed(&self.recipient_device_id)?,
             ephemeral_public_key: fixed(&self.ephemeral_public_key)?,
             ciphertext: self.ciphertext.bytes,
-            created_at_unix_ms: unsigned_millis(self.created_at_unix_ms),
+            created_at_unix_ns: unsigned(self.created_at_unix_ns),
         })
     }
 }
@@ -208,7 +209,7 @@ mod tests {
             username: "Ada".to_owned(),
             normalized_username: "ada".to_owned(),
             discriminator: "7Q2XZ".to_owned(),
-            created_at_unix_ms: 0,
+            created_at_unix_ns: 0,
             schema_version: SCHEMA_VERSION,
         }
     }
@@ -219,9 +220,9 @@ mod tests {
             user_id: binary(&USER_ID),
             public_key: binary(&PUBLIC_KEY),
             encryption_public_key: binary(&ENCRYPTION_PUBLIC_KEY),
-            created_at_unix_ms: 0,
-            last_authenticated_at_unix_ms: None,
-            revoked_at_unix_ms: None,
+            created_at_unix_ns: 0,
+            last_authenticated_at_unix_ns: None,
+            revoked_at_unix_ns: None,
             schema_version: SCHEMA_VERSION,
         }
     }
@@ -233,8 +234,8 @@ mod tests {
             requested_by: binary(&USER_ID),
             state: FriendshipState::Pending as i32,
             version: 1,
-            created_at_unix_ms: 0,
-            updated_at_unix_ms: 0,
+            created_at_unix_ns: 0,
+            updated_at_unix_ns: 0,
             schema_version: SCHEMA_VERSION,
         }
     }
@@ -354,7 +355,7 @@ mod tests {
             recipient_device_id: binary(&DEVICE_ID),
             ephemeral_public_key: binary(&ENCRYPTION_PUBLIC_KEY),
             ciphertext: binary(b"sealed"),
-            created_at_unix_ms: 0,
+            created_at_unix_ns: 0,
             schema_version: SCHEMA_VERSION,
         }
     }

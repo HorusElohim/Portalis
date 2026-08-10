@@ -89,7 +89,7 @@ async fn relays_a_correlated_protocol_error_to_its_caller() {
     let unsupported = Envelope {
         message_id: new_message_id(),
         correlation_id: Vec::new(),
-        sent_at_unix_ms: 1,
+        timestamp_unix_ns: 1,
         payload: Some(Payload::Pong(Pong { nonce: 1 })),
     };
 

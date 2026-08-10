@@ -25,7 +25,7 @@ pub type ShareId = [u8; SHARE_ID_BYTES];
 
 /// Reads wall-clock time, which the domain never does for itself.
 pub trait Clock: Send + Sync {
-    fn now_unix_ms(&self) -> u64;
+    fn now_unix_ns(&self) -> u64;
 }
 
 /// Fills a buffer with cryptographically random bytes.
@@ -59,7 +59,7 @@ pub struct UserRecord {
     /// The indexed form that makes a handle unique.
     pub normalized_username: String,
     pub discriminator: String,
-    pub created_at_unix_ms: u64,
+    pub created_at_unix_ns: u64,
 }
 
 /// A durable record of one device authorized to act for a user.
@@ -71,15 +71,15 @@ pub struct DeviceRecord {
     /// Where a share-key envelope for this device is encrypted to. Separate
     /// from `public_key` because signing and encryption use different curves.
     pub encryption_public_key: EncryptionKey,
-    pub created_at_unix_ms: u64,
-    pub last_authenticated_at_unix_ms: Option<u64>,
-    pub revoked_at_unix_ms: Option<u64>,
+    pub created_at_unix_ns: u64,
+    pub last_authenticated_at_unix_ns: Option<u64>,
+    pub revoked_at_unix_ns: Option<u64>,
 }
 
 impl DeviceRecord {
     #[must_use]
     pub fn is_revoked(&self) -> bool {
-        self.revoked_at_unix_ms.is_some()
+        self.revoked_at_unix_ns.is_some()
     }
 }
 
@@ -139,14 +139,14 @@ pub trait IdentityRepository: UserDirectory {
     fn touch_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
 
     /// Revokes a device so it can no longer authenticate.
     fn revoke_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
 }
 
@@ -185,7 +185,7 @@ pub struct KeyEnvelopeRecord {
     pub recipient_device_id: DeviceId,
     pub ephemeral_public_key: EncryptionKey,
     pub ciphertext: Vec<u8>,
-    pub created_at_unix_ms: u64,
+    pub created_at_unix_ns: u64,
 }
 
 /// One deterministic page of envelopes for a recipient device.
@@ -260,17 +260,17 @@ impl<T: IdentityRepository> IdentityRepository for std::sync::Arc<T> {
     fn touch_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
-        T::touch_device(self, device_id, at_unix_ms)
+        T::touch_device(self, device_id, at_unix_ns)
     }
 
     fn revoke_device(
         &self,
         device_id: DeviceId,
-        at_unix_ms: u64,
+        at_unix_ns: u64,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
-        T::revoke_device(self, device_id, at_unix_ms)
+        T::revoke_device(self, device_id, at_unix_ns)
     }
 }
 
@@ -357,7 +357,7 @@ mod tests {
                     recipient_device_id: [1; DEVICE_ID_BYTES],
                     ephemeral_public_key: [2; ENCRYPTION_KEY_BYTES],
                     ciphertext: vec![3],
-                    created_at_unix_ms: 4,
+                    created_at_unix_ns: 4,
                 }
             })
             .collect();

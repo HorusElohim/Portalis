@@ -37,7 +37,7 @@ pub(crate) async fn upgrade(
 /// most [`MAX_OUTBOUND_QUEUE`] entries. A peer that stops reading fills that
 /// queue and loses its connection instead of growing server memory.
 async fn handle_socket(socket: WebSocket, state: AppState) {
-    let issued_at = now_unix_ms();
+    let issued_at = now_unix_ns();
     let hello = hello_payload(state.protocol_policy(), issued_at);
     let span = info_span!(
         "nexus_socket",
@@ -63,7 +63,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             read_inbound(&mut stream, &outbound, &mut draining, &mut session, &state).await;
         }
 
-        departed(&session, &state, now_unix_ms()).await;
+        departed(&session, &state, now_unix_ns()).await;
         drop(outbound);
         let _ = writer.await;
         debug!("socket closed");
@@ -96,16 +96,16 @@ async fn read_inbound(
             // they are answered here rather than by the stateless mapping.
             Message::Binary(ref frame) => match decode_frame(frame) {
                 Ok(request) => SocketReply::Send(binary_frame(
-                    &dispatch(session, state, &request, now_unix_ms()).await,
+                    &dispatch(session, state, &request, now_unix_ns()).await,
                 )),
                 Err(error) => SocketReply::Send(binary_frame(&protocol_error(
                     ProtocolErrorCode::InvalidMessage,
                     Vec::new(),
                     error.to_string(),
-                    now_unix_ms(),
+                    now_unix_ns(),
                 ))),
             },
-            other => reply_to(&other, now_unix_ms()),
+            other => reply_to(&other, now_unix_ns()),
         };
         match reply {
             SocketReply::Send(reply) => {
@@ -133,12 +133,12 @@ async fn write_outbound(
     let _ = sink.send(Message::Close(None)).await;
 }
 
-fn now_unix_ms() -> u64 {
+fn now_unix_ns() -> u64 {
     u64::try_from(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock is after the Unix epoch")
-            .as_millis(),
+            .as_nanos(),
     )
-    .expect("milliseconds since the Unix epoch fit in u64")
+    .expect("nanoseconds since the Unix epoch fit in u64 until 2554")
 }

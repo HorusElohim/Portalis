@@ -36,7 +36,7 @@ mod store;
 
 pub use config::{DEFAULT_DATABASE, DEFAULT_LISTEN_ADDR, MissingMongoUri, ServerConfig};
 pub use connections::Connections;
-pub use environment::{OsRandom, SystemClock, now_unix_ms};
+pub use environment::{OsRandom, SystemClock, now_unix_ns};
 pub use handlers::{departed, dispatch};
 pub use health::SERVICE_NAME;
 pub use identity::{DefaultStore, NexusFriends, NexusIdentities, friends, identities};

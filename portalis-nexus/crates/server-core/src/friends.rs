@@ -140,16 +140,16 @@ where
                 ));
             };
 
-            let now = self.clock.now_unix_ms();
+            let now = self.clock.now_unix_ns();
             let updated = FriendshipRecord {
                 edge,
                 requested_by,
                 state,
                 version: expected_version + 1,
-                created_at_unix_ms: current
+                created_at_unix_ns: current
                     .as_ref()
-                    .map_or(now, |record| record.created_at_unix_ms),
-                updated_at_unix_ms: now,
+                    .map_or(now, |record| record.created_at_unix_ns),
+                updated_at_unix_ns: now,
             };
             match self
                 .store
@@ -210,7 +210,7 @@ mod tests {
 
     use super::*;
 
-    const NOW: u64 = 1_700_000_000_000;
+    const NOW: u64 = 1_700_000_000_000_000_000;
 
     /// One store type across every test, since `FriendService` is generic and
     /// each instantiation is measured as its own set of regions.
@@ -338,7 +338,7 @@ mod tests {
             username: username.to_owned(),
             normalized_username: username.to_lowercase(),
             discriminator: discriminator.to_owned(),
-            created_at_unix_ms: NOW,
+            created_at_unix_ns: NOW,
         }
     }
 
@@ -417,7 +417,7 @@ mod tests {
 
         assert_eq!(accepted.state, FriendshipState::Accepted);
         assert_eq!(accepted.version, 2);
-        assert_eq!(accepted.created_at_unix_ms, requested.created_at_unix_ms);
+        assert_eq!(accepted.created_at_unix_ns, requested.created_at_unix_ns);
         assert!(service.are_friends(ADA, GRACE).await.expect("checked"));
         assert!(service.are_friends(GRACE, ADA).await.expect("checked"));
     }
