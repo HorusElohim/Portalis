@@ -838,6 +838,25 @@ coming back, and a second device leaving does not report its user away.
 Gate: an authorized linked device decrypts the latest capsule; an unauthorized
 device cannot discover private state; share revisions never regress.
 
+Current slice: the publication rules, over no storage and no clock. `publish`
+decides what a publication does to a share without performing it, which is
+what lets the write carry the revision it read and lose safely to a concurrent
+publisher.
+
+A share that does not exist starts at revision one and has nothing to follow,
+and creating it fixes its owner permanently: a peer may seed and fetch a share
+without being able to move it. An update publishes exactly one revision past
+what is stored and names the snapshot the share is actually on, so a
+publication built against a revision another device already replaced is
+refused rather than silently overwriting it. Revisions never regress and never
+skip.
+
+Republishing the stored revision succeeds only when every byte matches,
+because a publisher whose answer was lost retries the same bytes and must not
+be stranded; different bytes for a published revision are refused, since a
+revision is immutable once written. Nexus compares capsule bytes to recognise
+that retry and otherwise treats them as opaque.
+
 ### M5: Swarm discovery
 
 - Announce, refresh, lookup, and expire peer leases.

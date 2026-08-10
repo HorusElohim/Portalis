@@ -14,6 +14,8 @@ pub const ENCRYPTION_KEY_BYTES: usize = 32;
 /// Client-generated and opaque to Nexus: M2.5 scopes key envelopes to it
 /// without the ownership, revision, or membership record M4 adds later.
 pub const SHARE_ID_BYTES: usize = 16;
+/// A `BLAKE3` content root over the resolved canonical manifest.
+pub const SNAPSHOT_ID_BYTES: usize = 32;
 pub const SIGNATURE_BYTES: usize = 64;
 pub const MIN_USERNAME_CHARS: usize = 3;
 pub const MAX_USERNAME_CHARS: usize = 24;

@@ -24,6 +24,7 @@ mod memory;
 mod negotiation;
 mod ports;
 mod presence;
+mod share;
 
 pub use challenge::{ChallengeError, IssuedChallenge};
 pub use envelopes::{EnvelopeError, EnvelopeService, PutKeyEnvelopeRequest};
@@ -48,3 +49,6 @@ pub use ports::{
     UserDirectory, UserId, UserRecord,
 };
 pub use presence::{ConnectionId, PresenceChange, PresenceRegistry};
+pub use share::{
+    Publication, Publish, ShareError, ShareRecord, SnapshotId, publish as publish_snapshot,
+};

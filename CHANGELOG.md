@@ -6,6 +6,11 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+- Started Nexus M4 with the share publication rules: a share's owner is fixed
+  by its first publication, revisions only ever move forward one at a time and
+  must follow the snapshot the share is on, and an identical retry succeeds
+  without republishing.
+
 - Added Nexus M2.5 encrypted share-key delivery between a user's approved
   devices. Nexus stores only per-device X25519 envelopes, never plaintext
   share keys or media metadata.
