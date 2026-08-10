@@ -36,6 +36,8 @@ message Envelope {
     Pong pong = 15;
     Ack ack = 16;
     ProtocolError protocol_error = 17;
+    LinkDevice link_device = 18;
+    DeviceLinked device_linked = 19;
 
     ResolveHandleRequest resolve_handle_request = 30;
     ResolveHandleResponse resolve_handle_response = 31;

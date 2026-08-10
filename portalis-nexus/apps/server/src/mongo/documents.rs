@@ -31,6 +31,7 @@ pub(crate) struct DeviceDocument {
     pub device_id: Binary,
     pub user_id: Binary,
     pub public_key: Binary,
+    pub encryption_public_key: Binary,
     pub created_at_unix_ms: i64,
     pub last_authenticated_at_unix_ms: Option<i64>,
     pub revoked_at_unix_ms: Option<i64>,
@@ -102,6 +103,7 @@ impl DeviceDocument {
             device_id: binary(&device.device_id),
             user_id: binary(&device.user_id),
             public_key: binary(&device.public_key),
+            encryption_public_key: binary(&device.encryption_public_key),
             created_at_unix_ms: millis(device.created_at_unix_ms),
             last_authenticated_at_unix_ms: device.last_authenticated_at_unix_ms.map(millis),
             revoked_at_unix_ms: device.revoked_at_unix_ms.map(millis),
@@ -114,6 +116,7 @@ impl DeviceDocument {
             device_id: fixed(&self.device_id)?,
             user_id: fixed(&self.user_id)?,
             public_key: fixed(&self.public_key)?,
+            encryption_public_key: fixed(&self.encryption_public_key)?,
             created_at_unix_ms: unsigned_millis(self.created_at_unix_ms),
             last_authenticated_at_unix_ms: self.last_authenticated_at_unix_ms.map(unsigned_millis),
             revoked_at_unix_ms: self.revoked_at_unix_ms.map(unsigned_millis),
@@ -161,6 +164,7 @@ mod tests {
     const OTHER_USER_ID: [u8; 16] = [2; 16];
     const DEVICE_ID: [u8; 32] = [3; 32];
     const PUBLIC_KEY: [u8; 32] = [4; 32];
+    const ENCRYPTION_PUBLIC_KEY: [u8; 32] = [5; 32];
     const WRONG_LENGTH: &[u8] = &[0, 0, 0];
 
     fn valid_user() -> UserDocument {
@@ -179,6 +183,7 @@ mod tests {
             device_id: binary(&DEVICE_ID),
             user_id: binary(&USER_ID),
             public_key: binary(&PUBLIC_KEY),
+            encryption_public_key: binary(&ENCRYPTION_PUBLIC_KEY),
             created_at_unix_ms: 0,
             last_authenticated_at_unix_ms: None,
             revoked_at_unix_ms: None,
@@ -240,6 +245,15 @@ mod tests {
     fn a_device_public_key_of_the_wrong_length_is_treated_as_absent() {
         let document = DeviceDocument {
             public_key: binary(WRONG_LENGTH),
+            ..valid_device()
+        };
+        assert_eq!(document.into_record(), None);
+    }
+
+    #[test]
+    fn a_device_encryption_public_key_of_the_wrong_length_is_treated_as_absent() {
+        let document = DeviceDocument {
+            encryption_public_key: binary(WRONG_LENGTH),
             ..valid_device()
         };
         assert_eq!(document.into_record(), None);

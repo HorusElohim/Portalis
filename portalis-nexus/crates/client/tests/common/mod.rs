@@ -12,10 +12,14 @@ use axum::Router;
 use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::response::Response;
 use axum::routing::get;
-use portalis_nexus_client::{ClientConfig, ReconnectPolicy};
+use ed25519_dalek::{Signer, SigningKey};
+use portalis_nexus_client::{ClientConfig, DeviceSigner, ReconnectPolicy};
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{Envelope, Ping, ProtocolRange, ServerHello};
-use portalis_nexus_protocol::{WEBSOCKET_SUBPROTOCOL, new_challenge, new_message_id};
+use portalis_nexus_protocol::{
+    DEVICE_KEY_BYTES, ENCRYPTION_KEY_BYTES, SIGNATURE_BYTES, WEBSOCKET_SUBPROTOCOL, new_challenge,
+    new_message_id,
+};
 use portalis_nexus_server::{AppState, binary_frame, hello_envelope, server_hello};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -24,6 +28,35 @@ use tokio::time::{sleep, timeout};
 pub const SOCKET_ROUTE: &str = "/v1/socket";
 /// Bounds every "eventually" assertion so a hung test fails instead of hanging.
 pub const PATIENCE: Duration = Duration::from_secs(5);
+
+/// A signer over a fixed key, so a test can re-create the same device.
+///
+/// Shared by every integration test file rather than defined locally in
+/// each: a locally-defined type is its own distinct monomorphization target
+/// for `ClientProtocol`'s generic methods, which fragments coverage of that
+/// generic code across as many compiled copies as there are local
+/// definitions. One shared type means one compiled copy to cover.
+pub struct TestDevice(SigningKey);
+
+impl DeviceSigner for TestDevice {
+    fn public_key(&self) -> [u8; DEVICE_KEY_BYTES] {
+        self.0.verifying_key().to_bytes()
+    }
+
+    fn encryption_public_key(&self) -> [u8; ENCRYPTION_KEY_BYTES] {
+        // Not a real X25519 key: deterministic and distinct per seed is all
+        // these tests need.
+        self.0.to_bytes()
+    }
+
+    fn sign(&self, payload: &[u8]) -> [u8; SIGNATURE_BYTES] {
+        self.0.sign(payload).to_bytes()
+    }
+}
+
+pub fn device(seed: u8) -> TestDevice {
+    TestDevice(SigningKey::from_bytes(&[seed; 32]))
+}
 
 /// Reserves an ephemeral port so a restarted server can rebind the address.
 pub async fn reserve_address() -> SocketAddr {

@@ -7,7 +7,9 @@
 
 use std::future::Future;
 
-use portalis_nexus_protocol::{DEVICE_ID_BYTES, DEVICE_KEY_BYTES, USER_ID_BYTES};
+use portalis_nexus_protocol::{
+    DEVICE_ID_BYTES, DEVICE_KEY_BYTES, ENCRYPTION_KEY_BYTES, USER_ID_BYTES,
+};
 use thiserror::Error;
 
 use crate::friendship::{FriendshipEdge, FriendshipRecord};
@@ -15,6 +17,8 @@ use crate::friendship::{FriendshipEdge, FriendshipRecord};
 pub type UserId = [u8; USER_ID_BYTES];
 pub type DeviceId = [u8; DEVICE_ID_BYTES];
 pub type DeviceKey = [u8; DEVICE_KEY_BYTES];
+/// An X25519 public key, used only to receive encrypted share-key envelopes.
+pub type EncryptionKey = [u8; ENCRYPTION_KEY_BYTES];
 
 /// Reads wall-clock time, which the domain never does for itself.
 pub trait Clock: Send + Sync {
@@ -61,6 +65,9 @@ pub struct DeviceRecord {
     pub device_id: DeviceId,
     pub user_id: UserId,
     pub public_key: DeviceKey,
+    /// Where a share-key envelope for this device is encrypted to. Separate
+    /// from `public_key` because signing and encryption use different curves.
+    pub encryption_public_key: EncryptionKey,
     pub created_at_unix_ms: u64,
     pub last_authenticated_at_unix_ms: Option<u64>,
     pub revoked_at_unix_ms: Option<u64>,
@@ -113,6 +120,16 @@ pub trait IdentityRepository: UserDirectory {
         &self,
         device_id: DeviceId,
     ) -> impl Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send;
+
+    /// Enrols an additional device for a user who already exists, authorized
+    /// by one of that user's other devices rather than by claiming a handle.
+    ///
+    /// Fails with [`RepositoryError::DeviceExists`] when the device is
+    /// already enrolled.
+    fn link_device(
+        &self,
+        device: DeviceRecord,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
 
     /// Records a successful authentication. Missing devices are ignored: the
     /// caller has already verified the device exists.
@@ -189,6 +206,13 @@ impl<T: IdentityRepository> IdentityRepository for std::sync::Arc<T> {
         device_id: DeviceId,
     ) -> impl Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send {
         T::find_device(self, device_id)
+    }
+
+    fn link_device(
+        &self,
+        device: DeviceRecord,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::link_device(self, device)
     }
 
     fn touch_device(

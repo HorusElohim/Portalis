@@ -1,29 +1,11 @@
 //! Handle resolution and friendships over a real socket.
 
-use ed25519_dalek::{Signer, SigningKey};
-use portalis_nexus_client::{ClientError, DeviceSigner, NexusClient, TransportError};
+use portalis_nexus_client::{ClientError, NexusClient, TransportError};
 use portalis_nexus_protocol::v1::{FriendAction, FriendshipState, ProtocolErrorCode};
-use portalis_nexus_protocol::{DEVICE_KEY_BYTES, SIGNATURE_BYTES};
 
 mod common;
 
-use common::{endpoint, reserve_address, start_server};
-
-struct TestDevice(SigningKey);
-
-impl DeviceSigner for TestDevice {
-    fn public_key(&self) -> [u8; DEVICE_KEY_BYTES] {
-        self.0.verifying_key().to_bytes()
-    }
-
-    fn sign(&self, payload: &[u8]) -> [u8; SIGNATURE_BYTES] {
-        self.0.sign(payload).to_bytes()
-    }
-}
-
-fn device(seed: u8) -> TestDevice {
-    TestDevice(SigningKey::from_bytes(&[seed; 32]))
-}
+use common::{device, endpoint, reserve_address, start_server};
 
 fn refusal(error: &TransportError) -> ProtocolErrorCode {
     let TransportError::Client(ClientError::Refused { code, .. }) = error else {

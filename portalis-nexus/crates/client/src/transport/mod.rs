@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use portalis_nexus_protocol::v1::{
-    Authenticated, Envelope, Friend, FriendAction, ResolveHandleResponse, ServerHello,
+    Authenticated, DeviceLinked, Envelope, Friend, FriendAction, ResolveHandleResponse, ServerHello,
 };
 use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame};
 use tokio::net::TcpStream;
@@ -16,8 +16,8 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::config::ClientConfig;
 use crate::protocol::{
-    validate_authenticated, validate_friend_event, validate_friend_list, validate_pong,
-    validate_resolved,
+    validate_authenticated, validate_device_linked, validate_friend_event, validate_friend_list,
+    validate_pong, validate_resolved,
 };
 use crate::signer::DeviceSigner;
 use crate::transport::connection::{Shared, start_connection, supervise};
@@ -208,6 +208,34 @@ impl NexusClient {
         );
         let response = self.request(&request).await?;
         Ok(validate_authenticated(&request, &response)?)
+    }
+
+    /// Approves a new device's keys, signed by this already-enrolled one.
+    ///
+    /// Needs no [`crate::ReconnectPolicy`]-tracked handshake state beyond the
+    /// authority to sign against: the approval itself is not bound to this
+    /// connection, so it remains valid however the candidate device submits
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the client is disconnected or the
+    /// server refuses the request.
+    pub async fn link_device<S: DeviceSigner + ?Sized>(
+        &self,
+        candidate_signing_public_key: &[u8],
+        candidate_encryption_public_key: &[u8],
+        approver: &S,
+    ) -> Result<DeviceLinked, TransportError> {
+        let request = self.shared.protocol.link_device(
+            self.authority(),
+            candidate_signing_public_key,
+            candidate_encryption_public_key,
+            approver,
+            now_unix_ms(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_device_linked(&request, &response)?)
     }
 
     /// The authority signatures are bound to, taken from the endpoint dialled.

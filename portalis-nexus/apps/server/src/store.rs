@@ -101,6 +101,13 @@ impl IdentityRepository for NexusStore {
         }
     }
 
+    async fn link_device(&self, device: DeviceRecord) -> Result<(), RepositoryError> {
+        match self {
+            Self::Memory(store) => store.link_device(device).await,
+            Self::Mongo(store) => store.link_device(device).await,
+        }
+    }
+
     async fn touch_device(
         &self,
         device_id: DeviceId,
@@ -179,6 +186,7 @@ mod tests {
             device_id: [1; 32],
             user_id: ADA,
             public_key: [1; 32],
+            encryption_public_key: [2; 32],
             created_at_unix_ms: 0,
             last_authenticated_at_unix_ms: None,
             revoked_at_unix_ms: None,
@@ -233,6 +241,7 @@ mod tests {
             &store.insert_registration(user(), device()).await
         ));
         assert!(unavailable(&store.find_device([1; 32]).await));
+        assert!(unavailable(&store.link_device(device()).await));
         assert!(unavailable(&store.touch_device([1; 32], 1).await));
         assert!(unavailable(&store.revoke_device([1; 32], 1).await));
         assert!(unavailable(&store.find_friendship(edge).await));

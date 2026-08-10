@@ -2,13 +2,13 @@
 
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
-    AuthenticateDevice, Authenticated, Envelope, Friend, FriendAction, FriendCommand,
-    ListFriendsRequest, ListFriendsResponse, Ping, Pong, ProtocolErrorCode, RegisterUser,
-    ResolveHandleRequest, ResolveHandleResponse, ServerHello,
+    AuthenticateDevice, Authenticated, DeviceLinked, Envelope, Friend, FriendAction, FriendCommand,
+    LinkDevice, ListFriendsRequest, ListFriendsResponse, Ping, Pong, ProtocolErrorCode,
+    RegisterUser, ResolveHandleRequest, ResolveHandleResponse, ServerHello,
 };
 use portalis_nexus_protocol::{
-    CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, new_message_id,
-    registration_payload, validate_server_hello,
+    CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, link_device_payload,
+    new_message_id, registration_payload, validate_server_hello,
 };
 
 use crate::error::ClientError;
@@ -43,7 +43,8 @@ impl ClientProtocol {
         sent_at_unix_ms: u64,
     ) -> Envelope {
         let public_key = signer.public_key();
-        let payload = registration_payload(binding, username, &public_key);
+        let encryption_public_key = signer.encryption_public_key();
+        let payload = registration_payload(binding, username, &public_key, &encryption_public_key);
         Envelope {
             message_id: new_message_id(),
             correlation_id: Vec::new(),
@@ -51,7 +52,40 @@ impl ClientProtocol {
             payload: Some(Payload::RegisterUser(RegisterUser {
                 requested_username: username.to_owned(),
                 device_public_key: public_key.to_vec(),
+                encryption_public_key: encryption_public_key.to_vec(),
                 signature: signer.sign(&payload).to_vec(),
+            })),
+        }
+    }
+
+    /// Builds an approval, signed by this device, for a new device's keys.
+    ///
+    /// Unlike registration and authentication this carries no
+    /// [`SessionBinding`]: the approval is durable, valid for this server
+    /// however many times and on whatever connection the candidate device
+    /// eventually submits it.
+    #[must_use]
+    pub fn link_device<S: DeviceSigner + ?Sized>(
+        &self,
+        server_authority: &str,
+        candidate_signing_public_key: &[u8],
+        candidate_encryption_public_key: &[u8],
+        approver: &S,
+        sent_at_unix_ms: u64,
+    ) -> Envelope {
+        let payload = link_device_payload(
+            server_authority,
+            candidate_signing_public_key,
+            candidate_encryption_public_key,
+        );
+        Envelope {
+            message_id: new_message_id(),
+            correlation_id: Vec::new(),
+            sent_at_unix_ms,
+            payload: Some(Payload::LinkDevice(LinkDevice {
+                candidate_signing_public_key: candidate_signing_public_key.to_vec(),
+                candidate_encryption_public_key: candidate_encryption_public_key.to_vec(),
+                approval_signature: approver.sign(&payload).to_vec(),
             })),
         }
     }
@@ -262,6 +296,23 @@ pub fn validate_resolved(
     }
 }
 
+/// Reads a device-linked confirmation.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not a device-linked confirmation.
+pub fn validate_device_linked(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<DeviceLinked, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::DeviceLinked(linked) => Ok(linked.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "DeviceLinked",
+        }),
+    }
+}
+
 /// Reads the friendship a command produced.
 ///
 /// # Errors
@@ -341,6 +392,8 @@ mod tests {
         let envelope = client.ping(42, 1000);
 
         assert_eq!(client.version(), CURRENT_PROTOCOL_VERSION);
+        assert_eq!(client, client.clone());
+        assert!(!format!("{client:?}").is_empty());
         assert_eq!(envelope.sent_at_unix_ms, 1000);
         assert_eq!(envelope.validate(), Ok(()));
         assert_eq!(envelope.payload, Some(Payload::Ping(Ping { nonce: 42 })));
@@ -460,11 +513,22 @@ mod tests {
         }
     }
 
+    fn link_of(envelope: &Envelope) -> Option<LinkDevice> {
+        match &envelope.payload {
+            Some(Payload::LinkDevice(link)) => Some(link.clone()),
+            _ => None,
+        }
+    }
+
     struct FixedSigner;
 
     impl DeviceSigner for FixedSigner {
         fn public_key(&self) -> [u8; 32] {
             [7; 32]
+        }
+
+        fn encryption_public_key(&self) -> [u8; 32] {
+            [8; 32]
         }
 
         fn sign(&self, payload: &[u8]) -> [u8; 64] {
@@ -493,6 +557,7 @@ mod tests {
         let claim = claim_of(&register).expect("a registration");
         assert_eq!(claim.requested_username, "Ada");
         assert_eq!(claim.device_public_key, vec![7; 32]);
+        assert_eq!(claim.encryption_public_key, vec![8; 32]);
         assert_eq!(register.sent_at_unix_ms, 5);
         assert_eq!(register.validate(), Ok(()));
 
@@ -504,6 +569,30 @@ mod tests {
         assert_ne!(claim.signature, proof.signature);
         assert!(claim_of(&authenticate).is_none());
         assert!(proof_of(&register).is_none());
+    }
+
+    #[test]
+    fn builds_a_durable_link_device_approval() {
+        let client = ClientProtocol::default();
+        let candidate_signing_public_key = [9; 32];
+        let candidate_encryption_public_key = [10; 32];
+
+        // Deliberately no `SessionBinding` here, unlike registration and
+        // authentication: a link approval is not tied to a connection.
+        let request = client.link_device(
+            "nexus.portalis.test",
+            &candidate_signing_public_key,
+            &candidate_encryption_public_key,
+            &FixedSigner,
+            7,
+        );
+
+        let link = link_of(&request).expect("a link-device request");
+        assert_eq!(link.candidate_signing_public_key, vec![9; 32]);
+        assert_eq!(link.candidate_encryption_public_key, vec![10; 32]);
+        assert_eq!(request.sent_at_unix_ms, 7);
+        assert_eq!(request.validate(), Ok(()));
+        assert!(link_of(&ping_envelope(1)).is_none());
     }
 
     #[test]
@@ -539,6 +628,33 @@ mod tests {
             validate_authenticated(&request, &wrong_payload),
             Err(ClientError::UnexpectedEnvelope {
                 expected: "Authenticated"
+            })
+        );
+    }
+
+    #[test]
+    fn reads_a_device_linked_confirmation() {
+        let request = ping_envelope(1);
+        let response = Envelope {
+            message_id: new_message_id(),
+            correlation_id: request.message_id.clone(),
+            sent_at_unix_ms: 2,
+            payload: Some(Payload::DeviceLinked(DeviceLinked {
+                user_id: vec![1; 16],
+                device_id: vec![2; 32],
+            })),
+        };
+
+        let linked =
+            validate_device_linked(&request, &response).expect("a device-linked confirmation");
+        assert_eq!(linked.user_id, vec![1; 16]);
+
+        let mut wrong_payload = response;
+        wrong_payload.payload = Some(Payload::Pong(Pong { nonce: 1 }));
+        assert_eq!(
+            validate_device_linked(&request, &wrong_payload),
+            Err(ClientError::UnexpectedEnvelope {
+                expected: "DeviceLinked"
             })
         );
     }

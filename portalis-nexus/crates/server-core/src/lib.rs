@@ -34,13 +34,13 @@ pub use handle::{
 };
 pub use identity::{
     AuthenticationRequest, HANDLE_ALLOCATION_ATTEMPTS, Identity, IdentityError, IdentityService,
-    RegistrationRequest,
+    LinkDeviceRequest, RegistrationRequest,
 };
 pub use memory::{FixedClock, InMemoryIdentities, ScriptedRandom};
 pub use negotiation::{NegotiationError, ProtocolPolicy};
 pub use portalis_nexus_protocol::v1::{FriendAction, FriendshipState};
 pub use ports::{
-    Clock, DeviceId, DeviceKey, DeviceRecord, FriendRepository, IdentityRepository, RandomSource,
-    RepositoryError, UserDirectory, UserId, UserRecord,
+    Clock, DeviceId, DeviceKey, DeviceRecord, EncryptionKey, FriendRepository, IdentityRepository,
+    RandomSource, RepositoryError, UserDirectory, UserId, UserRecord,
 };
 pub use presence::{ConnectionId, PresenceChange, PresenceRegistry};

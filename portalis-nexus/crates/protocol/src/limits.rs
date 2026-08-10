@@ -10,6 +10,7 @@ pub const CHALLENGE_BYTES: usize = 32;
 pub const USER_ID_BYTES: usize = 16;
 pub const DEVICE_ID_BYTES: usize = 32;
 pub const DEVICE_KEY_BYTES: usize = 32;
+pub const ENCRYPTION_KEY_BYTES: usize = 32;
 pub const SIGNATURE_BYTES: usize = 64;
 pub const MIN_USERNAME_CHARS: usize = 3;
 pub const MAX_USERNAME_CHARS: usize = 24;

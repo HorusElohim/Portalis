@@ -247,6 +247,16 @@ impl IdentityRepository for InMemoryIdentities {
         async move { outage.map_or(Ok(found), Err) }
     }
 
+    fn link_device(
+        &self,
+        device: DeviceRecord,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let result = self
+            .outage()
+            .map_or_else(|| self.lock().insert_device(device), Err);
+        async move { result }
+    }
+
     fn touch_device(
         &self,
         device_id: DeviceId,
@@ -343,6 +353,7 @@ mod tests {
             device_id: [seed; 32],
             user_id: [1; 16],
             public_key: [3; 32],
+            encryption_public_key: [4; 32],
             created_at_unix_ms: 1,
             last_authenticated_at_unix_ms: None,
             revoked_at_unix_ms: None,
@@ -453,6 +464,25 @@ mod tests {
             Ok(1)
         );
         assert_eq!(store.list_friendships([9; 16]).await, Ok(Vec::new()));
+    }
+
+    #[tokio::test]
+    async fn a_linked_device_joins_an_existing_user_without_touching_it() {
+        let store = InMemoryIdentities::default();
+        store
+            .insert_registration(user("7Q2XZ"), device(1))
+            .await
+            .expect("first device registered");
+
+        assert_eq!(store.link_device(device(2)).await, Ok(()));
+
+        assert_eq!(store.user_count(), 1, "linking creates no new user");
+        assert_eq!(store.device_count(), 2);
+        assert_eq!(store.find_device([2; 32]).await, Ok(Some(device(2))));
+        assert_eq!(
+            store.link_device(device(2)).await,
+            Err(RepositoryError::DeviceExists)
+        );
     }
 
     #[tokio::test]

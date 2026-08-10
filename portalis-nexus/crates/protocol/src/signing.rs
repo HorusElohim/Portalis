@@ -12,12 +12,14 @@
 use ed25519_dalek::{Signature, VerifyingKey};
 use thiserror::Error;
 
-use crate::limits::{DEVICE_KEY_BYTES, SIGNATURE_BYTES};
+use crate::limits::{DEVICE_KEY_BYTES, ENCRYPTION_KEY_BYTES, SIGNATURE_BYTES};
 
 /// Names the registration operation inside its signed payload.
 pub const REGISTRATION_CONTEXT: &str = "portalis.protocol.v1/register-user";
 /// Names the authentication operation inside its signed payload.
 pub const AUTHENTICATION_CONTEXT: &str = "portalis.protocol.v1/authenticate-device";
+/// Names the device-linking operation inside its signed payload.
+pub const LINK_DEVICE_CONTEXT: &str = "portalis.protocol.v1/link-device";
 
 /// The `ServerHello` facts that bind a signature to one connection attempt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,20 +41,29 @@ pub enum SignatureError {
     MalformedKey,
     #[error("signature must contain exactly {SIGNATURE_BYTES} bytes, got {actual}")]
     InvalidSignatureLength { actual: usize },
+    #[error(
+        "encryption public key must contain exactly {ENCRYPTION_KEY_BYTES} bytes, got {actual}"
+    )]
+    InvalidEncryptionKeyLength { actual: usize },
     #[error("signature does not match the signed payload")]
     Rejected,
 }
 
 /// Builds the bytes a device signs to claim a new username.
+///
+/// The encryption key is covered by the same signature as the signing key,
+/// so neither can be substituted after the fact without invalidating it.
 #[must_use]
 pub fn registration_payload(
     binding: &SessionBinding<'_>,
     requested_username: &str,
     device_public_key: &[u8],
+    encryption_public_key: &[u8],
 ) -> Vec<u8> {
     let mut payload = binding.encode(REGISTRATION_CONTEXT);
     push_field(&mut payload, requested_username.as_bytes());
     push_field(&mut payload, device_public_key);
+    push_field(&mut payload, encryption_public_key);
     payload
 }
 
@@ -61,6 +72,26 @@ pub fn registration_payload(
 pub fn authentication_payload(binding: &SessionBinding<'_>, device_public_key: &[u8]) -> Vec<u8> {
     let mut payload = binding.encode(AUTHENTICATION_CONTEXT);
     push_field(&mut payload, device_public_key);
+    payload
+}
+
+/// Builds the bytes an already-authorized device signs to approve a new one.
+///
+/// Durable rather than session-bound: it covers the server this approval is
+/// valid for and the two keys it grants, not a connection or challenge, so it
+/// can be produced once — even offline, from a scanned code — and submitted
+/// by the candidate device whenever it next connects.
+#[must_use]
+pub fn link_device_payload(
+    server_authority: &str,
+    candidate_signing_public_key: &[u8],
+    candidate_encryption_public_key: &[u8],
+) -> Vec<u8> {
+    let mut payload = Vec::new();
+    push_field(&mut payload, LINK_DEVICE_CONTEXT.as_bytes());
+    push_field(&mut payload, server_authority.as_bytes());
+    push_field(&mut payload, candidate_signing_public_key);
+    push_field(&mut payload, candidate_encryption_public_key);
     payload
 }
 
@@ -133,11 +164,18 @@ mod tests {
         }
     }
 
+    const ENCRYPTION_KEY: [u8; ENCRYPTION_KEY_BYTES] = [5; ENCRYPTION_KEY_BYTES];
+
     #[test]
     fn accepts_a_registration_signature_over_its_own_payload() {
         let key = signing_key(7);
         let public = key.verifying_key().to_bytes();
-        let payload = registration_payload(&binding(&[1; 32], &[2; 16]), "ada", &public);
+        let payload = registration_payload(
+            &binding(&[1; 32], &[2; 16]),
+            "ada",
+            &public,
+            &ENCRYPTION_KEY,
+        );
         let signature = key.sign(&payload).to_bytes();
 
         assert_eq!(verify_signature(&public, &payload, &signature), Ok(()));
@@ -158,7 +196,7 @@ mod tests {
         let key = signing_key(7);
         let public = key.verifying_key().to_bytes();
         let session = binding(&[1; 32], &[2; 16]);
-        let registration = registration_payload(&session, "ada", &public);
+        let registration = registration_payload(&session, "ada", &public, &ENCRYPTION_KEY);
         let authentication = authentication_payload(&session, &public);
 
         assert_ne!(registration, authentication);
@@ -175,19 +213,31 @@ mod tests {
         let key = signing_key(7);
         let public = key.verifying_key().to_bytes();
         let session = binding(&[1; 32], &[2; 16]);
-        let payload = registration_payload(&session, "ada", &public);
+        let payload = registration_payload(&session, "ada", &public, &ENCRYPTION_KEY);
 
-        let other_challenge = registration_payload(&binding(&[9; 32], &[2; 16]), "ada", &public);
-        let other_connection = registration_payload(&binding(&[1; 32], &[9; 16]), "ada", &public);
+        let other_challenge = registration_payload(
+            &binding(&[9; 32], &[2; 16]),
+            "ada",
+            &public,
+            &ENCRYPTION_KEY,
+        );
+        let other_connection = registration_payload(
+            &binding(&[1; 32], &[9; 16]),
+            "ada",
+            &public,
+            &ENCRYPTION_KEY,
+        );
         let mut elsewhere = session;
         elsewhere.server_authority = "nexus.attacker.test";
-        let other_server = registration_payload(&elsewhere, "ada", &public);
+        let other_server = registration_payload(&elsewhere, "ada", &public, &ENCRYPTION_KEY);
         let mut later = session;
         later.server_time_unix_ms += 1;
-        let other_time = registration_payload(&later, "ada", &public);
+        let other_time = registration_payload(&later, "ada", &public, &ENCRYPTION_KEY);
         let mut downgraded = session;
         downgraded.protocol_version = 2;
-        let other_version = registration_payload(&downgraded, "ada", &public);
+        let other_version = registration_payload(&downgraded, "ada", &public, &ENCRYPTION_KEY);
+        let other_encryption_key =
+            registration_payload(&session, "ada", &public, &[9; ENCRYPTION_KEY_BYTES]);
 
         for changed in [
             other_challenge,
@@ -195,6 +245,7 @@ mod tests {
             other_server,
             other_time,
             other_version,
+            other_encryption_key,
         ] {
             assert_ne!(payload, changed);
         }
@@ -208,8 +259,8 @@ mod tests {
 
         // Without length prefixes these two would encode to the same bytes.
         assert_ne!(
-            registration_payload(&session, "ab", &public),
-            registration_payload(&session, "a", &[b'b'; 32])
+            registration_payload(&session, "ab", &public, &ENCRYPTION_KEY),
+            registration_payload(&session, "a", &[b'b'; 32], &ENCRYPTION_KEY)
         );
     }
 
@@ -218,7 +269,12 @@ mod tests {
         let signer = signing_key(7);
         let impostor = signing_key(8);
         let public = signer.verifying_key().to_bytes();
-        let payload = registration_payload(&binding(&[1; 32], &[2; 16]), "ada", &public);
+        let payload = registration_payload(
+            &binding(&[1; 32], &[2; 16]),
+            "ada",
+            &public,
+            &ENCRYPTION_KEY,
+        );
         let signature = signer.sign(&payload).to_bytes();
 
         assert_eq!(
@@ -231,7 +287,12 @@ mod tests {
     fn rejects_malformed_keys_and_signatures() {
         let key = signing_key(7);
         let public = key.verifying_key().to_bytes();
-        let payload = registration_payload(&binding(&[1; 32], &[2; 16]), "ada", &public);
+        let payload = registration_payload(
+            &binding(&[1; 32], &[2; 16]),
+            "ada",
+            &public,
+            &ENCRYPTION_KEY,
+        );
         let signature = key.sign(&payload).to_bytes();
 
         assert_eq!(
@@ -251,5 +312,70 @@ mod tests {
             verify_signature(&public, &payload, &signature[..63]),
             Err(SignatureError::InvalidSignatureLength { actual: 63 })
         );
+    }
+
+    #[test]
+    fn accepts_a_link_device_signature_over_its_own_payload() {
+        let approver = signing_key(11);
+        let approver_public = approver.verifying_key().to_bytes();
+        let candidate_signing = signing_key(12).verifying_key().to_bytes();
+        let payload =
+            link_device_payload("nexus.portalis.test", &candidate_signing, &ENCRYPTION_KEY);
+        let signature = approver.sign(&payload).to_bytes();
+
+        assert_eq!(
+            verify_signature(&approver_public, &payload, &signature),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_link_device_approval_is_durable_across_connections() {
+        // No connection_id, challenge, or server_time enters the payload at
+        // all: the same bytes are valid however many times, and on whatever
+        // connection, the candidate device submits them.
+        let candidate_signing = signing_key(12).verifying_key().to_bytes();
+        let first = link_device_payload("nexus.portalis.test", &candidate_signing, &ENCRYPTION_KEY);
+        let second =
+            link_device_payload("nexus.portalis.test", &candidate_signing, &ENCRYPTION_KEY);
+
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn a_link_device_approval_is_bound_to_its_server_and_both_candidate_keys() {
+        let candidate_signing = signing_key(12).verifying_key().to_bytes();
+        let payload =
+            link_device_payload("nexus.portalis.test", &candidate_signing, &ENCRYPTION_KEY);
+
+        let other_server =
+            link_device_payload("nexus.attacker.test", &candidate_signing, &ENCRYPTION_KEY);
+        let other_signing_key = link_device_payload(
+            "nexus.portalis.test",
+            &[9; DEVICE_KEY_BYTES],
+            &ENCRYPTION_KEY,
+        );
+        let other_encryption_key = link_device_payload(
+            "nexus.portalis.test",
+            &candidate_signing,
+            &[9; ENCRYPTION_KEY_BYTES],
+        );
+
+        for changed in [other_server, other_signing_key, other_encryption_key] {
+            assert_ne!(payload, changed);
+        }
+    }
+
+    #[test]
+    fn separates_link_device_from_registration_and_authentication() {
+        let key = signing_key(7);
+        let public = key.verifying_key().to_bytes();
+        let session = binding(&[1; 32], &[2; 16]);
+        let registration = registration_payload(&session, "ada", &public, &ENCRYPTION_KEY);
+        let authentication = authentication_payload(&session, &public);
+        let link_device = link_device_payload("nexus.portalis.test", &public, &ENCRYPTION_KEY);
+
+        assert_ne!(link_device, registration);
+        assert_ne!(link_device, authentication);
     }
 }

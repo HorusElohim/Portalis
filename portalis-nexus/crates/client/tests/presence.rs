@@ -2,33 +2,15 @@
 
 use std::time::Duration;
 
-use ed25519_dalek::{Signer, SigningKey};
-use portalis_nexus_client::{DeviceSigner, NexusClient};
+use portalis_nexus_client::NexusClient;
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{Envelope, FriendAction, PresenceEvent};
-use portalis_nexus_protocol::{DEVICE_KEY_BYTES, SIGNATURE_BYTES};
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 
 mod common;
 
-use common::{PATIENCE, endpoint, reserve_address, start_server};
-
-struct TestDevice(SigningKey);
-
-impl DeviceSigner for TestDevice {
-    fn public_key(&self) -> [u8; DEVICE_KEY_BYTES] {
-        self.0.verifying_key().to_bytes()
-    }
-
-    fn sign(&self, payload: &[u8]) -> [u8; SIGNATURE_BYTES] {
-        self.0.sign(payload).to_bytes()
-    }
-}
-
-fn device(seed: u8) -> TestDevice {
-    TestDevice(SigningKey::from_bytes(&[seed; 32]))
-}
+use common::{PATIENCE, device, endpoint, reserve_address, start_server};
 
 /// The presence in an envelope, or `None` when it carried none.
 fn presence(envelope: &Envelope) -> Option<PresenceEvent> {

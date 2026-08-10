@@ -268,6 +268,21 @@ impl IdentityRepository for MongoStore {
         }
     }
 
+    fn link_device(
+        &self,
+        device: DeviceRecord,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            store
+                .devices()
+                .insert_one(DeviceDocument::from_record(&device))
+                .await
+                .map(|_| ())
+                .map_err(|error| classify(&error, RepositoryError::DeviceExists))
+        }
+    }
+
     fn touch_device(
         &self,
         device_id: DeviceId,

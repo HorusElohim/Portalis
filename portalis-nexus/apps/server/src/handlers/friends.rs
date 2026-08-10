@@ -268,6 +268,7 @@ mod tests {
             device_id: [seed; 32],
             user_id: [seed; 16],
             public_key: [seed; 32],
+            encryption_public_key: [seed; 32],
             created_at_unix_ms: NOW,
             last_authenticated_at_unix_ms: Some(NOW),
             revoked_at_unix_ms: None,

@@ -1,6 +1,6 @@
 # Portalis Nexus Specification
 
-Status: M3 friends and presence complete; M4 collections next
+Status: M3 friends and presence complete; M2.5 device linking next, then M4
 
 Protocol: `portalis.protocol.v1`
 
@@ -23,7 +23,7 @@ continue to move directly between peers.
 - Define all socket messages with Protocol Buffers.
 - Build one client crate for macOS, iOS, Android, and Linux.
 - Build a multithreaded asynchronous Rust server for Linux.
-- Reuse existing Ed25519 device identities.
+- Reuse existing Ed25519 device identities and add separate encryption keys.
 - Support unique handles, friends, presence, and shared collections.
 - Distribute versioned torrent metadata and current peer candidates.
 - Store durable state in indexed MongoDB collections.
@@ -46,7 +46,7 @@ continue to move directly between peers.
 1. Media payloads never pass through the control server.
 2. Every external message is size-bounded and validated.
 3. Durable commands are authenticated, authorized, idempotent, and versioned.
-4. Device private keys never leave their devices.
+4. Device signing and encryption private keys never leave their devices.
 5. Slow clients cannot create unbounded queues or tasks.
 6. MongoDB documents never contain unbounded friend, member, or event arrays.
 7. Deleted protobuf field numbers and enum values are permanently reserved.
@@ -121,7 +121,7 @@ portalis-nexus-client = { path = "../../../portalis-nexus/crates/client" }
 
 ### `server-core`
 
-- Defines registration and authentication rules.
+  - Defines registration, authentication, and device-linking rules.
 - Defines handle allocation and normalization.
 - Defines friendship, membership, collection-head, and lease state machines.
 - Exposes repository, clock, random-source, and event-sink traits.
@@ -196,6 +196,8 @@ message Envelope {
     Pong pong = 15;
     Ack ack = 16;
     ProtocolError protocol_error = 17;
+    LinkDevice link_device = 18;
+    DeviceLinked device_linked = 19;
 
     ResolveHandleRequest resolve_handle_request = 30;
     ResolveHandleResponse resolve_handle_response = 31;
@@ -205,10 +207,12 @@ message Envelope {
     ListFriendsResponse list_friends_response = 35;
     PresenceEvent presence_event = 36;
 
-    PublishCollectionHead publish_collection_head = 50;
-    CollectionHeadEvent collection_head_event = 51;
-    ListCollectionsRequest list_collections_request = 52;
-    ListCollectionsResponse list_collections_response = 53;
+    PublishShareSnapshot publish_share_snapshot = 50;
+    ShareSnapshotEvent share_snapshot_event = 51;
+    ListSharesRequest list_shares_request = 52;
+    ListSharesResponse list_shares_response = 53;
+    GetShareSnapshotRequest get_share_snapshot_request = 54;
+    GetShareSnapshotResponse get_share_snapshot_response = 55;
 
     AnnouncePeerLease announce_peer_lease = 70;
     LookupPeersRequest lookup_peers_request = 71;
@@ -222,7 +226,8 @@ Field allocation is grouped by subsystem and finalized before implementation.
 ### Identifiers
 
 - `UserId`: UUIDv7, 16 bytes.
-- `CollectionId`: UUIDv7, 16 bytes.
+- `ShareId`: UUIDv7, 16 bytes.
+- `SnapshotId`: BLAKE3 content root, 32 bytes.
 - `MessageId`: UUIDv7, 16 bytes.
 - `DeviceId`: BLAKE3-derived Ed25519 public-key identifier, 32 bytes.
 - `InfoHashV1`: 20 bytes.
@@ -254,15 +259,17 @@ Every limit has boundary-minus-one, boundary, and boundary-plus-one tests.
 
 ## 9. Identity and Authentication
 
-The client reuses Portalis's existing Ed25519 identity. The private key stays
-local; the server stores authorized public device keys.
+The client reuses Portalis's existing Ed25519 identity for signatures. Each
+device also owns an independent X25519 encryption keypair. Both private keys
+stay local; the server stores only the authorized public halves.
 
 ### Registration
 
 1. Server sends `ServerHello` with protocol range, connection ID, timestamp,
    and a fresh 32-byte challenge.
-2. Client sends `RegisterUser` with desired username, device public key, and a
-   domain-separated signature covering the full challenge context.
+2. Client sends `RegisterUser` with desired username, Ed25519 signing public
+   key, X25519 encryption public key, and a domain-separated signature covering
+   the full challenge context.
 3. Server verifies signature, challenge age, and one-time use.
 4. Server allocates stable `UserId` and unique user handle.
 5. Server stores the first authorized device and returns `Authenticated`.
@@ -296,8 +303,26 @@ Proposed constraints:
 Allocation retries random discriminators against the unique index. It never
 scans for the next available value.
 
-The schema supports multiple devices per user from day one. Device linking and
-account recovery require a separate signed authorization design before release.
+### Device linking and encryption keys
+
+The schema supports multiple devices per user from day one. A device record
+therefore contains an Ed25519 signing public key and an X25519 encryption
+public key. They are different keys with different purposes; neither key is
+derived from the other.
+
+An already authenticated, authorized device links a new device by sending its
+two public keys and a domain-separated approval signature. The signed payload
+binds the user, approving device, candidate signing key, candidate encryption
+key, and operation version. Nexus verifies that signature, rejects a duplicate
+candidate signing key, and stores the new device atomically. The new device can
+then authenticate normally with its Ed25519 key.
+
+Nexus never receives a share secret in plaintext. A client creates a random
+per-share symmetric key, encrypts each snapshot capsule with it, and stores one
+X25519-encrypted key envelope per authorized device. Linking a second device
+lets an existing device add its envelope; revoking a device prevents new
+envelopes and future capsule access. Account recovery remains a separate
+product decision and never weakens this approval rule.
 
 ## 10. Friends and Presence
 
@@ -323,31 +348,41 @@ Presence is derived from authenticated connections:
 - Multiple devices aggregate into one user state.
 - Heartbeats are not persisted to MongoDB.
 
-## 11. Collections and Torrent Heads
+## 11. Shares, Snapshots, and Torrent Handoffs
 
-A collection has a stable `CollectionId`. Adding or removing media creates a
-new immutable torrent version and therefore a new info hash.
+A **share** is the stable social object. It has a locally generated `ShareId`,
+an immutable owner, visibility/access policy, and a monotonically increasing
+revision. A **snapshot** is an immutable, content-addressed media manifest:
+adding, removing, renaming, or replacing media produces a different
+`SnapshotId`.
 
-A collection head contains:
+`SnapshotId` is the BLAKE3 content root of the resolved canonical manifest.
+The Portalis backend builds it once from the torrent engine's authoritative
+20-byte BitTorrent v1 info hashes and each signed manifest entry, in canonical
+info-hash order with length-prefixed fields. It never performs a second file
+scan or asks Nexus to reinterpret a torrent. Protobuf serialisation is never
+treated as the canonical manifest encoding.
 
-- Collection ID and monotonic version.
-- BitTorrent v1 info hash.
-- BLAKE3 hash of the torrent descriptor.
-- Torrent descriptor bytes or object reference.
-- Publisher device ID and signature.
-- Creation timestamp.
+The first authenticated publication creates a share and makes its publisher the
+permanent owner. A subsequent update publishes exactly
+`current_revision + 1`, names the prior snapshot, and points to the new
+snapshot. An identical signed retry is idempotently successful; conflicting
+bytes for one revision fail. A peer may seed and fetch a snapshot but cannot
+mutate the owner's share.
 
-The server accepts a head only from an authorized publisher and only when its
-version is greater than the current version. Replaying the same signed head is
-idempotently successful; conflicting data for one version fails.
+Nexus stores a bounded encrypted snapshot capsule and its signature, never
+plaintext torrent descriptors, file names, directory structure, or media. The
+capsule can carry a magnet link or `.torrent` descriptor encrypted by a random
+per-share secret. Nexus does not include a BitTorrent library and never parses
+or validates the encrypted torrent payload. It authorizes and returns capsules
+to permitted devices so a user's newly linked device can synchronise while the
+original device is offline.
 
 Membership is stored as separate edge documents. Server authorization is
-checked before private metadata is returned or updated.
-
-Torrent descriptors are metadata and may be stored within the size limit.
-Photos, videos, and BitTorrent pieces are never accepted. Descriptor encryption
-with the collection secret must be decided before production if filenames and
-structure should remain hidden from the server.
+checked before a private share summary, capsule, or live handoff is returned.
+The live rendezvous path may also forward an authorized, encrypted magnet or
+`.torrent` from one online client to another; it is bounded, transient, and is
+not written to MongoDB.
 
 ## 12. Swarm Discovery
 
@@ -424,7 +459,8 @@ streams are available.
 
 `devices`
 
-- Device ID, user ID, public key, creation/last-authentication/revocation times.
+- Device ID, user ID, Ed25519 signing public key, X25519 encryption public key,
+  creation/last-authentication/revocation times.
 - Unique device ID and `(user_id, revoked_at)` indexes.
 
 `friendships`
@@ -433,21 +469,27 @@ streams are available.
 - Unique `(user_low, user_high)` index.
 - State/listing indexes from each side of the edge.
 
-`collections`
+`shares`
 
-- Collection ID, owner, encrypted or visible metadata, current head summary,
+- Share ID, immutable owner, visibility policy, current revision/snapshot,
   timestamps, schema version.
 
-`collection_memberships`
+`share_memberships`
 
-- Collection ID, user ID, role, version, timestamps, revocation state.
-- Unique `(collection_id, user_id)` and user-listing indexes.
+- Share ID, user ID, role, version, timestamps, revocation state.
+- Unique `(share_id, user_id)` and user-listing indexes.
 
-`collection_heads`
+`share_snapshots`
 
-- Collection ID, version, info hash, descriptor hash/content, publisher,
-  signature, timestamp.
-- Unique `(collection_id, version)` index.
+- Share ID, revision, prior/current snapshot IDs, encrypted capsule hash/content,
+  publisher, signature, timestamp.
+- Unique `(share_id, revision)` index.
+
+`share_key_envelopes`
+
+- Share ID, recipient device ID, encrypted share-key envelope, envelope
+  algorithm/version, creation/revocation timestamps.
+- Unique `(share_id, recipient_device_id)` index.
 
 `command_receipts`
 
@@ -457,7 +499,7 @@ streams are available.
 ### Modeling rules
 
 - Friendships and memberships are edge documents, never growing arrays.
-- Head history is append-only; current head is updated with a transaction or
+- Snapshot history is append-only; the current share revision is updated with a transaction or
   safe compare-and-set.
 - Mutable documents carry optimistic-concurrency versions.
 - Security-sensitive multi-document transitions use transactions.
@@ -671,6 +713,17 @@ adapter: what remains after those tests is driver-internal error propagation
 that cannot be triggered deterministically. Its decisions live in
 `mongo/documents.rs` and `store.rs`, which stay measured at 100%.
 
+### M2.5: Device linking and encrypted share access
+
+- Register separate X25519 encryption public keys beside Ed25519 signing keys.
+- Link a device only through an existing authorized device's signed approval.
+- Persist per-device encrypted share-key envelopes without ever receiving a
+  share secret in plaintext.
+
+Gate: a second approved device authenticates, receives only its encrypted
+envelope, decrypts the same share capsule locally, and a revoked device cannot
+receive a replacement envelope.
+
 ### M3: Friends and presence
 
 Status: complete.
@@ -726,14 +779,14 @@ refresh on reconnect.
 Gate met: two clients become friends, observe each other going offline and
 coming back, and a second device leaving does not report its user away.
 
-### M4: Collections
+### M4: Encrypted shares and snapshots
 
-- Collection/member/head repositories.
-- Signed head publication and authorized listing/events.
-- Torrent descriptor limit and encryption envelope seam.
+- Share/member/snapshot repositories and per-device key envelopes.
+- Signed snapshot publication and authorized listing/events/fetches.
+- Encrypted torrent-capsule limit and transient client-to-client handoff.
 
-Gate: authorized clients receive the latest descriptor; unauthorized clients
-cannot discover private state; versions never regress.
+Gate: an authorized linked device decrypts the latest capsule; an unauthorized
+device cannot discover private state; share revisions never regress.
 
 ### M5: Swarm discovery
 
@@ -809,13 +862,11 @@ challenges, collection secrets, or plaintext private descriptors.
 ## 23. Decisions Required Before Production
 
 1. Account recovery and lost-device policy.
-2. Device-linking UX and authorization payload.
-3. End-to-end encryption policy for collection metadata/descriptors.
-4. Hosting region, DNS, certificates, backups, and retention.
-5. Relay or reachable-seed strategy for guaranteed transfer connectivity.
-6. Collection-head history and command-receipt retention.
-7. Measured trigger and technology for horizontal scaling.
-8. Final load targets based on expected users, friends, collections, and peers.
+2. Hosting region, DNS, certificates, backups, and retention.
+3. Relay or reachable-seed strategy for guaranteed transfer connectivity.
+4. Collection-head history and command-receipt retention.
+5. Measured trigger and technology for horizontal scaling.
+6. Final load targets based on expected users, friends, collections, and peers.
 
 ## 24. Initial Technology Set
 

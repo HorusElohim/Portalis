@@ -11,6 +11,8 @@ message RegisterUser {
   string requested_username = 1;
   bytes device_public_key = 2;
   bytes signature = 3;
+  // X25519 public key used only to receive encrypted share-key envelopes.
+  bytes encryption_public_key = 4;
 }
 
 // Proves possession of an already-authorized device key.
@@ -20,6 +22,21 @@ message RegisterUser {
 message AuthenticateDevice {
   bytes device_public_key = 1;
   bytes signature = 2;
+}
+
+// An already-authorized device approves one new signing/encryption key pair.
+// The approval signature is durable: it binds the approving device and both
+// candidate keys, rather than one WebSocket challenge.
+message LinkDevice {
+  bytes candidate_signing_public_key = 1;
+  bytes candidate_encryption_public_key = 2;
+  bytes approval_signature = 3;
+}
+
+// Confirms the new device was linked to the authenticated user's account.
+message DeviceLinked {
+  bytes user_id = 1;
+  bytes device_id = 2;
 }
 
 // The identity a connection is bound to once its device is verified.

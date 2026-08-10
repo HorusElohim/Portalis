@@ -6,14 +6,15 @@
 
 use ed25519_dalek::{Signer, SigningKey};
 use portalis_nexus_protocol::{
-    CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, format_id, new_message_id,
-    registration_payload,
+    CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, derive_device_id, format_id,
+    link_device_payload, new_message_id, registration_payload,
 };
 use portalis_nexus_server::{MongoStore, NexusStore};
 use portalis_nexus_server_core::{
     AuthenticationRequest, DeviceRecord, FixedClock, FriendRepository, FriendshipEdge,
     FriendshipRecord, FriendshipState, IdentityError, IdentityRepository, IdentityService,
-    RegistrationRequest, RepositoryError, ScriptedRandom, UserDirectory, UserId, UserRecord,
+    LinkDeviceRequest, RegistrationRequest, RepositoryError, ScriptedRandom, UserDirectory, UserId,
+    UserRecord,
 };
 use testcontainers_modules::mongo::Mongo;
 use testcontainers_modules::testcontainers::ContainerAsync;
@@ -30,6 +31,7 @@ const SELECTION_TIMEOUT_MS: u32 = 1_000;
 const NOW: u64 = 1_700_000_000_000;
 const ADA: UserId = [1; 16];
 const GRACE: UserId = [2; 16];
+const ENCRYPTION_KEY: [u8; 32] = [6; 32];
 
 /// Whether a Docker daemon is reachable at all.
 ///
@@ -159,6 +161,7 @@ fn device(seed: u8, owner: UserId) -> DeviceRecord {
         device_id: [seed; 32],
         user_id: owner,
         public_key: [seed; 32],
+        encryption_public_key: [seed; 32],
         created_at_unix_ms: NOW,
         last_authenticated_at_unix_ms: None,
         revoked_at_unix_ms: None,
@@ -233,6 +236,13 @@ async fn nexus_store_delegates_every_operation_to_mongo() {
         .expect("stored")
         .expect("present");
     assert!(revoked.is_revoked());
+
+    store.link_device(device(2, ADA)).await.expect("linked");
+    assert_eq!(store.find_device([2; 32]).await, Ok(Some(device(2, ADA))));
+    assert_eq!(
+        store.link_device(device(2, ADA)).await,
+        Err(RepositoryError::DeviceExists)
+    );
 
     let edge = FriendshipEdge::between(ADA, GRACE).expect("distinct users");
     store
@@ -615,12 +625,13 @@ fn registration<'a>(
     signature: &'a mut [u8; 64],
 ) -> RegistrationRequest<'a> {
     *public_key = signer.verifying_key().to_bytes();
-    let payload = registration_payload(&binding(challenge), username, public_key);
+    let payload = registration_payload(&binding(challenge), username, public_key, &ENCRYPTION_KEY);
     *signature = signer.sign(&payload).to_bytes();
     RegistrationRequest {
         binding: binding(challenge),
         requested_username: username,
         device_public_key: public_key,
+        encryption_public_key: &ENCRYPTION_KEY,
         signature,
     }
 }
@@ -720,4 +731,63 @@ async fn a_revoked_device_stays_revoked_across_a_restart() {
         .expect_err("a revoked device cannot authenticate");
 
     assert_eq!(refused, IdentityError::DeviceRevoked);
+}
+
+/// The claim only a durable store can make, applied to linking: a device
+/// approved by one process authenticates from a second one holding nothing
+/// but the database.
+#[tokio::test]
+async fn a_linked_device_outlives_the_process_that_linked_it() {
+    let Some(running) = mongo().await else {
+        return;
+    };
+    let approver = SigningKey::from_bytes(&[9; 32]);
+    let (mut approver_public, mut approver_signature) = ([0; 32], [0; 64]);
+    service(running.store.clone())
+        .register(registration(
+            &approver,
+            "Ada",
+            &[1; 32],
+            &mut approver_public,
+            &mut approver_signature,
+        ))
+        .await
+        .expect("registration succeeds");
+
+    let candidate = SigningKey::from_bytes(&[10; 32]);
+    let candidate_public = candidate.verifying_key().to_bytes();
+    let candidate_encryption_key = [11; 32];
+    let payload = link_device_payload(AUTHORITY, &candidate_public, &candidate_encryption_key);
+    let approval = approver.sign(&payload).to_bytes();
+
+    let linked = service(running.restart().await)
+        .link_device(
+            derive_device_id(&approver_public),
+            AUTHORITY,
+            LinkDeviceRequest {
+                candidate_signing_public_key: &candidate_public,
+                candidate_encryption_public_key: &candidate_encryption_key,
+                approval_signature: &approval,
+            },
+        )
+        .await
+        .expect("linking succeeds");
+
+    let (mut public, mut signature) = (candidate_public, [0; 64]);
+    let authenticated = service(running.restart().await)
+        .authenticate(authentication(
+            &candidate,
+            &[2; 32],
+            &mut public,
+            &mut signature,
+        ))
+        .await
+        .expect("the linked device authenticates from a fresh process");
+
+    assert_eq!(authenticated.device.device_id, linked.device.device_id);
+    assert_eq!(authenticated.user.user_id, linked.user.user_id);
+    assert_eq!(
+        authenticated.device.encryption_public_key,
+        candidate_encryption_key
+    );
 }

@@ -51,6 +51,17 @@ pub async fn dispatch(
             arrived(session, state, now_unix_ms).await;
             reply
         }
+        Some(Payload::LinkDevice(link_device)) => {
+            identity::link(
+                session,
+                state.identities(),
+                authority,
+                request,
+                link_device,
+                now_unix_ms,
+            )
+            .await
+        }
         Some(Payload::ResolveHandleRequest(lookup)) => {
             friends::resolve(session, state.friends(), request, lookup, now_unix_ms).await
         }

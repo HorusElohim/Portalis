@@ -113,6 +113,7 @@ mod tests {
                         device_id: [id[0]; 32],
                         user_id: id,
                         public_key: [id[0]; 32],
+                        encryption_public_key: [id[0]; 32],
                         created_at_unix_ms: NOW,
                         last_authenticated_at_unix_ms: Some(NOW),
                         revoked_at_unix_ms: None,

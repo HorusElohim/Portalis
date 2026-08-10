@@ -13,11 +13,18 @@ use std::path::Path;
 
 use ed25519_dalek::{Signer, SigningKey};
 use portalis_nexus_client::DeviceSigner;
-use portalis_nexus_protocol::{DEVICE_KEY_BYTES, SIGNATURE_BYTES, derive_device_id, format_id};
+use portalis_nexus_protocol::{
+    DEVICE_KEY_BYTES, ENCRYPTION_KEY_BYTES, SIGNATURE_BYTES, derive_device_id, format_id,
+};
 
 /// An Ed25519 device key kept in a file, the way an app keeps its identity.
 pub struct DemoDevice {
     key: SigningKey,
+    /// Registered alongside the signing key so the server has somewhere to
+    /// address encrypted share-key envelopes. Not a real X25519 keypair —
+    /// this demo does not yet exercise share delivery — and not persisted,
+    /// since only registration and linking ever submit it.
+    encryption_public_key: [u8; ENCRYPTION_KEY_BYTES],
 }
 
 impl DemoDevice {
@@ -26,6 +33,7 @@ impl DemoDevice {
     pub fn ephemeral(seed: u8) -> Self {
         Self {
             key: SigningKey::from_bytes(&[seed; DEVICE_KEY_BYTES]),
+            encryption_public_key: [seed; ENCRYPTION_KEY_BYTES],
         }
     }
 
@@ -45,9 +53,12 @@ impl DemoDevice {
                     format!("{} is not a {DEVICE_KEY_BYTES}-byte key", path.display()),
                 )
             })?;
+            let mut encryption_public_key = [0_u8; ENCRYPTION_KEY_BYTES];
+            getrandom_seed(&mut encryption_public_key);
             return Ok((
                 Self {
                     key: SigningKey::from_bytes(&seed),
+                    encryption_public_key,
                 },
                 false,
             ));
@@ -56,9 +67,12 @@ impl DemoDevice {
         let mut seed = [0_u8; DEVICE_KEY_BYTES];
         getrandom_seed(&mut seed);
         fs::write(path, seed)?;
+        let mut encryption_public_key = [0_u8; ENCRYPTION_KEY_BYTES];
+        getrandom_seed(&mut encryption_public_key);
         Ok((
             Self {
                 key: SigningKey::from_bytes(&seed),
+                encryption_public_key,
             },
             true,
         ))
@@ -74,6 +88,10 @@ impl DemoDevice {
 impl DeviceSigner for DemoDevice {
     fn public_key(&self) -> [u8; DEVICE_KEY_BYTES] {
         self.key.verifying_key().to_bytes()
+    }
+
+    fn encryption_public_key(&self) -> [u8; ENCRYPTION_KEY_BYTES] {
+        self.encryption_public_key
     }
 
     fn sign(&self, payload: &[u8]) -> [u8; SIGNATURE_BYTES] {
