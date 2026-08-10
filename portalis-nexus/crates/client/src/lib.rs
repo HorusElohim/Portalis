@@ -25,8 +25,9 @@ pub use config::{ClientConfig, DEFAULT_REQUEST_TIMEOUT};
 pub use error::ClientError;
 pub use pending::PendingRequests;
 pub use protocol::{
-    ClientProtocol, validate_authenticated, validate_device_linked, validate_friend_event,
-    validate_friend_list, validate_hello, validate_pong, validate_reply, validate_resolved,
+    ClientProtocol, KeyEnvelopePage, validate_authenticated, validate_device_linked,
+    validate_friend_event, validate_friend_list, validate_hello, validate_key_envelope_put,
+    validate_key_envelopes, validate_pong, validate_reply, validate_resolved,
 };
 pub use reconnect::{ReconnectPolicy, ReconnectPolicyError};
 pub use signer::DeviceSigner;

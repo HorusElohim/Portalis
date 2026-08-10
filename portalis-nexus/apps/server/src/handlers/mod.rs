@@ -15,6 +15,7 @@ use crate::state::AppState;
 pub(crate) mod friends;
 pub(crate) mod identity;
 pub(crate) mod presence;
+pub(crate) mod shares;
 
 /// Answers one decoded request on behalf of its connection.
 pub async fn dispatch(
@@ -70,6 +71,12 @@ pub async fn dispatch(
         }
         Some(Payload::ListFriendsRequest(_)) => {
             friends::list(session, state.friends(), request, now_unix_ms).await
+        }
+        Some(Payload::PutKeyEnvelope(put)) => {
+            shares::put(session, state.envelopes(), request, put, now_unix_ms).await
+        }
+        Some(Payload::ListKeyEnvelopesRequest(list)) => {
+            shares::list(session, state.envelopes(), request, list, now_unix_ms).await
         }
         // Ping and anything this version does not accept yet.
         _ => response_for(request, now_unix_ms),

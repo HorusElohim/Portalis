@@ -8,7 +8,9 @@ use portalis_nexus_server_core::{PresenceRegistry, ProtocolPolicy};
 
 use crate::config::DEFAULT_SERVER_AUTHORITY;
 use crate::connections::Connections;
-use crate::identity::{DefaultStore, NexusFriends, NexusIdentities, friends, identities};
+use crate::identity::{
+    DefaultStore, NexusEnvelopes, NexusFriends, NexusIdentities, envelopes, friends, identities,
+};
 use crate::shutdown::Shutdown;
 use crate::store::NexusStore;
 
@@ -20,6 +22,7 @@ pub struct AppState {
     store: DefaultStore,
     identities: Arc<NexusIdentities<DefaultStore>>,
     friends: Arc<NexusFriends<DefaultStore>>,
+    envelopes: Arc<NexusEnvelopes<DefaultStore>>,
     presence: Arc<PresenceRegistry>,
     connections: Arc<Connections>,
     /// The host clients believe they are talking to. Signatures are bound to
@@ -54,6 +57,7 @@ impl Default for AppState {
             shutdown: Shutdown::default(),
             identities: Arc::new(identities(Arc::clone(&store))),
             friends: Arc::new(friends(Arc::clone(&store))),
+            envelopes: Arc::new(envelopes(Arc::clone(&store))),
             store,
             presence: Arc::new(PresenceRegistry::default()),
             connections: Arc::new(Connections::default()),
@@ -70,6 +74,7 @@ impl AppState {
         Self {
             identities: Arc::new(identities(Arc::clone(&store))),
             friends: Arc::new(friends(Arc::clone(&store))),
+            envelopes: Arc::new(envelopes(Arc::clone(&store))),
             store,
             ..Self::default()
         }
@@ -95,6 +100,11 @@ impl AppState {
     #[must_use]
     pub fn friends(&self) -> &NexusFriends<DefaultStore> {
         &self.friends
+    }
+
+    #[must_use]
+    pub fn envelopes(&self) -> &NexusEnvelopes<DefaultStore> {
+        &self.envelopes
     }
 
     /// The store behind both services, so a caller can seed or fault it.

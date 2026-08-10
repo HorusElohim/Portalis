@@ -18,6 +18,7 @@ uuid.workspace = true
 axum.workspace = true
 ed25519-dalek.workspace = true
 portalis-nexus-server = { path = "../../apps/server" }
+x25519-dalek.workspace = true
 
 [lints]
 workspace = true

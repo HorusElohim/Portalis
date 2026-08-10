@@ -7,7 +7,9 @@
 
 use mongodb::bson::{Binary, spec::BinarySubtype};
 use portalis_nexus_protocol::v1::FriendshipState;
-use portalis_nexus_server_core::{DeviceRecord, FriendshipEdge, FriendshipRecord, UserRecord};
+use portalis_nexus_server_core::{
+    DeviceRecord, FriendshipEdge, FriendshipRecord, KeyEnvelopeRecord, UserRecord,
+};
 use serde::{Deserialize, Serialize};
 
 /// The shape version each document is written with, so a later migration can
@@ -146,6 +148,39 @@ impl FriendshipDocument {
             version: unsigned_millis(self.version),
             created_at_unix_ms: unsigned_millis(self.created_at_unix_ms),
             updated_at_unix_ms: unsigned_millis(self.updated_at_unix_ms),
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct KeyEnvelopeDocument {
+    pub share_id: Binary,
+    pub recipient_device_id: Binary,
+    pub ephemeral_public_key: Binary,
+    pub ciphertext: Binary,
+    pub created_at_unix_ms: i64,
+    pub schema_version: i32,
+}
+
+impl KeyEnvelopeDocument {
+    pub(crate) fn from_record(envelope: &KeyEnvelopeRecord) -> Self {
+        Self {
+            share_id: binary(&envelope.share_id),
+            recipient_device_id: binary(&envelope.recipient_device_id),
+            ephemeral_public_key: binary(&envelope.ephemeral_public_key),
+            ciphertext: binary(&envelope.ciphertext),
+            created_at_unix_ms: millis(envelope.created_at_unix_ms),
+            schema_version: SCHEMA_VERSION,
+        }
+    }
+
+    pub(crate) fn into_record(self) -> Option<KeyEnvelopeRecord> {
+        Some(KeyEnvelopeRecord {
+            share_id: fixed(&self.share_id)?,
+            recipient_device_id: fixed(&self.recipient_device_id)?,
+            ephemeral_public_key: fixed(&self.ephemeral_public_key)?,
+            ciphertext: self.ciphertext.bytes,
+            created_at_unix_ms: unsigned_millis(self.created_at_unix_ms),
         })
     }
 }
@@ -307,6 +342,55 @@ mod tests {
         let document = FriendshipDocument {
             state: 99,
             ..valid_friendship()
+        };
+        assert_eq!(document.into_record(), None);
+    }
+
+    const SHARE_ID: [u8; 16] = [6; 16];
+
+    fn valid_key_envelope() -> KeyEnvelopeDocument {
+        KeyEnvelopeDocument {
+            share_id: binary(&SHARE_ID),
+            recipient_device_id: binary(&DEVICE_ID),
+            ephemeral_public_key: binary(&ENCRYPTION_PUBLIC_KEY),
+            ciphertext: binary(b"sealed"),
+            created_at_unix_ms: 0,
+            schema_version: SCHEMA_VERSION,
+        }
+    }
+
+    #[test]
+    fn a_well_formed_key_envelope_document_round_trips() {
+        let record = valid_key_envelope().into_record().expect("well formed");
+        assert_eq!(record.share_id, SHARE_ID);
+        assert_eq!(record.recipient_device_id, DEVICE_ID);
+        assert_eq!(record.ephemeral_public_key, ENCRYPTION_PUBLIC_KEY);
+        assert_eq!(record.ciphertext, b"sealed");
+    }
+
+    #[test]
+    fn a_key_envelope_share_id_of_the_wrong_length_is_treated_as_absent() {
+        let document = KeyEnvelopeDocument {
+            share_id: binary(WRONG_LENGTH),
+            ..valid_key_envelope()
+        };
+        assert_eq!(document.into_record(), None);
+    }
+
+    #[test]
+    fn a_key_envelope_recipient_device_id_of_the_wrong_length_is_treated_as_absent() {
+        let document = KeyEnvelopeDocument {
+            recipient_device_id: binary(WRONG_LENGTH),
+            ..valid_key_envelope()
+        };
+        assert_eq!(document.into_record(), None);
+    }
+
+    #[test]
+    fn a_key_envelope_ephemeral_public_key_of_the_wrong_length_is_treated_as_absent() {
+        let document = KeyEnvelopeDocument {
+            ephemeral_public_key: binary(WRONG_LENGTH),
+            ..valid_key_envelope()
         };
         assert_eq!(document.into_record(), None);
     }

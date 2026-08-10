@@ -1,7 +1,8 @@
 //! The concrete services this server runs.
 
 use portalis_nexus_server_core::{
-    FriendRepository, FriendService, IdentityRepository, IdentityService, UserDirectory,
+    EnvelopeRepository, EnvelopeService, FriendRepository, FriendService, IdentityRepository,
+    IdentityService, UserDirectory,
 };
 
 use crate::environment::{OsRandom, SystemClock};
@@ -30,4 +31,12 @@ pub type NexusFriends<S> = FriendService<S, SystemClock>;
 #[must_use]
 pub fn friends<S: FriendRepository + UserDirectory>(store: S) -> NexusFriends<S> {
     FriendService::new(store, SystemClock)
+}
+
+/// The key-envelope rules bound to this server's clock.
+pub type NexusEnvelopes<S> = EnvelopeService<S, SystemClock>;
+
+#[must_use]
+pub fn envelopes<S: EnvelopeRepository + IdentityRepository>(store: S) -> NexusEnvelopes<S> {
+    EnvelopeService::new(store, SystemClock)
 }

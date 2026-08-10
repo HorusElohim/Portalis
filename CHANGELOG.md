@@ -6,6 +6,10 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+- Added Nexus M2.5 encrypted share-key delivery between a user's approved
+  devices. Nexus stores only per-device X25519 envelopes, never plaintext
+  share keys or media metadata.
+
 ### Changed
 
 <!-- Behaviour and UX changes go here before the next release. -->
@@ -14,9 +18,16 @@
 
 <!-- Bug fixes and regressions go here. -->
 
+- Hardened Nexus key envelopes against low-order X25519 keys and record
+  transplanting, and bounded retrieval with deterministic cursor pagination.
+
 ### Engineering
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+- Serialized Docker-backed Nexus MongoDB integration tests and bounded every
+  Docker readiness, connection, and shutdown wait so an unhealthy daemon
+  reports a clear failure instead of hanging the suite.
 
 - Started Portalis Nexus as an isolated Rust workspace for the new protobuf
   control-plane protocol and Linux discovery server, with portable client and

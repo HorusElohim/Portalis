@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package portalis.protocol.v1;
+
+// A random per-share symmetric key, sealed to one recipient device's X25519
+// public key, addressed by a client-generated share_id.
+//
+// Nexus stores and relays this opaquely: it never receives the key in
+// plaintext, and share_id carries no ownership or membership record of its
+// own until M4 adds one. Sent by an already-authenticated device on behalf
+// of the recipient device it names, which must belong to the same user.
+message PutKeyEnvelope {
+  bytes share_id = 1;
+  bytes recipient_device_id = 2;
+  bytes ephemeral_public_key = 3;
+  bytes ciphertext = 4;
+}
+
+// Confirms an envelope was stored for its recipient.
+message KeyEnvelopePut {
+  bytes share_id = 1;
+  bytes recipient_device_id = 2;
+}
+
+// Asks for every envelope addressed to the requesting connection's device.
+message ListKeyEnvelopesRequest {
+  // Return entries strictly after this share ID in bytewise order. Empty starts
+  // from the beginning. The server fixes the page size to its protocol limit.
+  bytes after_share_id = 1;
+}
+
+// One sealed envelope, addressed to the device that asked for it.
+message KeyEnvelope {
+  bytes share_id = 1;
+  bytes ephemeral_public_key = 2;
+  bytes ciphertext = 3;
+}
+
+message ListKeyEnvelopesResponse {
+  repeated KeyEnvelope envelopes = 1;
+  // The next request's after_share_id. Empty means this was the last page.
+  bytes next_after_share_id = 2;
+}

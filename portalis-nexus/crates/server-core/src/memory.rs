@@ -10,8 +10,9 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::friendship::{FriendshipEdge, FriendshipRecord};
 use crate::ports::{
-    Clock, DeviceId, DeviceRecord, FriendRepository, IdentityRepository, RandomSource,
-    RepositoryError, UserDirectory, UserId, UserRecord,
+    Clock, DeviceId, DeviceRecord, EnvelopeRepository, FriendRepository, IdentityRepository,
+    KeyEnvelopePage, KeyEnvelopeRecord, RandomSource, RepositoryError, ShareId, UserDirectory,
+    UserId, UserRecord,
 };
 
 /// A clock that stands still until a test advances it.
@@ -96,6 +97,7 @@ struct Stored {
     users: Vec<UserRecord>,
     devices: HashMap<DeviceId, DeviceRecord>,
     friendships: HashMap<FriendshipEdge, FriendshipRecord>,
+    envelopes: HashMap<(ShareId, DeviceId), KeyEnvelopeRecord>,
 }
 
 impl Stored {
@@ -331,6 +333,42 @@ impl FriendRepository for InMemoryIdentities {
             .cloned()
             .collect();
         async move { outage.map_or(Ok(found), Err) }
+    }
+}
+
+impl EnvelopeRepository for InMemoryIdentities {
+    fn put_key_envelope(
+        &self,
+        envelope: KeyEnvelopeRecord,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let outage = self.outage();
+        if outage.is_none() {
+            self.lock()
+                .envelopes
+                .insert((envelope.share_id, envelope.recipient_device_id), envelope);
+        }
+        async move { outage.map_or(Ok(()), Err) }
+    }
+
+    fn list_key_envelopes(
+        &self,
+        recipient_device_id: DeviceId,
+        after_share_id: Option<ShareId>,
+    ) -> impl std::future::Future<Output = Result<KeyEnvelopePage, RepositoryError>> + Send {
+        let outage = self.outage();
+        let mut found: Vec<_> = self
+            .lock()
+            .envelopes
+            .values()
+            .filter(|envelope| {
+                envelope.recipient_device_id == recipient_device_id
+                    && after_share_id.is_none_or(|after| envelope.share_id > after)
+            })
+            .cloned()
+            .collect();
+        found.sort_unstable_by_key(|envelope| envelope.share_id);
+        let page = KeyEnvelopePage::from_sorted(found);
+        async move { outage.map_or(Ok(page), Err) }
     }
 }
 

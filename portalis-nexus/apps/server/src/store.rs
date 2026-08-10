@@ -5,8 +5,9 @@
 //! method dispatches once and awaits the arm it chose.
 
 use portalis_nexus_server_core::{
-    DeviceId, DeviceRecord, FriendRepository, FriendshipEdge, FriendshipRecord, IdentityRepository,
-    InMemoryIdentities, RepositoryError, UserDirectory, UserId, UserRecord,
+    DeviceId, DeviceRecord, EnvelopeRepository, FriendRepository, FriendshipEdge, FriendshipRecord,
+    IdentityRepository, InMemoryIdentities, KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError,
+    ShareId, UserDirectory, UserId, UserRecord,
 };
 
 use crate::mongo::MongoStore;
@@ -164,6 +165,34 @@ impl FriendRepository for NexusStore {
     }
 }
 
+impl EnvelopeRepository for NexusStore {
+    async fn put_key_envelope(&self, envelope: KeyEnvelopeRecord) -> Result<(), RepositoryError> {
+        match self {
+            Self::Memory(store) => store.put_key_envelope(envelope).await,
+            Self::Mongo(store) => store.put_key_envelope(envelope).await,
+        }
+    }
+
+    async fn list_key_envelopes(
+        &self,
+        recipient_device_id: DeviceId,
+        after_share_id: Option<ShareId>,
+    ) -> Result<KeyEnvelopePage, RepositoryError> {
+        match self {
+            Self::Memory(store) => {
+                store
+                    .list_key_envelopes(recipient_device_id, after_share_id)
+                    .await
+            }
+            Self::Mongo(store) => {
+                store
+                    .list_key_envelopes(recipient_device_id, after_share_id)
+                    .await
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,6 +219,16 @@ mod tests {
             created_at_unix_ms: 0,
             last_authenticated_at_unix_ms: None,
             revoked_at_unix_ms: None,
+        }
+    }
+
+    fn key_envelope() -> KeyEnvelopeRecord {
+        KeyEnvelopeRecord {
+            share_id: [3; 16],
+            recipient_device_id: [1; 32],
+            ephemeral_public_key: [4; 32],
+            ciphertext: b"sealed".to_vec(),
+            created_at_unix_ms: 0,
         }
     }
 
@@ -251,5 +290,7 @@ mod tests {
                 .await
         ));
         assert!(unavailable(&store.list_friendships(ADA).await));
+        assert!(unavailable(&store.put_key_envelope(key_envelope()).await));
+        assert!(unavailable(&store.list_key_envelopes([1; 32], None).await));
     }
 }

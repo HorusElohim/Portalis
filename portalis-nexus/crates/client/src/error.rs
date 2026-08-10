@@ -16,6 +16,8 @@ pub enum ClientError {
     InvalidCorrelation,
     #[error("pong nonce did not match the ping nonce")]
     InvalidPongNonce,
+    #[error("the server returned an invalid {field}")]
+    InvalidField { field: &'static str },
     #[error("at most {MAX_PENDING_REQUESTS} requests may be in flight at once")]
     TooManyPendingRequests,
     /// The server answered with a typed refusal rather than a result. Callers

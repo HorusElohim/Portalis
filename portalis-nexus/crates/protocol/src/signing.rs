@@ -45,6 +45,8 @@ pub enum SignatureError {
         "encryption public key must contain exactly {ENCRYPTION_KEY_BYTES} bytes, got {actual}"
     )]
     InvalidEncryptionKeyLength { actual: usize },
+    #[error("encryption public key is non-contributory")]
+    NonContributoryEncryptionKey,
     #[error("signature does not match the signed payload")]
     Rejected,
 }

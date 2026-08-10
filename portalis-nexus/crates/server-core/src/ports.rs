@@ -8,7 +8,8 @@
 use std::future::Future;
 
 use portalis_nexus_protocol::{
-    DEVICE_ID_BYTES, DEVICE_KEY_BYTES, ENCRYPTION_KEY_BYTES, USER_ID_BYTES,
+    DEVICE_ID_BYTES, DEVICE_KEY_BYTES, ENCRYPTION_KEY_BYTES, MAX_KEY_ENVELOPES_PER_PAGE,
+    SHARE_ID_BYTES, USER_ID_BYTES,
 };
 use thiserror::Error;
 
@@ -19,6 +20,8 @@ pub type DeviceId = [u8; DEVICE_ID_BYTES];
 pub type DeviceKey = [u8; DEVICE_KEY_BYTES];
 /// An X25519 public key, used only to receive encrypted share-key envelopes.
 pub type EncryptionKey = [u8; ENCRYPTION_KEY_BYTES];
+/// Client-generated and opaque to Nexus until M4 gives it a real record.
+pub type ShareId = [u8; SHARE_ID_BYTES];
 
 /// Reads wall-clock time, which the domain never does for itself.
 pub trait Clock: Send + Sync {
@@ -172,6 +175,45 @@ pub trait FriendRepository: Send + Sync {
     ) -> impl Future<Output = Result<Vec<FriendshipRecord>, RepositoryError>> + Send;
 }
 
+/// A share's random symmetric key, sealed to one device's X25519 public key.
+///
+/// Nexus stores and relays this opaquely: `ciphertext` is meaningless
+/// without the recipient device's private key, which Nexus never holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyEnvelopeRecord {
+    pub share_id: ShareId,
+    pub recipient_device_id: DeviceId,
+    pub ephemeral_public_key: EncryptionKey,
+    pub ciphertext: Vec<u8>,
+    pub created_at_unix_ms: u64,
+}
+
+/// One deterministic page of envelopes for a recipient device.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyEnvelopePage {
+    pub envelopes: Vec<KeyEnvelopeRecord>,
+    /// The exclusive cursor for the next page, if another page exists.
+    pub next_after_share_id: Option<ShareId>,
+}
+
+/// Durable key-envelope storage, one row per share and recipient device.
+pub trait EnvelopeRepository: Send + Sync {
+    /// Stores `envelope`, replacing any earlier one for the same share and
+    /// recipient device — a rotated share key or a retried push both land
+    /// the same way rather than accumulating stale rows.
+    fn put_key_envelope(
+        &self,
+        envelope: KeyEnvelopeRecord,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    /// A bounded, bytewise-share-ID-ordered page addressed to one device.
+    fn list_key_envelopes(
+        &self,
+        recipient_device_id: DeviceId,
+        after_share_id: Option<ShareId>,
+    ) -> impl Future<Output = Result<KeyEnvelopePage, RepositoryError>> + Send;
+}
+
 // Shared-ownership delegations, so one store can back several services. The
 // server holds a single identity store that both identity and friend rules
 // read, which is why these exist.
@@ -253,5 +295,71 @@ impl<T: FriendRepository> FriendRepository for std::sync::Arc<T> {
         user: UserId,
     ) -> impl Future<Output = Result<Vec<FriendshipRecord>, RepositoryError>> + Send {
         T::list_friendships(self, user)
+    }
+}
+
+impl<T: EnvelopeRepository> EnvelopeRepository for std::sync::Arc<T> {
+    fn put_key_envelope(
+        &self,
+        envelope: KeyEnvelopeRecord,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::put_key_envelope(self, envelope)
+    }
+
+    fn list_key_envelopes(
+        &self,
+        recipient_device_id: DeviceId,
+        after_share_id: Option<ShareId>,
+    ) -> impl Future<Output = Result<KeyEnvelopePage, RepositoryError>> + Send {
+        T::list_key_envelopes(self, recipient_device_id, after_share_id)
+    }
+}
+
+impl KeyEnvelopePage {
+    /// Splits sorted records into the protocol's fixed-size response page.
+    #[must_use]
+    pub fn from_sorted(mut envelopes: Vec<KeyEnvelopeRecord>) -> Self {
+        debug_assert!(
+            envelopes
+                .windows(2)
+                .all(|pair| pair[0].share_id < pair[1].share_id)
+        );
+        let next_after_share_id = (envelopes.len() > MAX_KEY_ENVELOPES_PER_PAGE).then(|| {
+            envelopes.truncate(MAX_KEY_ENVELOPES_PER_PAGE);
+            envelopes
+                .last()
+                .expect("a non-empty page has a final cursor")
+                .share_id
+        });
+        Self {
+            envelopes,
+            next_after_share_id,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_page_keeps_its_bound_and_returns_the_last_share_as_cursor() {
+        let envelopes = (0..=MAX_KEY_ENVELOPES_PER_PAGE)
+            .map(|index| KeyEnvelopeRecord {
+                share_id: [index as u8; SHARE_ID_BYTES],
+                recipient_device_id: [1; DEVICE_ID_BYTES],
+                ephemeral_public_key: [2; ENCRYPTION_KEY_BYTES],
+                ciphertext: vec![3],
+                created_at_unix_ms: 4,
+            })
+            .collect();
+
+        let page = KeyEnvelopePage::from_sorted(envelopes);
+
+        assert_eq!(page.envelopes.len(), MAX_KEY_ENVELOPES_PER_PAGE);
+        assert_eq!(
+            page.next_after_share_id,
+            Some([(MAX_KEY_ENVELOPES_PER_PAGE - 1) as u8; SHARE_ID_BYTES])
+        );
     }
 }

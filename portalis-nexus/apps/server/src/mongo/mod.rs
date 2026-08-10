@@ -11,14 +11,17 @@ use mongodb::error::{ErrorKind, WriteFailure};
 use mongodb::options::{ClientOptions, IndexOptions};
 use mongodb::{Client, ClientSession, Collection, Database, IndexModel};
 use portalis_nexus_server_core::{
-    DeviceId, DeviceRecord, FriendRepository, FriendshipEdge, FriendshipRecord, IdentityRepository,
-    RepositoryError, UserDirectory, UserId, UserRecord,
+    DeviceId, DeviceRecord, EnvelopeRepository, FriendRepository, FriendshipEdge, FriendshipRecord,
+    IdentityRepository, KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId,
+    UserDirectory, UserId, UserRecord,
 };
 use tracing::debug;
 
 mod documents;
 
-use documents::{DeviceDocument, FriendshipDocument, UserDocument, binary, millis};
+use documents::{
+    DeviceDocument, FriendshipDocument, KeyEnvelopeDocument, UserDocument, binary, millis,
+};
 
 /// The duplicate-key code every unique index reports.
 const DUPLICATE_KEY: i32 = 11_000;
@@ -26,6 +29,7 @@ const DUPLICATE_KEY: i32 = 11_000;
 const USERS: &str = "users";
 const DEVICES: &str = "devices";
 const FRIENDSHIPS: &str = "friendships";
+const KEY_ENVELOPES: &str = "key_envelopes";
 
 /// Identity and friend storage backed by `MongoDB`.
 #[derive(Clone, Debug)]
@@ -117,6 +121,19 @@ impl MongoStore {
                     .keys(doc! { "user_high": 1, "state": 1 })
                     .build(),
             ),
+            // One envelope per share and recipient device, so a rotated key
+            // replaces its predecessor rather than piling up beside it.
+            (
+                KEY_ENVELOPES,
+                unique(doc! { "share_id": 1, "recipient_device_id": 1 }),
+            ),
+            // A device fetching everything addressed to it.
+            (
+                KEY_ENVELOPES,
+                IndexModel::builder()
+                    .keys(doc! { "recipient_device_id": 1 })
+                    .build(),
+            ),
         ];
         for (collection, index) in indexes {
             self.database
@@ -139,6 +156,10 @@ impl MongoStore {
 
     fn friendships(&self) -> Collection<FriendshipDocument> {
         self.database.collection(FRIENDSHIPS)
+    }
+
+    fn key_envelopes(&self) -> Collection<KeyEnvelopeDocument> {
+        self.database.collection(KEY_ENVELOPES)
     }
 
     /// Writes a user and its first device inside one transaction.
@@ -397,6 +418,60 @@ impl FriendRepository for MongoStore {
                 .into_iter()
                 .filter_map(FriendshipDocument::into_record)
                 .collect())
+        }
+    }
+}
+
+impl EnvelopeRepository for MongoStore {
+    fn put_key_envelope(
+        &self,
+        envelope: KeyEnvelopeRecord,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            let filter = doc! {
+                "share_id": binary(&envelope.share_id),
+                "recipient_device_id": binary(&envelope.recipient_device_id),
+            };
+            store
+                .key_envelopes()
+                .replace_one(filter, KeyEnvelopeDocument::from_record(&envelope))
+                // A rotated key replaces its predecessor, and the first push
+                // for a device has nothing to replace.
+                .upsert(true)
+                .await
+                .map(|_| ())
+                .map_err(unavailable)
+        }
+    }
+
+    fn list_key_envelopes(
+        &self,
+        recipient_device_id: DeviceId,
+        after_share_id: Option<ShareId>,
+    ) -> impl std::future::Future<Output = Result<KeyEnvelopePage, RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            let mut filter = doc! { "recipient_device_id": binary(&recipient_device_id) };
+            if let Some(after_share_id) = after_share_id {
+                filter.insert("share_id", doc! { "$gt": binary(&after_share_id) });
+            }
+            let found: Vec<_> = store
+                .key_envelopes()
+                .find(filter)
+                .sort(doc! { "share_id": 1 })
+                .limit((portalis_nexus_protocol::MAX_KEY_ENVELOPES_PER_PAGE + 1) as i64)
+                .await
+                .map_err(unavailable)?
+                .try_collect()
+                .await
+                .map_err(unavailable)?;
+            Ok(KeyEnvelopePage::from_sorted(
+                found
+                    .into_iter()
+                    .filter_map(KeyEnvelopeDocument::into_record)
+                    .collect(),
+            ))
         }
     }
 }

@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use portalis_nexus_protocol::v1::{
-    Authenticated, DeviceLinked, Envelope, Friend, FriendAction, ResolveHandleResponse, ServerHello,
+    Authenticated, DeviceLinked, Envelope, Friend, FriendAction, KeyEnvelopePut,
+    ResolveHandleResponse, ServerHello,
 };
 use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame};
 use tokio::net::TcpStream;
@@ -16,8 +17,9 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::config::ClientConfig;
 use crate::protocol::{
-    validate_authenticated, validate_device_linked, validate_friend_event, validate_friend_list,
-    validate_pong, validate_resolved,
+    KeyEnvelopePage, validate_authenticated, validate_device_linked, validate_friend_event,
+    validate_friend_list, validate_key_envelope_put, validate_key_envelopes, validate_pong,
+    validate_resolved,
 };
 use crate::signer::DeviceSigner;
 use crate::transport::connection::{Shared, start_connection, supervise};
@@ -236,6 +238,46 @@ impl NexusClient {
         );
         let response = self.request(&request).await?;
         Ok(validate_device_linked(&request, &response)?)
+    }
+
+    /// Stores a sealed share key for one of this user's own devices.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the server refuses or cannot answer.
+    pub async fn put_key_envelope(
+        &self,
+        share_id: &[u8],
+        recipient_device_id: &[u8],
+        ephemeral_public_key: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<KeyEnvelopePut, TransportError> {
+        let request = self.shared.protocol.put_key_envelope(
+            share_id,
+            recipient_device_id,
+            ephemeral_public_key,
+            ciphertext,
+            now_unix_ms(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_key_envelope_put(&request, &response)?)
+    }
+
+    /// One bounded page of envelopes addressed to this connection's own device.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] when the server refuses or cannot answer.
+    pub async fn list_key_envelopes(
+        &self,
+        after_share_id: Option<&[u8]>,
+    ) -> Result<KeyEnvelopePage, TransportError> {
+        let request = self
+            .shared
+            .protocol
+            .list_key_envelopes(after_share_id, now_unix_ms());
+        let response = self.request(&request).await?;
+        Ok(validate_key_envelopes(&request, &response)?)
     }
 
     /// The authority signatures are bound to, taken from the endpoint dialled.

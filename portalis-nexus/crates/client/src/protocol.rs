@@ -3,12 +3,13 @@
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
     AuthenticateDevice, Authenticated, DeviceLinked, Envelope, Friend, FriendAction, FriendCommand,
-    LinkDevice, ListFriendsRequest, ListFriendsResponse, Ping, Pong, ProtocolErrorCode,
-    RegisterUser, ResolveHandleRequest, ResolveHandleResponse, ServerHello,
+    KeyEnvelope, KeyEnvelopePut, LinkDevice, ListFriendsRequest, ListFriendsResponse,
+    ListKeyEnvelopesRequest, ListKeyEnvelopesResponse, Ping, Pong, ProtocolErrorCode,
+    PutKeyEnvelope, RegisterUser, ResolveHandleRequest, ResolveHandleResponse, ServerHello,
 };
 use portalis_nexus_protocol::{
-    CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, link_device_payload,
-    new_message_id, registration_payload, validate_server_hello,
+    CURRENT_PROTOCOL_VERSION, SHARE_ID_BYTES, SessionBinding, authentication_payload,
+    link_device_payload, new_message_id, registration_payload, validate_server_hello,
 };
 
 use crate::error::ClientError;
@@ -17,6 +18,13 @@ use crate::signer::DeviceSigner;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientProtocol {
     version: u32,
+}
+
+/// One bounded page of key envelopes addressed to the authenticated device.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyEnvelopePage {
+    pub envelopes: Vec<KeyEnvelope>,
+    pub next_after_share_id: Option<[u8; SHARE_ID_BYTES]>,
 }
 
 impl Default for ClientProtocol {
@@ -134,6 +142,46 @@ impl ClientProtocol {
             Payload::FriendCommand(FriendCommand {
                 action: action as i32,
                 peer_user_id: peer.to_vec(),
+            }),
+            sent_at_unix_ms,
+        )
+    }
+
+    /// Builds a request to store a sealed share key for one of this user's
+    /// own devices.
+    ///
+    /// The caller seals the key itself with
+    /// [`portalis_nexus_protocol::seal`]; this only carries the result.
+    #[must_use]
+    pub fn put_key_envelope(
+        &self,
+        share_id: &[u8],
+        recipient_device_id: &[u8],
+        ephemeral_public_key: &[u8],
+        ciphertext: &[u8],
+        sent_at_unix_ms: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::PutKeyEnvelope(PutKeyEnvelope {
+                share_id: share_id.to_vec(),
+                recipient_device_id: recipient_device_id.to_vec(),
+                ephemeral_public_key: ephemeral_public_key.to_vec(),
+                ciphertext: ciphertext.to_vec(),
+            }),
+            sent_at_unix_ms,
+        )
+    }
+
+    /// Builds a request for one page of envelopes addressed to this device.
+    #[must_use]
+    pub fn list_key_envelopes(
+        &self,
+        after_share_id: Option<&[u8]>,
+        sent_at_unix_ms: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::ListKeyEnvelopesRequest(ListKeyEnvelopesRequest {
+                after_share_id: after_share_id.unwrap_or_default().to_vec(),
             }),
             sent_at_unix_ms,
         )
@@ -292,6 +340,54 @@ pub fn validate_resolved(
         Payload::ResolveHandleResponse(resolved) => Ok(resolved.clone()),
         _ => Err(ClientError::UnexpectedEnvelope {
             expected: "ResolveHandleResponse",
+        }),
+    }
+}
+
+/// Reads a stored-envelope confirmation.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not one.
+pub fn validate_key_envelope_put(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<KeyEnvelopePut, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::KeyEnvelopePut(stored) => Ok(stored.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "KeyEnvelopePut",
+        }),
+    }
+}
+
+/// Reads the envelopes addressed to this device.
+///
+/// # Errors
+///
+/// Returns [`ClientError`] when the reply is not an envelope list.
+pub fn validate_key_envelopes(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<KeyEnvelopePage, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::ListKeyEnvelopesResponse(ListKeyEnvelopesResponse {
+            envelopes,
+            next_after_share_id,
+        }) => Ok(KeyEnvelopePage {
+            envelopes: envelopes.clone(),
+            next_after_share_id: (!next_after_share_id.is_empty())
+                .then(|| {
+                    next_after_share_id.as_slice().try_into().map_err(|_| {
+                        ClientError::InvalidField {
+                            field: "next_after_share_id",
+                        }
+                    })
+                })
+                .transpose()?,
+        }),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "ListKeyEnvelopesResponse",
         }),
     }
 }

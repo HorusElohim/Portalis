@@ -11,9 +11,11 @@
 //! - [`presence`]: who is online, aggregated across a user's devices.
 //! - [`ports`]: the storage, time, and randomness the domain depends on.
 //! - [`identity`]: registration and device authentication.
+//! - [`envelopes`]: key-envelope delivery between a user's own devices.
 //! - [`memory`]: in-memory ports for tests and local development.
 
 mod challenge;
+mod envelopes;
 mod friends;
 mod friendship;
 mod handle;
@@ -24,6 +26,7 @@ mod ports;
 mod presence;
 
 pub use challenge::{ChallengeError, IssuedChallenge};
+pub use envelopes::{EnvelopeError, EnvelopeService, PutKeyEnvelopeRequest};
 pub use friends::{COMMAND_ATTEMPTS, FriendError, FriendService, FriendSummary};
 pub use friendship::{
     FriendshipEdge, FriendshipError, FriendshipRecord, Transition, apply as apply_friend_action,
@@ -40,7 +43,8 @@ pub use memory::{FixedClock, InMemoryIdentities, ScriptedRandom};
 pub use negotiation::{NegotiationError, ProtocolPolicy};
 pub use portalis_nexus_protocol::v1::{FriendAction, FriendshipState};
 pub use ports::{
-    Clock, DeviceId, DeviceKey, DeviceRecord, EncryptionKey, FriendRepository, IdentityRepository,
-    RandomSource, RepositoryError, UserDirectory, UserId, UserRecord,
+    Clock, DeviceId, DeviceKey, DeviceRecord, EncryptionKey, EnvelopeRepository, FriendRepository,
+    IdentityRepository, KeyEnvelopePage, KeyEnvelopeRecord, RandomSource, RepositoryError, ShareId,
+    UserDirectory, UserId, UserRecord,
 };
 pub use presence::{ConnectionId, PresenceChange, PresenceRegistry};

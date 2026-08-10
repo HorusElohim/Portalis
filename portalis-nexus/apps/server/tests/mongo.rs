@@ -4,6 +4,9 @@
 //! `cargo test` still passes on a machine that cannot run containers; CI has
 //! Docker and runs them for real.
 
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
+
 use ed25519_dalek::{Signer, SigningKey};
 use portalis_nexus_protocol::{
     CURRENT_PROTOCOL_VERSION, SessionBinding, authentication_payload, derive_device_id, format_id,
@@ -19,6 +22,8 @@ use portalis_nexus_server_core::{
 use testcontainers_modules::mongo::Mongo;
 use testcontainers_modules::testcontainers::ContainerAsync;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
+use tokio::sync::{Mutex, OwnedMutexGuard};
+use tokio::time::timeout;
 
 /// How long a store waits for a server before calling it an outage.
 ///
@@ -27,6 +32,12 @@ use testcontainers_modules::testcontainers::runners::AsyncRunner;
 /// that stop it on purpose would otherwise spend minutes proving a point that
 /// takes a moment.
 const SELECTION_TIMEOUT_MS: u32 = 1_000;
+/// Docker can stall while pulling or starting a replica set. Fail one test
+/// promptly instead of leaving every parallel test blocked behind it.
+const CONTAINER_START_TIMEOUT: Duration = Duration::from_secs(20);
+const CONTAINER_STOP_TIMEOUT: Duration = Duration::from_secs(10);
+const STORE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const DOCKER_INFO_TIMEOUT: Duration = Duration::from_secs(2);
 
 const NOW: u64 = 1_700_000_000_000;
 const ADA: UserId = [1; 16];
@@ -39,12 +50,35 @@ const ENCRYPTION_KEY: [u8; 32] = [6; 32];
 /// start the container is a real failure, and saying otherwise would let this
 /// suite report success while testing nothing.
 fn docker_is_available() -> bool {
-    std::process::Command::new("docker")
+    let Ok(mut child) = std::process::Command::new("docker")
         .arg("info")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+        .spawn()
+    else {
+        return false;
+    };
+    let deadline = Instant::now() + DOCKER_INFO_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(25)),
+            Ok(None) | Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return false;
+            }
+        }
+    }
+}
+
+fn docker_failure() -> &'static OnceLock<String> {
+    static FAILURE: OnceLock<String> = OnceLock::new();
+    &FAILURE
+}
+
+fn remember_docker_failure(reason: String) {
+    let _ = docker_failure().set(reason);
 }
 
 /// The environment variable naming an already-running `MongoDB`.
@@ -72,6 +106,9 @@ struct Running {
     store: MongoStore,
     uri: String,
     database: String,
+    /// Container-backed tests are exclusive because each replica set is a
+    /// heavy Docker resource. Kept until the test drops `Running`.
+    _docker_guard: Option<OwnedMutexGuard<()>>,
 }
 
 impl Running {
@@ -79,9 +116,12 @@ impl Running {
     /// would. Nothing is carried over in memory, so whatever the reconnected
     /// store can see was genuinely durable.
     async fn restart(&self) -> MongoStore {
-        MongoStore::connect(&self.uri, &self.database)
-            .await
-            .expect("the store reconnects to the same database")
+        connect_store(
+            &self.uri,
+            &self.database,
+            "the store reconnects to the same database",
+        )
+        .await
     }
 }
 
@@ -94,45 +134,95 @@ impl Running {
 async fn mongo() -> Option<Running> {
     if let Ok(uri) = std::env::var(EXTERNAL_URI) {
         let database = scratch_database();
-        let store = MongoStore::connect(&uri, &database)
-            .await
-            .expect("the configured MongoDB is reachable");
+        let store = connect_store(&uri, &database, "the configured MongoDB is reachable").await;
         return Some(Running {
             container: None,
             store,
             uri,
             database,
+            _docker_guard: None,
         });
     }
 
-    let started = Mongo::repl_set().start().await;
-    let container = match started {
-        Ok(container) => container,
-        Err(error) if docker_is_available() => {
+    if let Some(reason) = docker_failure().get() {
+        eprintln!("skipping: Docker was already unavailable ({reason})");
+        return None;
+    }
+
+    let docker_guard = docker_gate().lock_owned().await;
+    let container = match timeout(CONTAINER_START_TIMEOUT, Mongo::repl_set().start()).await {
+        Ok(Ok(container)) => container,
+        Ok(Err(error)) if docker_is_available() => {
+            remember_docker_failure(error.to_string());
             panic!("Docker is running but MongoDB would not start: {error}")
         }
-        Err(error) => {
+        Ok(Err(error)) => {
+            remember_docker_failure(error.to_string());
             eprintln!("skipping: no Docker and no {EXTERNAL_URI} ({error})");
             return None;
         }
+        Err(_) => {
+            let reason = format!(
+                "MongoDB replica set did not start within {} seconds",
+                CONTAINER_START_TIMEOUT.as_secs()
+            );
+            remember_docker_failure(reason.clone());
+            panic!("{reason}");
+        }
     };
-    let port = container
-        .get_host_port_ipv4(27017)
+    let port = timeout(CONTAINER_START_TIMEOUT, container.get_host_port_ipv4(27017))
         .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "MongoDB replica set did not publish its port within {} seconds",
+                CONTAINER_START_TIMEOUT.as_secs()
+            )
+        })
         .expect("the container publishes its port");
     let uri = format!(
         "mongodb://127.0.0.1:{port}/?directConnection=true&serverSelectionTimeoutMS={SELECTION_TIMEOUT_MS}"
     );
     let database = scratch_database();
-    let store = MongoStore::connect(&uri, &database)
-        .await
-        .expect("the store connects to its container");
+    let store = connect_store(&uri, &database, "the store connects to its container").await;
     Some(Running {
         container: Some(container),
         store,
         uri,
         database,
+        _docker_guard: Some(docker_guard),
     })
+}
+
+/// One local Docker daemon is shared by the test process. Starting many
+/// replica sets concurrently makes Docker's readiness wait appear as a hung
+/// test on smaller developer machines.
+fn docker_gate() -> Arc<Mutex<()>> {
+    static GATE: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+    Arc::clone(GATE.get_or_init(|| Arc::new(Mutex::new(()))))
+}
+
+async fn connect_store(uri: &str, database: &str, expectation: &str) -> MongoStore {
+    timeout(STORE_CONNECT_TIMEOUT, MongoStore::connect(uri, database))
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "{expectation} within {} seconds",
+                STORE_CONNECT_TIMEOUT.as_secs()
+            )
+        })
+        .unwrap_or_else(|error| panic!("{expectation}: {error}"))
+}
+
+async fn stop_container(container: &ContainerAsync<Mongo>) {
+    timeout(CONTAINER_STOP_TIMEOUT, container.stop())
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "MongoDB container did not stop within {} seconds",
+                CONTAINER_STOP_TIMEOUT.as_secs()
+            )
+        })
+        .expect("the container stops");
 }
 
 /// Runs a test against a real store, or skips when Docker is unavailable.
@@ -400,29 +490,50 @@ async fn indexes_are_created_more_than_once_without_complaint() {
 /// exactly this.
 #[tokio::test]
 async fn a_standalone_server_cannot_start_the_registration_transaction() {
-    let started = testcontainers_modules::mongo::Mongo::default()
-        .start()
-        .await;
-    let container = match started {
-        Ok(container) => container,
-        Err(error) if docker_is_available() => {
+    if let Some(reason) = docker_failure().get() {
+        eprintln!("skipping: Docker was already unavailable ({reason})");
+        return;
+    }
+    let _docker_guard = docker_gate().lock_owned().await;
+    let container = match timeout(
+        CONTAINER_START_TIMEOUT,
+        testcontainers_modules::mongo::Mongo::default().start(),
+    )
+    .await
+    {
+        Ok(Ok(container)) => container,
+        Ok(Err(error)) if docker_is_available() => {
+            remember_docker_failure(error.to_string());
             panic!("Docker is running but MongoDB would not start: {error}")
         }
-        Err(error) => {
+        Ok(Err(error)) => {
+            remember_docker_failure(error.to_string());
             eprintln!("skipping: no Docker available ({error})");
             return;
         }
+        Err(_) => {
+            let reason = format!(
+                "MongoDB standalone server did not start within {} seconds",
+                CONTAINER_START_TIMEOUT.as_secs()
+            );
+            remember_docker_failure(reason.clone());
+            panic!("{reason}");
+        }
     };
-    let port = container
-        .get_host_port_ipv4(27017)
+    let port = timeout(CONTAINER_START_TIMEOUT, container.get_host_port_ipv4(27017))
         .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "MongoDB standalone server did not publish its port within {} seconds",
+                CONTAINER_START_TIMEOUT.as_secs()
+            )
+        })
         .expect("the container publishes its port");
     let uri = format!(
         "mongodb://127.0.0.1:{port}/?directConnection=true&serverSelectionTimeoutMS={SELECTION_TIMEOUT_MS}"
     );
-    let store = MongoStore::connect(&uri, &scratch_database())
-        .await
-        .expect("indexes do not need a replica set");
+    let database = scratch_database();
+    let store = connect_store(&uri, &database, "indexes do not need a replica set").await;
 
     let outcome = store
         .insert_registration(user(ADA, "Ada", "7Q2XZ"), device(1, ADA))
@@ -462,7 +573,7 @@ async fn every_operation_reports_an_outage_once_the_server_is_gone() {
         .expect("stored");
 
     let store = &running.store;
-    container.stop().await.expect("the container stops");
+    stop_container(container).await;
 
     let find_user = store.find_user(ADA).await;
     assert!(unavailable(&find_user), "find_user: {find_user:?}");
@@ -586,7 +697,7 @@ async fn a_write_that_loses_its_server_is_reported_as_an_outage() {
     };
 
     let store = &running.store;
-    container.stop().await.expect("the container stops");
+    stop_container(container).await;
 
     let edge = FriendshipEdge::between(ADA, GRACE).expect("distinct users");
     let outcome = store

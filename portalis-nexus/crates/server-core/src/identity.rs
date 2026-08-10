@@ -2,8 +2,8 @@
 
 use portalis_nexus_protocol::{
     DISCRIMINATOR_CHARS, SessionBinding, SignatureError, UUID_V7_ENTROPY_BYTES,
-    authentication_payload, derive_device_id, link_device_payload, registration_payload,
-    user_id_from, verify_signature,
+    authentication_payload, derive_device_id, is_contributory_x25519_public_key,
+    link_device_payload, registration_payload, user_id_from, verify_signature,
 };
 use thiserror::Error;
 
@@ -283,12 +283,15 @@ where
     /// Unlike a signing key this is never itself verified against a
     /// signature, so its length has to be checked on its own.
     fn verify_encryption_key(encryption_public_key: &[u8]) -> Result<EncryptionKey, IdentityError> {
-        EncryptionKey::try_from(encryption_public_key).map_err(|_| {
-            SignatureError::InvalidEncryptionKeyLength {
+        let key = EncryptionKey::try_from(encryption_public_key).map_err(|_| {
+            IdentityError::Signature(SignatureError::InvalidEncryptionKeyLength {
                 actual: encryption_public_key.len(),
-            }
-            .into()
-        })
+            })
+        })?;
+        if !is_contributory_x25519_public_key(&key) {
+            return Err(SignatureError::NonContributoryEncryptionKey.into());
+        }
+        Ok(key)
     }
 
     fn new_user_id(&self, now_unix_ms: u64) -> UserId {
@@ -1307,6 +1310,29 @@ mod tests {
                 .await,
             Err(IdentityError::Signature(
                 SignatureError::InvalidEncryptionKeyLength { actual: 10 }
+            ))
+        );
+        assert!(service.store.inner.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_non_contributory_registration_encryption_key_is_refused() {
+        let service = service(&[9]);
+        let signer = key(7);
+        let public = signer.verifying_key().to_bytes();
+
+        assert_eq!(
+            service
+                .register(RegistrationRequest {
+                    binding: binding(&[1; 32]),
+                    requested_username: "Ada",
+                    device_public_key: &public,
+                    encryption_public_key: &[0; 32],
+                    signature: &[0; 64],
+                })
+                .await,
+            Err(IdentityError::Signature(
+                SignatureError::NonContributoryEncryptionKey
             ))
         );
         assert!(service.store.inner.is_empty());

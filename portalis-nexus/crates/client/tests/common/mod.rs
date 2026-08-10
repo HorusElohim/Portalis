@@ -24,6 +24,7 @@ use portalis_nexus_server::{AppState, binary_frame, hello_envelope, server_hello
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
+use x25519_dalek::{PublicKey, StaticSecret};
 
 pub const SOCKET_ROUTE: &str = "/v1/socket";
 /// Bounds every "eventually" assertion so a hung test fails instead of hanging.
@@ -36,26 +37,43 @@ pub const PATIENCE: Duration = Duration::from_secs(5);
 /// for `ClientProtocol`'s generic methods, which fragments coverage of that
 /// generic code across as many compiled copies as there are local
 /// definitions. One shared type means one compiled copy to cover.
-pub struct TestDevice(SigningKey);
+pub struct TestDevice {
+    signing: SigningKey,
+    /// A real X25519 secret, so a test can actually open what was sealed to
+    /// this device rather than only assert that bytes moved.
+    encryption: StaticSecret,
+}
+
+impl TestDevice {
+    /// The private half, which only the device itself ever holds. Passed to
+    /// [`portalis_nexus_protocol::open`] by whoever is standing in for this
+    /// device; it never crosses the wire.
+    pub fn encryption_secret_key(&self) -> [u8; ENCRYPTION_KEY_BYTES] {
+        self.encryption.to_bytes()
+    }
+}
 
 impl DeviceSigner for TestDevice {
     fn public_key(&self) -> [u8; DEVICE_KEY_BYTES] {
-        self.0.verifying_key().to_bytes()
+        self.signing.verifying_key().to_bytes()
     }
 
     fn encryption_public_key(&self) -> [u8; ENCRYPTION_KEY_BYTES] {
-        // Not a real X25519 key: deterministic and distinct per seed is all
-        // these tests need.
-        self.0.to_bytes()
+        PublicKey::from(&self.encryption).to_bytes()
     }
 
     fn sign(&self, payload: &[u8]) -> [u8; SIGNATURE_BYTES] {
-        self.0.sign(payload).to_bytes()
+        self.signing.sign(payload).to_bytes()
     }
 }
 
 pub fn device(seed: u8) -> TestDevice {
-    TestDevice(SigningKey::from_bytes(&[seed; 32]))
+    TestDevice {
+        signing: SigningKey::from_bytes(&[seed; 32]),
+        // A different byte pattern than the signing seed, so a test that
+        // confuses the two keys fails rather than coincidentally passing.
+        encryption: StaticSecret::from([seed.wrapping_add(128); 32]),
+    }
 }
 
 /// Reserves an ephemeral port so a restarted server can rebind the address.
