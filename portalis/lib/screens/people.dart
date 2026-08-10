@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/app_controllers.dart';
 import '../design/design.dart';
 import '../features/collections/domain/collection.dart';
+import '../features/collections/presentation/collection_presentation.dart';
 import '../theme.dart';
 
 /// Distinct collaborators across every collection, and where they appear.
@@ -28,13 +29,13 @@ class PeopleScreen extends StatelessWidget {
   Widget _build(BuildContext context) {
     final byDevice = <String,
         ({
-          Collaborator who,
-          List<String> collections,
-          int totalBytes,
-          double downloadMbps,
-          double uploadMbps,
-          bool isSharing,
-        })>{};
+      Collaborator who,
+      List<String> collections,
+      int totalBytes,
+      double downloadMbps,
+      double uploadMbps,
+      bool isSharing,
+    })>{};
     for (final collection in AppControllers.collections.collections) {
       for (final collaborator in collection.collaborators) {
         final entry = byDevice[collaborator.deviceId];
@@ -67,10 +68,10 @@ class PeopleScreen extends StatelessWidget {
     // seen time are known at this level; per-peer speed and bytes are not.
     final byAddress = <String,
         ({
-          String address,
-          List<String> collections,
-          DateTime lastSeen,
-        })>{};
+      String address,
+      List<String> collections,
+      DateTime lastSeen,
+    })>{};
     for (final peer in AppControllers.collections.peerHistory) {
       final entry = byAddress[peer.address];
       if (entry == null) {
@@ -93,10 +94,18 @@ class PeopleScreen extends StatelessWidget {
       }
     }
     final torrentPeople = byAddress.values.toList();
+    final activeTorrentAddresses = <String>{
+      for (final collection in AppControllers.collections.collections)
+        ...collection.torrentPeers,
+    };
 
     final cards = [
       for (final entry in people) PersonCard(entry: entry),
-      for (final entry in torrentPeople) TorrentPeerCard(entry: entry),
+      for (final entry in torrentPeople)
+        TorrentPeerCard(
+          entry: entry,
+          active: activeTorrentAddresses.contains(entry.address),
+        ),
     ];
 
     return AppScreen(
@@ -179,9 +188,8 @@ class PersonCard extends StatelessWidget {
       bool isSharing,
     }) entry,
   }) {
-    final rateMbps = entry.uploadMbps > 0
-        ? entry.uploadMbps
-        : entry.downloadMbps;
+    final rateMbps =
+        entry.uploadMbps > 0 ? entry.uploadMbps : entry.downloadMbps;
     return PersonCard._(
       key: key,
       avatar: Avatar(initials: entry.who.initials, size: 44),
@@ -311,8 +319,8 @@ class PersonCard extends StatelessWidget {
   }
 }
 
-/// One anonymous swarm peer's card. Ember marks it as network-only: the
-/// address has no signed identity behind it.
+/// One anonymous swarm peer's card. A live network-only address earns ember;
+/// a remembered address gets a quieter color of its own.
 class TorrentPeerCard extends PersonCard {
   TorrentPeerCard({
     super.key,
@@ -321,17 +329,24 @@ class TorrentPeerCard extends PersonCard {
       List<String> collections,
       DateTime lastSeen,
     }) entry,
+    required super.active,
   }) : super._(
           avatar: Container(
             width: 44,
             height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.emberWash,
+              color: active
+                  ? AppColors.emberWash
+                  : rememberedPeerColor(entry.address).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(44 * 0.34),
             ),
-            child: Icon(Icons.hub_outlined,
-                size: 20, color: AppColors.ember),
+            child: Icon(
+              Icons.hub_outlined,
+              size: 20,
+              color:
+                  active ? AppColors.ember : rememberedPeerColor(entry.address),
+            ),
           ),
           title: entry.address,
           subtitle: '${entry.collections.join(' · ')} · '
@@ -339,15 +354,19 @@ class TorrentPeerCard extends PersonCard {
           totalBytes: null,
           sharedCount: entry.collections.length,
           rateMbps: null,
-          status: 'Torrent peer',
-          statusColor: AppColors.ember,
-          metricColor: AppColors.ember,
-          subtitleColor: AppColors.ember,
+          status: active ? 'CONNECTED' : 'NOT CONNECTED',
+          statusColor:
+              active ? AppColors.ember : rememberedPeerColor(entry.address),
+          metricColor:
+              active ? AppColors.ember : rememberedPeerColor(entry.address),
+          subtitleColor:
+              active ? AppColors.ember : rememberedPeerColor(entry.address),
           trailing: IconButton(
             tooltip: 'Forget peer',
             icon: const Icon(Icons.close, size: 16),
             color: AppColors.textDim,
-            onPressed: () => AppControllers.collections.forgetPeer(entry.address),
+            onPressed: () =>
+                AppControllers.collections.forgetPeer(entry.address),
           ),
         );
 }

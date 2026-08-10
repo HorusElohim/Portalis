@@ -1,9 +1,76 @@
 import 'test_support.dart';
 
+import 'package:portalis/features/collections/domain/peer_observation.dart';
+import 'package:portalis/features/collections/presentation/collection_peers.dart';
+import 'package:portalis/features/collections/presentation/collection_presentation.dart';
+
 void main() {
   tearDown(resetTestState);
 
   group('collection', () {
+    test('peer age keeps only the compact time unit', () {
+      final now = DateTime(2026, 8, 11, 12);
+
+      expect(
+        formatLastSeen(now.subtract(const Duration(seconds: 4)), now: now),
+        '4s',
+      );
+      expect(
+        formatLastSeen(now.subtract(const Duration(minutes: 2)), now: now),
+        '2m',
+      );
+      expect(
+        formatLastSeen(now.subtract(const Duration(hours: 3)), now: now),
+        '3h',
+      );
+    });
+
+    testWidgets('active and disconnected peers have honest distinct colours',
+        (tester) async {
+      final observedAt = DateTime.now().subtract(const Duration(seconds: 12));
+      final collection = buildCollection(
+        kind: CollectionKind.torrent,
+        torrentPeers: const ['203.0.113.5:6881'],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CollectionPeers(
+              collection: collection,
+              peerHistory: [
+                PeerObservation(
+                  collectionId: collection.id,
+                  collectionName: collection.name,
+                  address: '203.0.113.5:6881',
+                  lastSeen: observedAt,
+                ),
+                PeerObservation(
+                  collectionId: collection.id,
+                  collectionName: collection.name,
+                  address: '198.51.100.9:6881',
+                  lastSeen: observedAt,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final active = tester.widget<Text>(find.text('203.0.113.5:6881'));
+      final disconnected = tester.widget<Text>(find.text('198.51.100.9:6881'));
+      expect(active.style?.color, AppColors.ember);
+      expect(
+        disconnected.style?.color,
+        rememberedPeerColor('198.51.100.9:6881'),
+      );
+      expect(disconnected.style?.color, isNot(AppColors.textFaint));
+      expect(find.textContaining(RegExp(r'^1[2-3]s$')), findsNWidgets(2));
+      expect(find.textContaining('seen'), findsNothing);
+      expect(find.textContaining('ago'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     test('only active native imports keep real-time polling enabled', () {
       final active = buildCollection(
         ingestion: const CollectionImport(

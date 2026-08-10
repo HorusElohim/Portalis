@@ -35,7 +35,8 @@ class CollectionPeers extends StatelessWidget {
             collection.livePeers == 0
                 ? 'No peers connected right now'
                 : '${collection.peersLabel} connected - addresses unavailable',
-            style: monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
+            style:
+                monoLabel(size: 10, color: AppColors.textDim, letterSpacing: 0),
           )
         else
           Wrap(
@@ -46,10 +47,15 @@ class CollectionPeers extends StatelessWidget {
                 _NamedPeer(collaborator: collaborator),
               if (collection.collaborators.length > namedPeers.length)
                 _PeerLabel(
-                  label: '+${collection.collaborators.length - namedPeers.length} more',
+                  label:
+                      '+${collection.collaborators.length - namedPeers.length} more',
                 ),
               for (final peer in torrentPeers)
-                _AnonymousPeer(peer: peer, onForget: onForgetPeer),
+                _AnonymousPeer(
+                  peer: peer,
+                  active: collection.torrentPeers.contains(peer.address),
+                  onForget: onForgetPeer,
+                ),
             ],
           ),
       ],
@@ -84,16 +90,21 @@ class _NamedPeer extends StatelessWidget {
 }
 
 class _AnonymousPeer extends StatelessWidget {
-  const _AnonymousPeer({required this.peer, required this.onForget});
+  const _AnonymousPeer({
+    required this.peer,
+    required this.active,
+    required this.onForget,
+  });
 
   final PeerObservation peer;
+  final bool active;
   final ValueChanged<String>? onForget;
 
   @override
   Widget build(BuildContext context) => _PeerLabel(
         label: peer.address,
         detail: formatLastSeen(peer.lastSeen),
-        color: AppColors.ember,
+        color: active ? AppColors.ember : rememberedPeerColor(peer.address),
         onForget: onForget == null ? null : () => onForget!(peer.address),
       );
 }
@@ -116,18 +127,23 @@ class _PeerLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxWidth = MediaQuery.sizeOf(context).width - 2 * kScreenGutter;
+    final colorful = color != AppColors.textDim;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
-          color: color == AppColors.ember
-              ? AppColors.emberWash
+          color: colorful
+              ? color.withValues(
+                  alpha: color == AppColors.ember ? 0.12 : 0.08,
+                )
               : AppColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: color == AppColors.ember
-                ? AppColors.ember.withValues(alpha: 0.35)
+            color: colorful
+                ? color.withValues(
+                    alpha: color == AppColors.ember ? 0.35 : 0.24,
+                  )
                 : AppColors.border,
           ),
         ),

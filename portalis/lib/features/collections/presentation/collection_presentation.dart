@@ -4,6 +4,18 @@ import '../../../theme.dart';
 import '../../../design/formatters.dart';
 import '../domain/collection.dart';
 
+/// A stable playful identity color for a remembered anonymous address.
+///
+/// The identity palette deliberately excludes live signal and torrent ember,
+/// so remembered peers can stay colorful without looking connected.
+Color rememberedPeerColor(String address) {
+  var hash = 0;
+  for (final unit in address.codeUnits) {
+    hash = (hash * 31 + unit) & 0x7fffffff;
+  }
+  return AppColors.hueAt(hash);
+}
+
 /// Rendering facts derived from a collection. Keeping them outside the domain
 /// model lets design change without changing controllers or native mappings.
 extension CollectionPresentation on Collection {
@@ -22,8 +34,7 @@ extension CollectionPresentation on Collection {
     return isSharing ? GlowLevel.calm : GlowLevel.none;
   }
 
-  double get liveIntensity =>
-      Glow.intensityForRate(downloadMbps + uploadMbps);
+  double get liveIntensity => Glow.intensityForRate(downloadMbps + uploadMbps);
 
   Color get hue => AppColors.hueAt(id.hashCode.abs());
 

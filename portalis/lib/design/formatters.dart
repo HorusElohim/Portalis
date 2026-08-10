@@ -75,17 +75,16 @@ String formatEta(int seconds) {
   return '${seconds}s';
 }
 
-/// A compact age for a remembered network observation.
+/// A compact age for a remembered network observation: `4s`, `2m`, `1h`.
 String formatLastSeen(DateTime lastSeen, {DateTime? now}) {
   final elapsed = (now ?? DateTime.now()).difference(lastSeen).inSeconds;
   final seconds = elapsed < 0 ? 0 : elapsed;
-  if (seconds < 10) return 'seen just now';
-  if (seconds < 60) return 'seen ${seconds}s ago';
+  if (seconds < 60) return '${seconds}s';
   final minutes = seconds ~/ 60;
-  if (minutes < 60) return 'seen ${minutes}m ago';
+  if (minutes < 60) return '${minutes}m';
   final hours = minutes ~/ 60;
-  if (hours < 24) return 'seen ${hours}h ago';
-  return 'seen ${hours ~/ 24}d ago';
+  if (hours < 24) return '${hours}h';
+  return '${hours ~/ 24}d';
 }
 
 /// An optional duration setting, in seconds.

@@ -1,9 +1,11 @@
 import 'test_support.dart';
 
+import 'package:portalis/features/collections/presentation/collection_presentation.dart';
+
 void main() {
   tearDown(resetTestState);
 
-group('people and settings', () {
+  group('people and settings', () {
     testWidgets('the User profile counts distinct collaborators',
         (tester) async {
       const ana = Collaborator(deviceId: 'dev-ana', name: 'Ana');
@@ -41,10 +43,39 @@ group('people and settings', () {
       await tester.pump();
 
       expect(find.text('198.51.100.7:6881'), findsOneWidget);
-      expect(find.textContaining('Torrent peer'), findsOneWidget);
+      expect(find.text('CONNECTED'), findsOneWidget);
+      expect(find.textContaining('seen'), findsNothing);
+      expect(find.textContaining('ago'), findsNothing);
       expect(find.text('72.6'), findsNothing);
       expect(find.text('—'), findsWidgets);
       expect(find.byTooltip('Forget peer'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a remembered disconnected torrent peer keeps a playful hue',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TorrentPeerCard(
+            entry: (
+              address: '198.51.100.8:6881',
+              collections: ['Archive'],
+              lastSeen: DateTime.now().subtract(const Duration(minutes: 2)),
+            ),
+            active: false,
+          ),
+        ),
+      );
+
+      final status = tester.widget<Text>(find.text('NOT CONNECTED'));
+      expect(
+        status.style?.color,
+        rememberedPeerColor('198.51.100.8:6881'),
+      );
+      expect(status.style?.color, isNot(AppColors.textFaint));
+      expect(find.textContaining(RegExp(r'Archive · 2m')), findsOneWidget);
+      expect(find.textContaining('seen'), findsNothing);
+      expect(find.textContaining('ago'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -112,8 +143,6 @@ group('people and settings', () {
       expect(tester.takeException(), isNull);
     });
   });
-
-
 
   group('settings', () {
     testWidgets('hides engine internals behind Network & engine',

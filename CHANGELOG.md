@@ -64,6 +64,10 @@
 - Shortened the empty Home welcome to `Send anything to anybody`; all welcome
   copy now lingers briefly, then softly fades and collapses, replaying whenever
   Home is entered again while the logo remains available.
+- Peer observations now show only their compact age (`4s`, `2m`, `1h`); active
+  torrent peers retain their live ember treatment while remembered peers that
+  are no longer connected receive a quieter, stable identity color of their
+  own.
 
 - Fixed the Settings efficiency benchmark reporting `0 ms`. The run is
   sub-millisecond, and whole milliseconds rounded it away, which reads as a
