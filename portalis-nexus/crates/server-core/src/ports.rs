@@ -317,6 +317,11 @@ impl<T: EnvelopeRepository> EnvelopeRepository for std::sync::Arc<T> {
 
 impl KeyEnvelopePage {
     /// Splits sorted records into the protocol's fixed-size response page.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the protocol's fixed page size is zero when pagination is
+    /// required. The protocol defines a non-zero page size.
     #[must_use]
     pub fn from_sorted(mut envelopes: Vec<KeyEnvelopeRecord>) -> Self {
         debug_assert!(
@@ -345,21 +350,26 @@ mod tests {
     #[test]
     fn a_page_keeps_its_bound_and_returns_the_last_share_as_cursor() {
         let envelopes = (0..=MAX_KEY_ENVELOPES_PER_PAGE)
-            .map(|index| KeyEnvelopeRecord {
-                share_id: [index as u8; SHARE_ID_BYTES],
-                recipient_device_id: [1; DEVICE_ID_BYTES],
-                ephemeral_public_key: [2; ENCRYPTION_KEY_BYTES],
-                ciphertext: vec![3],
-                created_at_unix_ms: 4,
+            .map(|index| {
+                let index = u8::try_from(index).expect("test indices fit in a share ID byte");
+                KeyEnvelopeRecord {
+                    share_id: [index; SHARE_ID_BYTES],
+                    recipient_device_id: [1; DEVICE_ID_BYTES],
+                    ephemeral_public_key: [2; ENCRYPTION_KEY_BYTES],
+                    ciphertext: vec![3],
+                    created_at_unix_ms: 4,
+                }
             })
             .collect();
 
         let page = KeyEnvelopePage::from_sorted(envelopes);
+        let expected_cursor_byte = u8::try_from(MAX_KEY_ENVELOPES_PER_PAGE - 1)
+            .expect("the test page size fits in a share ID byte");
 
         assert_eq!(page.envelopes.len(), MAX_KEY_ENVELOPES_PER_PAGE);
         assert_eq!(
             page.next_after_share_id,
-            Some([(MAX_KEY_ENVELOPES_PER_PAGE - 1) as u8; SHARE_ID_BYTES])
+            Some([expected_cursor_byte; SHARE_ID_BYTES])
         );
     }
 }

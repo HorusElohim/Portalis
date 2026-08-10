@@ -456,11 +456,14 @@ impl EnvelopeRepository for MongoStore {
             if let Some(after_share_id) = after_share_id {
                 filter.insert("share_id", doc! { "$gt": binary(&after_share_id) });
             }
+            let query_limit =
+                i64::try_from(portalis_nexus_protocol::MAX_KEY_ENVELOPES_PER_PAGE + 1)
+                    .map_err(|error| RepositoryError::Unavailable(error.to_string()))?;
             let found: Vec<_> = store
                 .key_envelopes()
                 .find(filter)
                 .sort(doc! { "share_id": 1 })
-                .limit((portalis_nexus_protocol::MAX_KEY_ENVELOPES_PER_PAGE + 1) as i64)
+                .limit(query_limit)
                 .await
                 .map_err(unavailable)?
                 .try_collect()
