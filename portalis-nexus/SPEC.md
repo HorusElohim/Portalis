@@ -715,6 +715,8 @@ that cannot be triggered deterministically. Its decisions live in
 
 ### M2.5: Device linking and encrypted share access
 
+Status: complete.
+
 - Register separate X25519 encryption public keys beside Ed25519 signing keys.
 - Link a device only through an existing authorized device's signed approval.
 - Persist per-device encrypted share-key envelopes without ever receiving a
@@ -723,6 +725,39 @@ that cannot be triggered deterministically. Its decisions live in
 Gate: a second approved device authenticates, receives only its encrypted
 envelope, decrypts the same share capsule locally, and a revoked device cannot
 receive a replacement envelope.
+
+Nexus never holds a share key. `seal` and `open` are an X25519 exchange to the
+recipient device's encryption key with ChaCha20-Poly1305 over it, and the
+share and recipient device are authenticated alongside the ciphertext, so an
+envelope cannot be transplanted onto another share or another device. A
+low-order ephemeral key is refused on both sides: sealing names it, opening
+reports only that the envelope did not open.
+
+`EnvelopeService` decides one thing — whether the sender may address the
+recipient it named. The recipient is re-read from storage rather than trusted
+from whatever the sender last knew, so a device revoked after the sender last
+checked still refuses a replacement envelope, and a device belonging to
+another user is refused outright. An oversized ciphertext or a malformed
+ephemeral key is rejected before anything is stored.
+
+Fetching is scoped by the connection rather than the request: `list` takes the
+device from the authenticated session, so there is nothing to authorize beyond
+having authenticated, and no way to ask for someone else's envelopes.
+Listing is a keyset page ordered by share ID, carrying the cursor the next
+request resumes from, so a device with more shares than one page learns where
+to continue rather than silently stopping.
+
+Storage keeps one row per share and recipient device under a unique index, so
+a rotated key replaces its predecessor rather than piling up beside it. The
+durable adapter upserts under that index and retries a lost insert race once,
+because reporting an outage there would drop a rotated key while telling the
+caller it was stored.
+
+Gate met: a linked device decrypts a share key Nexus never saw, an envelope
+reaches only the device it names, a revoked device is refused a replacement,
+and an envelope addressed to another user's device is refused — over real
+sockets, with the same storage behaviour proven against a real MongoDB
+replica set.
 
 ### M3: Friends and presence
 
