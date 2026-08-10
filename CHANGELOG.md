@@ -58,7 +58,9 @@
   differences, and either direction keeps the temporal graph on screen.
   Collection actions no longer expose `Forget` or a files-only deletion;
   one `Delete` confirmation now offers `Cancel`, `Delete`, and `Delete with
-  files`, with both destructive choices removing the collection.
+  files`, with both destructive choices removing the collection. Media
+  previews now stay tiny on wide collection cards instead of stretching with
+  the four-column layout.
 - Shortened the empty Home welcome to `Send anything to anybody`; all welcome
   copy now lingers briefly, then softly fades and collapses, replaying whenever
   Home is entered again while the logo remains available.

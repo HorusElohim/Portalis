@@ -4,6 +4,8 @@ import 'package:portalis/bridge_generated/collections.dart' as bridge;
 import 'package:portalis/bridge_generated/torrent.dart' as torrent_bridge;
 import 'package:portalis/design/design.dart';
 import 'package:portalis/features/collections/data/collection_mapper.dart';
+import 'package:portalis/features/collections/domain/collection.dart';
+import 'package:portalis/features/collections/presentation/collection_contents.dart';
 import 'package:portalis/features/media/domain/media_item.dart';
 import 'package:portalis/features/media/presentation/media_piece_frame.dart';
 
@@ -139,5 +141,46 @@ void main() {
     await tester.pump();
 
     expect(tester.binding.transientCallbackCount, 0);
+  });
+
+  testWidgets('collection media previews stay tiny on wide surfaces',
+      (tester) async {
+    const media = MediaItem(
+      label: 'part-2.mkv',
+      infoHash: 'aa',
+      sizeBytes: 100,
+      downloadedBytes: 20,
+      progress: 0.2,
+    );
+    const collection = Collection(
+      id: 'atlantis',
+      name: 'Atlantis',
+      kind: CollectionKind.torrent,
+      collaborators: [],
+      media: [media],
+      state: 'downloading',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 1000,
+              child: CollectionContents(
+                collection: collection,
+                onOpenMedia: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final previewSize = tester.getSize(find.byType(MediaPieceFrame));
+    expect(previewSize.width, lessThanOrEqualTo(84));
+    expect(previewSize.height, lessThan(84));
+    expect(tester.takeException(), isNull);
   });
 }
