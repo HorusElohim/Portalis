@@ -16,11 +16,26 @@ use portalis_nexus_client::DeviceSigner;
 use portalis_nexus_protocol::{
     DEVICE_KEY_BYTES, ENCRYPTION_KEY_BYTES, SIGNATURE_BYTES, derive_device_id, format_id,
 };
+use tracing_subscriber::EnvFilter;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 /// How many bytes [`DemoDevice::load_or_create`] keeps on disk: one signing
 /// seed and one encryption secret, side by side.
 pub const KEY_FILE_BYTES: usize = DEVICE_KEY_BYTES + ENCRYPTION_KEY_BYTES;
+
+/// Installs compact structured logging for a Nexus demo executable.
+///
+/// `RUST_LOG` always wins. `try_init` makes this safe in tests and embedded
+/// demos where the process may already have installed a global subscriber.
+pub fn init_tracing(default_filter: &str) {
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .compact()
+        .try_init();
+}
 
 /// A device's two keys kept in a file, the way an app keeps its identity.
 ///

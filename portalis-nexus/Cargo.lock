@@ -2017,6 +2017,7 @@ dependencies = [
  "portalis-nexus-protocol",
  "portalis-nexus-server",
  "tokio",
+ "tracing-subscriber",
  "x25519-dalek",
 ]
 
@@ -2030,6 +2031,7 @@ dependencies = [
  "portalis-nexus-protocol",
  "portalis-nexus-server",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -21,6 +21,7 @@ portalis-nexus-demo = { path = "../demo" }
 portalis-nexus-protocol.workspace = true
 portalis-nexus-server.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

@@ -14,7 +14,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use portalis_nexus_client::{ClientError, NexusClient, TransportError, authority_of};
-use portalis_nexus_demo::{DemoDevice, short};
+use portalis_nexus_demo::{DemoDevice, init_tracing, short};
 
 /// Where this demo keeps its device key. A real app would use a keychain.
 const DEFAULT_KEY_PATH: &str = "demo-device.key";
@@ -22,6 +22,7 @@ const DEFAULT_ENDPOINT: &str = "ws://127.0.0.1:8080/v1/socket";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    init_tracing("portalis_nexus_client=debug");
     let mut arguments = std::env::args().skip(1);
     let endpoint = arguments
         .next()

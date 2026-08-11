@@ -8,13 +8,16 @@ use portalis_nexus_protocol::v1::{
     LookupPeersResponse, PeerAnnounced, PeerWithdrawn, PublishShare, ResolveHandleResponse,
     ServerHello, ShareAccessGranted, ShareAccessRevoked, ShareSnapshot,
 };
-use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame};
+use portalis_nexus_protocol::{
+    CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame, format_id, payload_name,
+};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use tracing::{debug, warn};
 
 use crate::config::ClientConfig;
 use crate::protocol::{
@@ -146,6 +149,8 @@ impl NexusClient {
     /// are saturated, the connection ends first, or no response arrives within
     /// the configured request timeout.
     pub async fn request(&self, request: &Envelope) -> Result<Envelope, TransportError> {
+        let operation = payload_name(request.payload.as_ref());
+        let message_id = format_id(&request.message_id);
         let frame = encode_frame(request)?;
         let response = self.shared.pending.register(request.message_id.clone())?;
 
@@ -157,17 +162,37 @@ impl NexusClient {
         };
         if let Err(error) = queued {
             self.shared.pending.cancel(&request.message_id);
-            return Err(match error {
+            let error = match error {
                 mpsc::error::TrySendError::Full(_) => TransportError::OutboundQueueFull,
                 mpsc::error::TrySendError::Closed(_) => TransportError::Disconnected,
-            });
+            };
+            warn!(operation, %message_id, %error, "request could not be sent");
+            return Err(error);
         }
+        debug!(operation, %message_id, "request queued");
 
         match timeout(self.shared.request_timeout, response).await {
-            Ok(Ok(envelope)) => Ok(envelope),
-            Ok(Err(_)) => Err(TransportError::ConnectionClosed),
+            Ok(Ok(envelope)) => {
+                debug!(
+                    operation,
+                    response = payload_name(envelope.payload.as_ref()),
+                    %message_id,
+                    "request completed"
+                );
+                Ok(envelope)
+            }
+            Ok(Err(_)) => {
+                warn!(operation, %message_id, "connection closed before response");
+                Err(TransportError::ConnectionClosed)
+            }
             Err(_) => {
                 self.shared.pending.cancel(&request.message_id);
+                warn!(
+                    operation,
+                    %message_id,
+                    timeout_ms = self.shared.request_timeout.as_millis(),
+                    "request timed out"
+                );
                 Err(TransportError::RequestTimeout(self.shared.request_timeout))
             }
         }
@@ -486,10 +511,12 @@ impl NexusClient {
 
     /// Stops supervising, closes the live socket, and waits for it to finish.
     pub async fn shutdown(mut self) {
+        debug!(authority = self.authority(), "Nexus client shutting down");
         self.shared.shutdown.send_replace(true);
         if let Some(supervisor) = self.supervisor.take() {
             let _ = supervisor.await;
         }
+        debug!(authority = self.authority(), "Nexus client stopped");
     }
 }
 

@@ -97,6 +97,7 @@ pub(crate) fn start_connection(
     let (outbound, inbox) = mpsc::channel(MAX_OUTBOUND_QUEUE);
     debug!(
         connection_id = %format_id(&hello.connection_id),
+        authority = %shared.server_authority,
         "Nexus connection established"
     );
     shared.set_live(Live {
@@ -135,7 +136,7 @@ pub(crate) async fn supervise(
             match attempt {
                 Ok(connection) => start_connection(&shared, connection),
                 Err(error) => {
-                    warn!(%error, "Nexus client stopped reconnecting");
+                    warn!(authority = %shared.server_authority, %error, "Nexus client stopped reconnecting");
                     return;
                 }
             }
@@ -144,7 +145,7 @@ pub(crate) async fn supervise(
         if *shutdown.borrow() {
             return;
         }
-        debug!("Nexus connection ended; reconnecting");
+        debug!(authority = %shared.server_authority, "Nexus connection ended; reconnecting");
     }
 }
 
@@ -186,14 +187,21 @@ async fn run_connection(shared: &Arc<Shared>, tasks: Tasks, shutdown: &mut watch
 /// Routes inbound envelopes to their waiting request, or to the event stream.
 async fn read_socket(shared: Arc<Shared>, mut stream: SplitStream<Socket>) {
     while let Some(message) = stream.next().await {
-        let Ok(message) = message else {
-            return;
+        let message = match message {
+            Ok(message) => message,
+            Err(error) => {
+                warn!(%error, "Nexus socket read failed");
+                return;
+            }
         };
         match message {
             Message::Binary(frame) => {
-                let Ok(envelope) = decode_frame(&frame) else {
-                    warn!("Nexus server sent an invalid frame");
-                    return;
+                let envelope = match decode_frame(&frame) {
+                    Ok(envelope) => envelope,
+                    Err(error) => {
+                        warn!(%error, "Nexus server sent an invalid frame");
+                        return;
+                    }
                 };
                 if let Some(event) = shared.pending.route(envelope) {
                     if shared.events.try_send(event).is_err() {
@@ -211,9 +219,12 @@ async fn read_socket(shared: Arc<Shared>, mut stream: SplitStream<Socket>) {
 /// Writes queued messages, then closes the socket once the queue is dropped.
 async fn write_socket(mut sink: SplitSink<Socket, Message>, mut inbox: mpsc::Receiver<Message>) {
     while let Some(message) = inbox.recv().await {
-        if sink.send(message).await.is_err() {
+        if let Err(error) = sink.send(message).await {
+            warn!(%error, "Nexus socket write failed");
             return;
         }
     }
-    let _ = sink.send(Message::Close(None)).await;
+    if let Err(error) = sink.send(Message::Close(None)).await {
+        debug!(%error, "Nexus socket close frame could not be sent");
+    }
 }

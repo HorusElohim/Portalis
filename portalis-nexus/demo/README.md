@@ -25,6 +25,10 @@ cannot read. Finally two seeders announce to a swarm, discover each other at
 the addresses their sockets were observed on, and one withdraws before its
 lease expires. Then the server drains.
 
+The demos enable compact structured client and server transport logs on
+stderr. Their numbered walkthrough remains on stdout, so it can be redirected
+independently. `RUST_LOG` overrides the default filters.
+
 ## Two processes
 
 Start the server:

@@ -10,6 +10,7 @@ use futures_util::{SinkExt, StreamExt};
 use portalis_nexus_protocol::v1::ProtocolErrorCode;
 use portalis_nexus_protocol::{
     MAX_FRAME_BYTES, MAX_OUTBOUND_QUEUE, WEBSOCKET_SUBPROTOCOL, decode_frame, format_id,
+    payload_name,
 };
 use std::net::SocketAddr;
 use tokio::sync::{mpsc, watch};
@@ -91,22 +92,45 @@ async fn read_inbound(
             }
             message = stream.next() => message,
         };
-        let Some(Ok(message)) = message else {
+        let Some(message) = message else {
             return;
+        };
+        let message = match message {
+            Ok(message) => message,
+            Err(error) => {
+                warn!(%error, "socket read failed");
+                return;
+            }
         };
         let reply = match message {
             // Identity commands need the connection's own challenge state, so
             // they are answered here rather than by the stateless mapping.
             Message::Binary(ref frame) => match decode_frame(frame) {
-                Ok(request) => SocketReply::Send(binary_frame(
-                    &dispatch(session, state, &request, now_unix_ns()).await,
-                )),
-                Err(error) => SocketReply::Send(binary_frame(&protocol_error(
-                    ProtocolErrorCode::InvalidMessage,
-                    Vec::new(),
-                    error.to_string(),
-                    now_unix_ns(),
-                ))),
+                Ok(request) => {
+                    let operation = payload_name(request.payload.as_ref());
+                    debug!(
+                        operation,
+                        message_id = %format_id(&request.message_id),
+                        "request received"
+                    );
+                    let response = dispatch(session, state, &request, now_unix_ns()).await;
+                    debug!(
+                        operation,
+                        response = payload_name(response.payload.as_ref()),
+                        message_id = %format_id(&request.message_id),
+                        "request completed"
+                    );
+                    SocketReply::Send(binary_frame(&response))
+                }
+                Err(error) => {
+                    warn!(%error, "invalid request frame");
+                    SocketReply::Send(binary_frame(&protocol_error(
+                        ProtocolErrorCode::InvalidMessage,
+                        Vec::new(),
+                        error.to_string(),
+                        now_unix_ns(),
+                    )))
+                }
             },
             other => reply_to(&other, now_unix_ns()),
         };
@@ -129,11 +153,14 @@ async fn write_outbound(
     mut inbox: mpsc::Receiver<Message>,
 ) {
     while let Some(message) = inbox.recv().await {
-        if sink.send(message).await.is_err() {
+        if let Err(error) = sink.send(message).await {
+            warn!(%error, "socket write failed");
             return;
         }
     }
-    let _ = sink.send(Message::Close(None)).await;
+    if let Err(error) = sink.send(Message::Close(None)).await {
+        debug!(%error, "socket close frame could not be sent");
+    }
 }
 
 fn now_unix_ns() -> u64 {

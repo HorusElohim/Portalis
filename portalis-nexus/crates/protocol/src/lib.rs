@@ -12,6 +12,7 @@ pub mod v1 {
 mod frame;
 mod ids;
 mod limits;
+mod payload;
 mod sealing;
 mod signing;
 mod validate;
@@ -30,6 +31,7 @@ pub use limits::{
     SNAPSHOT_ID_BYTES, SWARM_LEASE_SECONDS, SWARM_REFRESH_SECONDS, USER_ID_BYTES,
     WEBSOCKET_SUBPROTOCOL,
 };
+pub use payload::payload_name;
 pub use sealing::{
     EnvelopeContext, SealError, SealedEnvelope, is_contributory_x25519_public_key, open, seal,
 };

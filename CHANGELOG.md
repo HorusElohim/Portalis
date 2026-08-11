@@ -52,7 +52,8 @@
   and concurrent-client executable exercise registration, pings, friendship,
   socket-derived presence, capsule publication, recipient-device grants,
   sealed key delivery, exact-device encrypted `.torrent` handoff, and private
-  swarm discovery over real connections.
+  swarm discovery over real connections. The server logs each socket and safe
+  command/response label while keeping opaque encrypted payloads out of logs.
 
 - Added Nexus share-membership revocation, so an owner can remove someone
   from a share rather than only ever adding them. Nexus stops answering that
@@ -75,6 +76,14 @@
 ### Changed
 
 <!-- Behaviour and UX changes go here before the next release. -->
+
+- Standardized structured tracing across every Nexus executable and both
+  WebSocket boundaries. Clients and servers now correlate safe operation and
+  response labels with message IDs, report connection, retry, timeout, and
+  shutdown lifecycle events, and share one exhaustive protocol-owned label
+  mapping. Capsules, key envelopes, handoff ciphertext, challenges, and
+  private metadata remain deliberately absent from logs; narrated demo steps
+  remain on stdout as user-facing output.
 
 - Moved every Nexus timestamp to nanoseconds since the Unix epoch, on the
   wire, in the domain, and in storage. `Envelope.sent_at_unix_ms` is now

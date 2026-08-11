@@ -64,6 +64,17 @@ PORTALIS_NEXUS_LISTEN_ADDR=127.0.0.1:8080 cargo run -p portalis-nexus-server
 Then request `http://127.0.0.1:8080/health/live` or
 `http://127.0.0.1:8080/health/ready`.
 
+Every Nexus executable installs a `tracing` subscriber. The production server
+emits JSON; demos use compact text on stderr and keep their narrated steps on
+stdout. Client and server transport logs carry connection IDs, message IDs,
+and protocol variant names only — never encrypted payloads or private
+metadata. Set `RUST_LOG` to tune them, for example:
+
+```sh
+RUST_LOG=portalis_nexus_client=debug,portalis_nexus_server=debug \
+  cargo run -p portalis-nexus-demo
+```
+
 The server process requires MongoDB and refuses to start without
 `PORTALIS_NEXUS_MONGODB_URI`; identity and friendship state must survive every
 restart. In-memory storage remains an explicit test and development adapter,

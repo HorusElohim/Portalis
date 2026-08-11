@@ -7,7 +7,7 @@ use portalis_nexus_client::{
     CapsuleContext, DeviceSigner, HandoffContext, Manifest, ManifestEntry, NexusClient,
     SHARE_KEY_BYTES, open_capsule, open_handoff, seal_capsule, seal_handoff,
 };
-use portalis_nexus_demo::{DemoDevice, short};
+use portalis_nexus_demo::{DemoDevice, init_tracing, short};
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{AddressFamily, FriendAction, FriendshipState, ShareHandoff};
 use portalis_nexus_protocol::{EnvelopeContext, SealedEnvelope, new_challenge, new_message_id};
@@ -23,6 +23,7 @@ const TORRENT_BYTES: &[u8] = b"d4:infod6:lengthi5e4:name5:hello12:piece lengthi1
 // makes the terminal output and the protocol order readable side by side.
 #[allow(clippy::too_many_lines)]
 async fn main() -> Result<(), Box<dyn Error>> {
+    init_tracing("portalis_nexus_client=debug");
     let endpoint =
         std::env::var("PORTALIS_NEXUS_M6_ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_owned());
     println!("Connecting Alice and Bob concurrently to {endpoint}");

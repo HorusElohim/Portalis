@@ -11,6 +11,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderValue, SEC_WEBSOCKET_PROTOCOL};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::protocol::validate_hello;
@@ -59,14 +60,21 @@ pub(crate) async fn handshake_with_retry(
     loop {
         attempts += 1;
         match handshake(endpoint, limit).await {
-            Ok(connection) => return Ok(connection),
+            Ok(connection) => {
+                debug!(attempts, "Nexus handshake succeeded");
+                return Ok(connection);
+            }
             Err(error) if !policy.can_retry_after(attempts) => {
                 return Err(TransportError::ReconnectExhausted {
                     attempts,
                     source: Box::new(error),
                 });
             }
-            Err(_) => sleep(policy.delay_after_failure(attempts, random_entropy())).await,
+            Err(error) => {
+                let delay = policy.delay_after_failure(attempts, random_entropy());
+                debug!(attempts, delay_ms = delay.as_millis(), %error, "Nexus handshake failed; retrying");
+                sleep(delay).await;
+            }
         }
     }
 }

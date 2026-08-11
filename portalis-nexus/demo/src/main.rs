@@ -10,7 +10,7 @@ use portalis_nexus_client::{
     ClientError, DeviceSigner, HandoffContext, NexusClient, SHARE_KEY_BYTES, TransportError,
     open_handoff, seal_handoff,
 };
-use portalis_nexus_demo::{DemoDevice, short};
+use portalis_nexus_demo::{DemoDevice, init_tracing, short};
 use portalis_nexus_protocol::v1::AddressFamily;
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_server::{AppState, GRACEFUL_DRAIN_TIMEOUT};
@@ -22,6 +22,7 @@ const MAGNET: &[u8] = b"magnet:?xt=urn:btih:0102030405060708090a0b0c0d0e0f101112
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    init_tracing("portalis_nexus_client=debug,portalis_nexus_server=debug");
     let (address, state, server) = start_server().await?;
     let endpoint = format!("ws://{address}/v1/socket");
     step(1, "A server is listening", &endpoint);
