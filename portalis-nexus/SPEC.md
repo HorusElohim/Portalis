@@ -1,6 +1,7 @@
 # Portalis Nexus Specification
 
-Status: M5 swarm discovery complete; M6 Flutter integration is next.
+Status: M5 swarm discovery complete; M5.5 account and membership control is
+next, then M6 Flutter integration.
 
 Protocol: `portalis.protocol.v1`
 
@@ -74,7 +75,7 @@ Portalis/
     │       ├── identity.proto
     │       ├── friends.proto
     │       ├── presence.proto
-    │       ├── collections.proto
+    │       ├── shares.proto
     │       └── swarm.proto
     ├── crates/
     │   ├── protocol/                 # limits, ids, frame, validate
@@ -199,6 +200,16 @@ message Envelope {
     LinkDevice link_device = 18;
     DeviceLinked device_linked = 19;
 
+    // M5.5, account control.
+    ListDevicesRequest list_devices_request = 20;
+    ListDevicesResponse list_devices_response = 21;
+    RevokeDevice revoke_device = 22;
+    DeviceRevoked device_revoked = 23;
+    ChangeHandle change_handle = 24;
+    HandleChanged handle_changed = 25;
+    DeleteAccount delete_account = 26;
+    AccountDeleted account_deleted = 27;
+
     ResolveHandleRequest resolve_handle_request = 30;
     ResolveHandleResponse resolve_handle_response = 31;
     FriendCommand friend_command = 32;
@@ -206,22 +217,39 @@ message Envelope {
     ListFriendsRequest list_friends_request = 34;
     ListFriendsResponse list_friends_response = 35;
     PresenceEvent presence_event = 36;
+    BlockUser block_user = 37;          // M5.5
+    UnblockUser unblock_user = 38;      // M5.5
 
-    PublishShareSnapshot publish_share_snapshot = 50;
-    ShareSnapshotEvent share_snapshot_event = 51;
+    PutKeyEnvelope put_key_envelope = 40;
+    KeyEnvelopePut key_envelope_put = 41;
+    ListKeyEnvelopesRequest list_key_envelopes_request = 42;
+    ListKeyEnvelopesResponse list_key_envelopes_response = 43;
+    RevokeShareAccess revoke_share_access = 44;      // M5.5
+    ShareAccessRevoked share_access_revoked = 45;    // M5.5
+
+    PublishShare publish_share = 50;
+    SharePublished share_published = 51;
     ListSharesRequest list_shares_request = 52;
     ListSharesResponse list_shares_response = 53;
-    GetShareSnapshotRequest get_share_snapshot_request = 54;
-    GetShareSnapshotResponse get_share_snapshot_response = 55;
+    FetchShareRequest fetch_share_request = 54;
+    FetchShareResponse fetch_share_response = 55;
+    GrantShareAccess grant_share_access = 56;
+    ShareAccessGranted share_access_granted = 57;
+    ShareEvent share_event = 58;
+    ShareHandoff share_handoff = 59;
 
-    AnnouncePeerLease announce_peer_lease = 70;
-    LookupPeersRequest lookup_peers_request = 71;
-    LookupPeersResponse lookup_peers_response = 72;
+    AnnouncePeer announce_peer = 60;
+    PeerAnnounced peer_announced = 61;
+    LookupPeersRequest lookup_peers_request = 62;
+    LookupPeersResponse lookup_peers_response = 63;
+    WithdrawPeer withdraw_peer = 64;
   }
 }
 ```
 
-Field allocation is grouped by subsystem and finalized before implementation.
+Field allocation is grouped by subsystem, and a group keeps room to grow: 28
+and 29 belong to identity, 39 to friends, 46 to 49 to shares and their key
+envelopes, 65 upwards to swarm discovery.
 
 ### Time
 
@@ -271,6 +299,41 @@ Binary identifiers use protobuf `bytes`, not hexadecimal strings.
 - Maximum queued outbound messages per connection: 256.
 
 Every limit has boundary-minus-one, boundary, and boundary-plus-one tests.
+
+### Rate limits
+
+Numbers, not intentions: a limit without one cannot be implemented or tested.
+Exceeding a limit answers `RATE_LIMITED` with `retry_after_ms`; sustained
+abuse closes the connection.
+
+Before authentication, keyed by source address:
+
+- 5 concurrent connections.
+- 20 messages per second.
+- 5 registrations per hour.
+
+After authentication, keyed by user unless stated:
+
+- 100 commands per second per connection, bursting to 200.
+- 30 publications per minute per share.
+- 60 friend commands per hour.
+- 120 key-envelope pushes per minute per device.
+- 600 peer announcements and lookups per minute per device.
+
+### Per-user quotas
+
+Bounded frames and queues stop one connection exhausting the server; these
+stop one account exhausting the database, which is otherwise unbounded by
+design.
+
+- 16 devices per user.
+- 2 000 friendships per user.
+- 1 000 shares owned per user.
+- 512 members per share.
+- 4 096 manifest entries per snapshot.
+
+A quota reached answers `INVALID_MESSAGE` naming the limit, because the caller
+must remove something rather than retry.
 
 ## 9. Identity and Authentication
 
@@ -335,9 +398,39 @@ then authenticate normally with its Ed25519 key.
 Nexus never receives a share secret in plaintext. A client creates a random
 per-share symmetric key, encrypts each snapshot capsule with it, and stores one
 X25519-encrypted key envelope per authorized device. Linking a second device
-lets an existing device add its envelope; revoking a device prevents new
-envelopes and future capsule access. Account recovery remains a separate
+lets an existing device add its envelope. Account recovery remains a separate
 product decision and never weakens this approval rule.
+
+Revoking a device stops Nexus issuing it new envelopes and answering its
+requests. It does not reach the share keys that device already holds, so
+revocation means rotating the key of every share it could read and publishing
+the next revision sealed only to the devices that remain. Nexus enforces
+authorization; only re-keying changes what a revoked device can still open.
+
+### Device identity on Portalis clients
+
+A device holds two independent keypairs: the Ed25519 signing key the Portalis
+application already persists, and an X25519 key that only ever receives sealed
+share keys. Neither is derived from the other. A client generates and stores
+both together in whatever secure storage its platform offers, and a client
+that has an Ed25519 identity but no X25519 key generates one before it first
+registers or links.
+
+Losing the X25519 private key loses access to every capsule sealed to it. The
+device presents a new key and an owner re-seals; there is no recovery path
+that avoids someone who already holds the share key, by design.
+
+Nexus derives `DeviceId` as BLAKE3 over the Ed25519 public key. The Portalis
+application has until now used that raw public key as its own device
+identifier. The two must not be confused: both are 32 bytes and neither is
+self-describing. The application adopts the derived identifier, and manifest
+entries carry the public key itself (§11), so both are recoverable from one
+stored field and neither has to be looked up.
+
+That changes what a manifest entry signs, which makes it a manifest version
+rather than a rename. Entries written by earlier builds are verified under the
+rule they were signed with, and are rewritten in the current encoding when
+their collection is next published.
 
 ## 10. Friends and Presence
 
@@ -349,10 +442,27 @@ NONE -> PENDING -> ACCEPTED
   ^        |          |
   |        v          v
   +----- REJECTED   REMOVED
+
+any state ----------> BLOCKED
 ```
 
 Commands use compare-and-set filters so concurrent accept, reject, and remove
 operations are deterministic and idempotent.
+
+### Blocking
+
+A refusal that can be sent again is not a refusal, and handle resolution makes
+every account reachable by anyone who knows its handle. Either side may
+therefore block the other from any state.
+
+While an edge is blocked, friend commands from both sides are refused, and
+presence is delivered in neither direction. Existing share memberships between
+the two are left alone: they belong to the shares' owners to revoke, and
+silently dropping someone's access to media is a different decision from
+declining to hear from them.
+
+The edge records who blocked, and only that user may clear it, returning the
+edge to `NONE`. Blocking is the one transition the other side cannot answer.
 
 Presence is derived from authenticated connections:
 
@@ -371,12 +481,87 @@ revision. A **snapshot** is an immutable, content-addressed media manifest:
 adding, removing, renaming, or replacing media produces a different
 `SnapshotId`.
 
-`SnapshotId` is the BLAKE3 content root of the resolved canonical manifest.
-The Portalis backend builds it once from the torrent engine's authoritative
-20-byte BitTorrent v1 info hashes and each signed manifest entry, in canonical
-info-hash order with length-prefixed fields. It never performs a second file
-scan or asks Nexus to reinterpret a torrent. Protobuf serialisation is never
-treated as the canonical manifest encoding.
+### Canonical manifest and `SnapshotId`
+
+The manifest lists the media a share contains. Its canonical encoding is the
+one definition both the content root and the capsule are built from, so any
+client that can compute one can compute the other, and two clients that
+disagree about a byte disagree about the share.
+
+```text
+manifest := "portalis.manifest.v1\0"
+            u32     entry_count
+            entry*                        ascending by info_hash
+
+entry    := u8      entry_version = 1
+            u8[20]  info_hash             BitTorrent v1, from the torrent engine
+            u32     name_len
+            u8[]    name                  name_len bytes, UTF-8, NFC-normalized
+            u8      has_thumbnail         0 or 1
+            u8[32]  thumbnail_hash        present only when has_thumbnail is 1
+            u8[32]  author_public_key     Ed25519
+            u64     added_at_unix_ns
+            u8[64]  signature             over every preceding field of the entry
+```
+
+Every integer is little-endian, and every variable-length field carries its
+length before its bytes, so no pair of fields can be reinterpreted as a
+different pair — the rule the connection payloads in `signing.rs` already
+follow.
+
+`SnapshotId` is BLAKE3 over exactly those bytes. The Portalis backend builds
+them once from the torrent engine's authoritative info hashes; it never
+performs a second file scan, never asks Nexus to reinterpret a torrent, and
+never treats protobuf serialisation as the canonical encoding.
+
+An entry carries its author's Ed25519 public key rather than an identifier
+derived from it. The key is what the signature verifies against, and every
+identifier this system uses is derivable from it, which is what lets one
+manifest satisfy both the local collection model and Nexus (§9).
+
+### Capsule format
+
+Nexus stores the capsule and never opens it, so its format is a contract
+between clients that the server cannot enforce. It is fixed here for that
+reason:
+
+```text
+capsule  := u8      capsule_version = 1
+            u8[12]  nonce
+            u8[]    ciphertext            ChaCha20-Poly1305, tag included
+```
+
+The plaintext is exactly the canonical manifest above, and the key is the
+share's random 32-byte secret. The nonce is
+`BLAKE3("portalis.capsule.v1/nonce" || share_id || revision_le)[..12]`: unique
+for every revision under one key, and identical for a retry of the same
+revision, so a publisher whose acknowledgement was lost re-encrypts to the
+same bytes and Nexus recognises the retry rather than refusing it. Associated
+data is `share_id || revision_le || snapshot_id`, so a capsule lifted from one
+share or revision fails to open under another.
+
+`capsule_version` is the only field a reader may act on before authenticating
+the rest. A version it does not know is a capsule it must not guess at.
+
+### Media confidentiality
+
+Encrypting the capsule keeps the descriptor, file names, and directory
+structure away from Nexus. It does not encrypt the media: BitTorrent pieces
+move between peers exactly as stored.
+
+Version 1 therefore rests the confidentiality of a private share on the
+secrecy of its info hashes, and requires clients to treat a private share's
+torrents as private in the BitTorrent sense: the `private` flag set in the
+info dictionary, and no DHT, PEX, or local peer discovery for them. Nexus is
+their only discovery path (§12).
+
+This is a deliberate and weaker position than encrypting payloads, and it is
+stated rather than implied: anyone who learns an info hash can fetch the
+pieces, and a former member keeps that knowledge. Payload encryption is the
+upgrade path; the capsule carries a version byte so adding a content key is an
+additive change rather than a new format.
+
+### Publication
 
 The first authenticated publication creates a share and makes its publisher the
 permanent owner. A subsequent update publishes exactly
@@ -385,19 +570,41 @@ snapshot. An identical signed retry is idempotently successful; conflicting
 bytes for one revision fail. A peer may seed and fetch a snapshot but cannot
 mutate the owner's share.
 
-Nexus stores a bounded encrypted snapshot capsule and its signature, never
-plaintext torrent descriptors, file names, directory structure, or media. The
-capsule can carry a magnet link or `.torrent` descriptor encrypted by a random
-per-share secret. Nexus does not include a BitTorrent library and never parses
-or validates the encrypted torrent payload. It authorizes and returns capsules
-to permitted devices so a user's newly linked device can synchronise while the
-original device is offline.
+Nexus stores the bounded capsule and its signature, never plaintext torrent
+descriptors, file names, directory structure, or media. It does not include a
+BitTorrent library and never parses or validates what a capsule contains — it
+holds bytes it cannot read, and returns them to permitted devices so a newly
+linked device can synchronise while the original is offline.
+
+The signature covers the capsule and is made by the publishing device's
+Ed25519 key. Nexus relays it without checking it, holding no key that could;
+recipients verify it against the author they expect before opening anything.
+
+### Membership
 
 Membership is stored as separate edge documents. Server authorization is
 checked before a private share summary, capsule, or live handoff is returned.
 The live rendezvous path may also forward an authorized, encrypted magnet or
 `.torrent` from one online client to another; it is bounded, transient, and is
 not written to MongoDB.
+
+An owner grants and revokes membership. Revoking removes the edge, so Nexus
+stops returning summaries, capsules, envelopes, and handoffs to that user. It
+does not reach what they already hold. Removing someone therefore means
+rotating the share key and publishing the next revision sealed only to the
+members who remain — the same rule device revocation follows (§9). Nexus
+enforces authorization and cannot enforce forgetting; a specification that
+implied otherwise would be lying about what removal buys.
+
+### Collections become shares
+
+A Portalis collection keeps its local identifier and its info hashes when it
+is published (§20). Publishing mints a fresh `ShareId` (UUIDv7) and a fresh
+random 32-byte share key, and stores both beside the collection.
+
+The existing invite secret never becomes the share key. It is a join
+credential that everyone holding an invite link has already seen, and a share
+key must be known only to the devices an owner has sealed it to.
 
 ## 12. Swarm Discovery
 
@@ -423,6 +630,12 @@ Initial policy:
 Lookup returns bounded randomized candidates, preferring compatible transport,
 recent leases, and diverse network prefixes. The client merges and de-duplicates
 server, direct, tracker, and DHT candidates before handing them to librqbit.
+
+A private share is the exception: its torrents carry the BitTorrent `private`
+flag, so DHT, PEX, and local discovery are not used for them and Nexus is the
+only source of candidates (§11). Its confidentiality rests on the secrecy of
+its info hashes, and announcing one to a public network spends that secrecy
+permanently.
 
 The Portalis server is deterministic discovery, not guaranteed reachability.
 Symmetric NAT and restrictive firewalls still require a relay, reachable seed,
@@ -491,8 +704,14 @@ streams are available.
 
 `share_memberships`
 
-- Share ID, user ID, role, version, timestamps, revocation state.
+- Share ID, user ID, granted timestamp.
 - Unique `(share_id, user_id)` and user-listing indexes.
+- No role: the owner is on the share record and everyone else may read, which
+  is every distinction the rules currently draw. A role column with one value
+  is a source of truth waiting to disagree with the one beside it.
+- No revocation state: revoking removes the edge. A share's history lives in
+  `share_snapshots`, and keeping tombstones here would only record who was
+  once allowed to read media they may still hold (§11).
 
 `share_snapshots`
 
@@ -529,7 +748,8 @@ streams are available.
 - Domain-separate all signed payloads.
 - Reject replayed and expired challenges.
 - Bound frames, queues, concurrent requests, and database operation times.
-- Apply per-IP limits before authentication and per-device/user limits after.
+- Apply the per-address limits of §8 before authentication and the per-user
+  ones after, and enforce the per-user quotas that bound durable growth.
 - Redact credentials, challenges, collection secrets, and descriptor content
   from logs.
 - Run the Linux container as non-root with a read-only root filesystem.
@@ -893,16 +1113,49 @@ candidates by endpoint with deterministic source preference.
 Gate met: two authenticated socket clients discover each other's current
 source-bound endpoints; disconnect and time-based expiry both remove leases.
 
+### M5.5: Account and membership control
+
+Every command here is one a user-facing client must offer and cannot build
+today: the protocol can add a member but not remove one, mark a device revoked
+but never say so, and refuse a friend request that can be sent again a second
+later. M6 would otherwise ship a UI with buttons that have no messages behind
+them.
+
+- `RevokeShareAccess`: an owner removes a member (§11).
+- `ListDevices` and `RevokeDevice`: a user sees their devices and signs one
+  out. A device may revoke itself; only an authorized device may revoke
+  another. Revoking closes that device's live connections.
+- `BlockUser` and `UnblockUser` (§10).
+- `ChangeHandle`: a new username under the existing `UserId`, allocated by the
+  same rules as registration.
+- `DeleteAccount`: removes users, devices, friendships, memberships, and key
+  envelopes; leaves published snapshots owned by nobody and unreachable.
+
+Gate: each command's effect survives a restart, a revoked device's live
+connections close, a blocked user cannot re-request, and a deleted account
+frees its handle.
+
 ### M6: Flutter integration
 
 - Add only `portalis-nexus-client` to the existing backend.
-- Add Flutter Rust Bridge façade for connection, identity, friends, presence,
-  collections, and errors.
+- Add a Flutter Rust Bridge façade for connection, identity, device linking
+  and revocation, friends, presence, shares, key envelopes, swarm discovery,
+  and errors.
+- Implement the canonical manifest, `SnapshotId`, and capsule of §11, and the
+  device identity migration of §9.
+- Mark private shares' torrents private and keep them off DHT, PEX, and local
+  discovery (§11).
 - Keep protobuf and sockets out of Dart.
 - Add runtime feature flag.
 
-Gate: macOS, iOS, Android, and Linux builds pass with legacy behavior unchanged
-when disabled.
+Gate: macOS, iOS, Android, and Linux builds pass with legacy behavior
+unchanged when disabled; two devices of one user and two users exchange a
+share end to end; a capsule written by one platform opens on another.
+
+When Nexus is unreachable the client keeps working against its local state and
+its existing discovery paths. Publications wait rather than fail, since a
+publication is a revision of durable local state and not a request that can be
+abandoned; everything else refreshes on reconnect (§8).
 
 ### M7: Dual-protocol migration
 
@@ -925,14 +1178,22 @@ configuration-only rollback.
 
 1. Build and test Portalis Nexus without changing current app behavior.
 2. Import the stable client façade into the Flutter Rust backend.
-3. Authenticate using the existing device identity.
-4. Register existing collections without changing local IDs or info hashes.
-5. Publish heads through both paths during migration.
-6. Read server state first and retain current fallbacks.
-7. Prevent duplicate collection creation and media import across paths.
-8. Measure both paths and stage rollout by cohort.
-9. Keep rollback as runtime configuration.
-10. Remove legacy address encoding only after the support window expires.
+3. Authenticate using the existing device identity, and generate the X25519
+   key beside it (§9).
+4. Register existing collections without changing local IDs or info hashes,
+   minting a `ShareId` and share key for each (§11).
+5. Rewrite manifest entries into the canonical encoding as their collections
+   are published. Entries signed by earlier builds concatenate a
+   variable-length name directly before an optional thumbnail hash, so two
+   different names and thumbnails can produce the same signed bytes; the
+   length-prefixed encoding of §11 removes that, and re-signing is what
+   applies the fix.
+6. Publish heads through both paths during migration.
+7. Read server state first and retain current fallbacks.
+8. Prevent duplicate collection creation and media import across paths.
+9. Measure both paths and stage rollout by cohort.
+10. Keep rollback as runtime configuration.
+11. Remove legacy address encoding only after the support window expires.
 
 ## 21. Initial Acceptance Objectives
 
@@ -964,6 +1225,12 @@ challenges, collection secrets, or plaintext private descriptors.
 4. Collection-head history and command-receipt retention.
 5. Measured trigger and technology for horizontal scaling.
 6. Final load targets based on expected users, friends, collections, and peers.
+7. Whether media payloads are encrypted before seeding, which §11 defers by
+   resting v1 on info-hash secrecy. The answer decides whether a former member
+   can still fetch pieces they hold an info hash for.
+8. Retention of a deleted account's published snapshots, which §19's M5.5
+   leaves owned by nobody rather than removing them from every member's
+   history.
 
 ## 24. Initial Technology Set
 

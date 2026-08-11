@@ -117,6 +117,20 @@
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
 
+- Specified everything the Portalis clients need before M6 can start. The
+  capsule format and the canonical manifest encoding behind `SnapshotId` are
+  now defined byte for byte: both were contracts every client must agree on
+  that no client could have derived, and Nexus is structurally unable to
+  catch a disagreement about either. Device identity is reconciled — the app
+  adopts the derived identifier and manifest entries carry the public key —
+  along with where the X25519 key lives and what losing it costs. Private
+  shares get a stated threat model: v1 rests on info-hash secrecy and
+  requires private torrents kept off DHT, PEX, and local discovery, which is
+  weaker than encrypting payloads and now says so. Rate limits and per-user
+  quotas have numbers, blocking has rules, and a new M5.5 milestone adds the
+  commands a client cannot build without: removing a share member, listing
+  and revoking devices, blocking, changing a handle, and deleting an account.
+
 - Extended the Nexus demo walkthrough through M4 and M5, so both milestones
   are exercised by running them rather than only by their tests: an encrypted
   share published and advanced, a stale revision refused, a private share and
