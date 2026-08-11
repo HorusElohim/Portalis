@@ -83,8 +83,9 @@ Portalis/
     │       └── swarm.proto
     ├── crates/
     │   ├── protocol/                 # limits, ids, frame, validate
-    │   ├── client/                   # error, protocol, pending, reconnect,
-    │   │                             #   config, transport/
+    │   ├── client/                   # Portable Nexus engine: identity,
+    │   │                             #   sessions, channels, codecs,
+    │   │                             #   transport, reconnect
     │   └── server-core/              # Pure domain/application logic
     ├── apps/
     │   └── server/                   # config, state, shutdown, health,
@@ -116,13 +117,117 @@ portalis-nexus-client = { path = "../../../portalis-nexus/crates/client" }
 
 ### `client`
 
-- Maintains one authenticated socket connection.
-- Reconnects with exponential backoff and jitter.
-- Correlates responses with requests.
-- Exposes typed commands and event streams.
-- Uses bounded queues and request concurrency.
-- Restores subscriptions and refreshes durable state after reconnecting.
-- Has no MongoDB, Axum, server-core, or Linux-only dependency.
+- The client crate is the portable **Nexus engine**. It owns authenticated
+  sessions, device identity, request correlation, reconnect, bounded queues,
+  channel negotiation, routing metadata, and codec-neutral data delivery.
+- Protobuf is the mandatory control protocol. An authorized data channel may
+  carry bounded raw bytes, a named protobuf schema, JSON, or a later codec;
+  codecs are explicit and negotiated, never inferred from payload contents.
+- It exposes both a byte-oriented channel and typed codec adapters. A codec
+  adapter validates its protocol name, schema version, limits, and decoding;
+  callers never deserialize an unclassified network payload.
+- The existing canonical manifest, capsule, key-envelope, and handoff codecs
+  are one higher-level protocol using the Nexus engine. They do not define the
+  engine and do not make Torrent a Nexus dependency.
+- Has no MongoDB, Axum, Flutter, server-core, or Linux-only dependency.
+
+### Portalis composes two engines
+
+The final Portalis application uses two sibling engines with distinct jobs:
+
+- **Nexus engine:** authenticates devices, establishes safe peer channels,
+  routes control and application data, correlates requests, reconnects, and
+  supplies presence and rendezvous.
+- **Torrent engine:** creates and validates torrents, transfers file pieces,
+  seeds content, and applies the selected discovery policy.
+
+The Rust backend coordinates them. For an online collection share it publishes
+the manifest and private torrent descriptor through a Manifest-over-Nexus
+protocol, obtains peer candidates from Nexus, and gives those candidates to
+the Torrent engine. Nexus does not transfer the collection's file pieces;
+Torrent does not authenticate friends or carry application messages.
+
+The backend also owns secure device-key storage, local collection persistence,
+and the Flutter Rust Bridge façade. The existing invite/`collab_sync` path
+remains isolated behind its fallback flag until cutover.
+
+```text
+Flutter UI
+    │
+    ▼
+Portalis backend coordinator ─────────────► local + secure storage
+    │                              │
+    ▼                              ▼
+Nexus engine                  Torrent engine
+identity, handshake,          descriptors, pieces,
+channels, routing             seeding, discovery policy
+    │                              ▲
+    ▼                              │ peer candidates
+Nexus server ──────────────────────┘
+```
+
+### Safe codec-neutral channels
+
+Nexus version 1 keeps its existing protobuf `Envelope` as the control plane.
+Channel open, acceptance, rejection, closure, acknowledgements, and errors are
+typed control messages. Only after both the authenticated session and channel
+policy permit it may a `DataFrame` carry application payload bytes.
+
+Every open channel fixes these values before data is accepted:
+
+- An application protocol name and major version, for example
+  `portalis.manifest.v1`.
+- The exact peer device or server service and the authorization that permits
+  that route.
+- A security mode. Peer-device channels default to end-to-end authenticated
+  encryption; a server-terminated service channel must request that weaker
+  boundary explicitly.
+- One codec identifier (`raw`, `protobuf`, or `json` in version 1), an optional
+  schema identifier, and a maximum payload size no larger than the connection
+  limit.
+- Delivery semantics: correlated request/response or an ordered event stream.
+
+Each data frame identifies its channel, message, correlation when present,
+codec, schema version, and payload length. The receiver validates that header
+against the accepted channel before exposing the payload. Unknown protocols,
+codecs, schemas, versions, oversized frames, unauthorized routes, and invalid
+sequences fail closed with a typed error. There is no content sniffing and no
+implicit JSON fallback.
+
+`raw` means an application receives `bytes`; it does not bypass framing,
+bounds, authorization, encryption, replay protection, or backpressure. The
+protobuf and JSON adapters encode and decode application values above that
+secure byte API. JSON is suitable for an explicit application protocol or
+diagnostics, but the Nexus control plane remains protobuf so there is one
+authoritative handshake and error model.
+
+For a peer channel, Nexus performs a mutually authenticated key agreement
+using the devices' registered signing and encryption identities. Its signed
+transcript binds both device IDs, the server authority, channel ID, application
+protocol, codec, schema version, limits, and both fresh contributions. Derived
+send and receive keys are unique to that channel; ordered sequence numbers are
+authenticated and replayed frames are rejected. The precise wire construction
+must use a reviewed standard protocol or library and fixed cross-platform test
+vectors rather than a new ad-hoc handshake.
+
+TLS still protects each client-to-server leg and routing metadata, while the
+Nexus server sees only peer-channel ciphertext and its bounded routing header.
+Object formats that survive a connection, such as stored manifest capsules
+and share-key envelopes, retain their own end-to-end encryption; live-channel
+security is not a substitute for encryption at rest on an untrusted server.
+
+### Manifest sharing over Nexus
+
+Manifest sharing is the first application protocol on the generic Nexus
+engine. Its module owns canonical manifests, snapshots, capsules, key
+envelopes, torrent handoffs, share revisions, and replay-safe publication. The
+Portalis backend persists its binding to a local collection and coordinates
+its outputs with the Torrent engine.
+
+This layering allows another application protocol to use Nexus channels
+without importing collection or BitTorrent concepts. It also keeps one
+canonical Manifest implementation across Portalis platforms without turning
+Nexus itself into a manifest-specific stack.
 
 ### `server-core`
 
@@ -1276,28 +1381,38 @@ Protocol and portable-client work, in order:
    the protocol constants, keeping one complete handoff below the 8 MiB frame
    limit.
 
-Portalis backend work, in order:
+Nexus engine and Portalis integration work, in order:
 
-1. Add only `portalis-nexus-client` as the Nexus dependency and implement its
-   signer with the existing Ed25519 identity. Generate the independent X25519
-   key before first registration.
-2. Add an optional local Nexus binding beside a collection: `ShareId`, share
-   key, acknowledged revision and snapshot, plus the exact private `.torrent`
-   bytes for each entry. It is one source of truth for retries and handoffs.
-3. Add a Nexus-only creation path that builds torrents with `private = true`
+1. **Done:** import only `portalis-nexus-client` as the Nexus dependency and
+   implement its signer with the existing Ed25519 identity. Generate the
+   independent X25519 key before first registration.
+2. Specify and add the generic Nexus data-channel contract: mutually
+   authenticated open/accept, exact-device routing, end-to-end channel keys,
+   replay protection, explicit protocol/codec/schema metadata, payload limits,
+   typed errors, and backpressure. Use a reviewed handshake construction and
+   preserve the existing typed client API over the same session runtime.
+3. Provide byte, protobuf, and JSON channel adapters. Protobuf remains the
+   only control-plane codec; adapter negotiation and boundary tests prove that
+   unknown, mismatched, malformed, or oversized payloads fail closed.
+4. Implement Manifest sharing as the first higher-level Nexus protocol. Keep
+   canonical-entry construction, capsules, handoffs, publication ordering,
+   and retry/idempotency rules together in that protocol module.
+5. Persist one backend collection binding containing `ShareId`, share key,
+   acknowledged revision and snapshot, and the exact private `.torrent` bytes.
+6. Add the Torrent-engine path that creates torrents with `private = true`
    from birth. Do not convert existing collection torrents in this slice.
-4. Publish revision one, grant the selected accepted friend, seal the share key
-   to the returned device keys, and send one handoff per manifest entry.
-5. On B, consume the key envelope and handoff, validate both the descriptor and
-   manifest, create or find the local collection by `ShareId`, and add the
-   torrent from bytes.
-6. Announce A's lease and give B only Nexus lookup results as initial peers for
-   that private torrent. No DHT, PEX, tracker, local discovery, or bare-magnet
-   resolution is allowed on this path.
-7. Expose the smallest Flutter Rust Bridge façade needed to select a friend,
-   start the share, observe waiting/failed/receiving state, and report typed
-   errors. Protobuf and sockets remain outside Dart.
-8. Put the entire path behind the runtime feature flag; disabled behavior is
+7. Publish revision one over Nexus, grant the selected accepted friend, seal
+   the key to each recipient device, and deliver encrypted descriptor bytes
+   through an authorized Manifest channel.
+8. On B, verify and persist the Manifest state, validate/add the descriptor to
+   the Torrent engine, and create or find the local collection by `ShareId`.
+9. Refresh A's Nexus lease and give B's Torrent engine only Nexus peer
+   candidates. Permit no DHT, PEX, tracker, local discovery, or bare-magnet
+   resolution on this private path.
+10. Expose the smallest Flutter Rust Bridge façade needed to select a friend,
+   start a share, observe waiting/failed/receiving state, and report typed
+   errors. Nexus codecs, sockets, and engine internals remain outside Dart.
+11. Put the entire path behind the runtime feature flag; disabled behavior is
    byte-for-byte the legacy behavior.
 
 Automated gate:
