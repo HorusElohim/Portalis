@@ -18,6 +18,15 @@
   transactional snapshot history and compare-and-swap heads so revisions
   cannot regress. The portable client exposes the complete flow.
 
+- Started Nexus M6 with the client-side foundation the Portalis app needs to
+  publish a share: the canonical manifest, the `SnapshotId` taken over it, and
+  the capsule that carries it. Both live in the portable client crate, so
+  every platform shares one implementation — Nexus stores a capsule it cannot
+  open and a content root it cannot recompute, and so cannot catch two clients
+  that disagree about a byte. Sealing is deterministic, which is what makes a
+  retried publication byte-identical, and a capsule is bound to its share,
+  revision, and snapshot so it cannot be lifted onto another.
+
 - Added Nexus share-membership revocation, so an owner can remove someone
   from a share rather than only ever adding them. Nexus stops answering that
   user with summaries, capsules, envelopes, and handoffs; it cannot reach the
