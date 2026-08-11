@@ -84,10 +84,11 @@
 
 <!-- Behaviour and UX changes go here before the next release. -->
 
-- Moved the Nexus workspace under `portalis/rust/nexus` beside the native
-  backend and torrent dependency. Portalis now has one Rust engine tree, and
-  the backend imports the Nexus client directly from that tree rather than
-  reaching into a repository-level sibling workspace.
+- Unified the native backend and Nexus into one Cargo workspace rooted at
+  `portalis/rust/backend`. The Flutter library is now the Nexus application
+  composition root; protocol, client, and server remain focused internal
+  crates, while Torrent is an engine owned by the same lifecycle rather than
+  a sibling backend joined through a compatibility binding.
 
 - Standardized structured tracing across every Nexus executable and both
   WebSocket boundaries. Clients and servers now correlate safe operation and

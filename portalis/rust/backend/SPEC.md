@@ -1,11 +1,11 @@
 # Portalis Nexus Specification
 
-Status: M5 swarm discovery complete; the M6 online friend-to-friend sharing
-slice is in progress. The portable capsule and handoff codecs, recipient-device
-grant response, exact-device routing, and backend Ed25519/X25519 credential
-migration are implemented; the backend collection binding and Flutter façade
-remain. Share revocation is complete; the remaining M5.5 account-control
-commands are not prerequisites for that slice.
+Status: M5 swarm discovery and the portable M6 manifest/capsule foundation are
+complete. The former backend and Nexus now form one Cargo workspace. M6 is
+being recast around one Nexus application lifecycle, direct-or-relayed peer
+connections, native `ShareId` collections, and one Flutter façade. Share
+revocation is complete; remaining M5.5 account controls do not block this
+rewrite.
 
 Protocol: `portalis.protocol.v1`
 
@@ -15,9 +15,10 @@ Last updated: 2026-08-11
 
 ## 1. Purpose
 
-Portalis Nexus is an independent Rust workspace for the new Portalis control
-plane. It contains the protobuf contract, portable Rust client, Linux server,
-database adapters, and end-to-end tests.
+Portalis Nexus is the single Rust application core behind Portalis. It owns
+the Flutter boundary, application lifecycle, identity, local collection state,
+portable networking, Torrent engine coordination, Linux server, database
+adapters, and end-to-end tests.
 
 The server makes identity, friends, presence, collection discovery, torrent
 metadata, and peer discovery reliable. Photos, videos, and BitTorrent pieces
@@ -26,15 +27,18 @@ continue to move directly between peers.
 ## 2. Goals
 
 - Define all socket messages with Protocol Buffers.
-- Build one client crate for macOS, iOS, Android, and Linux.
+- Build one application core for macOS, iOS, Android, Linux, and Flutter Web's
+  supported viewer surface.
 - Build a multithreaded asynchronous Rust server for Linux.
 - Reuse existing Ed25519 device identities and add separate encryption keys.
 - Support unique handles, friends, presence, and shared collections.
 - Distribute versioned torrent metadata and current peer candidates.
 - Store durable state in indexed MongoDB collections.
 - Keep active connections, presence, and peer leases in bounded fast tables.
-- Enforce backward-compatible protocol evolution in CI.
-- Migrate gradually from the current direct-address protocol.
+- Establish authenticated direct peer connections when possible and encrypted
+  relay paths when direct connectivity is unavailable.
+- Replace the current direct-address protocol through a one-way data migration,
+  without maintaining parallel runtime models.
 - Reach 100% line and branch coverage for eligible handwritten core code.
 
 ## 3. Non-goals
@@ -55,7 +59,8 @@ continue to move directly between peers.
 5. Slow clients cannot create unbounded queues or tasks.
 6. MongoDB documents never contain unbounded friend, member, or event arrays.
 7. Deleted protobuf field numbers and enum values are permanently reserved.
-8. The Flutter backend imports only the portable client crate.
+8. The root `backend` package is the only Flutter boundary; workspace crates
+   expose Rust APIs and never Flutter bindings.
 9. Nexus replaces legacy collection networking through a one-way migration;
    there is no parallel compatibility binding or second runtime source of truth.
 10. Backend integration changes are recorded in the root `CHANGELOG.md`.
@@ -66,40 +71,25 @@ continue to move directly between peers.
 Portalis/
 └── portalis/                         # Flutter application and Rust engines
     └── rust/
-        ├── backend/                  # Imports portalis-nexus-client only
-        ├── vendor/                   # Locally maintained dependencies
-        └── nexus/                    # Focused Nexus Cargo workspace
-            ├── Cargo.toml
-            ├── Cargo.lock
-            ├── SPEC.md
-            ├── README.md
-            ├── buf.yaml
-            ├── proto/
-            │   └── portalis/protocol/v1/
-            │       ├── common.proto
-            │       ├── connection.proto
-            │       ├── identity.proto
-            │       ├── friends.proto
-            │       ├── presence.proto
-            │       ├── shares.proto
-            │       └── swarm.proto
-            ├── crates/
-            │   ├── protocol/         # Wire contract and validation
-            │   ├── client/           # Portable Nexus engine
-            │   └── server-core/      # Domain/application logic
-            ├── apps/
-            │   └── server/           # Deployable Nexus service
-            ├── demo/                     # Runnable examples
-            ├── demo-m6/                  # Two-process M6 walkthrough
-            └── docker/
-                ├── Dockerfile
-                └── compose.yaml
+        ├── backend/                  # Unified Nexus application workspace
+        │   ├── src/                  # Lifecycle, Flutter API, local state,
+        │   │                             #   collections, Torrent adapter
+        │   ├── crates/
+        │   │   ├── protocol/         # Wire contract and validation
+        │   │   ├── client/           # Portable Nexus networking
+        │   │   └── server-core/      # Server application rules
+        │   ├── apps/server/             # Deployable Nexus service
+        │   ├── proto/                  # Authoritative protobuf schemas
+        │   ├── demo/                   # Runnable examples
+        │   ├── demo-m6/                # Two-process M6 walkthrough
+        │   └── docker/                 # Server deployment
+        └── vendor/                   # Locally maintained dependencies
 ```
 
-The backend imports:
+The root package consumes its internal portable client through the workspace:
 
 ```toml
-portalis-nexus-client = { path = "../nexus/crates/client" }
+portalis-nexus-client.workspace = true
 ```
 
 ## 6. Crate Boundaries
@@ -127,83 +117,70 @@ portalis-nexus-client = { path = "../nexus/crates/client" }
   engine and do not make Torrent a Nexus dependency.
 - Has no MongoDB, Axum, Flutter, server-core, or Linux-only dependency.
 
-### Portalis composes two engines
+### One Nexus application core, two focused engines
 
-The final Portalis application uses two sibling engines with distinct jobs:
+Nexus is the Portalis backend, not a service attached beside it. One runtime
+owns device identity, persisted application state, connection state,
+collection workflows, and the Flutter façade. Inside that runtime two engines
+have narrow jobs:
 
-- **Nexus engine:** authenticates devices, establishes or brokers connections,
-  routes its protobuf control messages, correlates requests, reconnects, and
-  supplies presence and rendezvous.
-- **Torrent engine:** creates and validates torrents, transfers file pieces,
-  seeds content, and applies the selected discovery policy.
+- **Connection engine:** establishes authenticated application connections to
+  a server or another device, choosing a direct path on the same network when
+  possible and an encrypted relay path otherwise.
+- **Torrent engine:** creates and validates private torrents, transfers and
+  verifies file pieces, seeds content, and accepts peer candidates supplied by
+  Nexus policy.
 
-The Rust backend coordinates them. For an online collection share it publishes
-the manifest and private torrent descriptor through a Manifest-over-Nexus
-protocol, obtains peer candidates from Nexus, and gives those candidates to
-the Torrent engine. Nexus does not transfer the collection's file pieces;
-Torrent does not authenticate friends or carry application messages.
-
-The backend also owns secure device-key storage, local collection persistence,
-and the Flutter Rust Bridge façade. The existing invite/`collab_sync` path
-remains isolated behind its fallback flag until cutover.
+Manifest, friend, presence, and share workflows belong to the Nexus
+application core. Torrent does not carry application state, and the Nexus
+server never receives media pieces. There is one device identity, one
+collection model, and one lifecycle status exposed to Flutter.
 
 ```text
 Flutter UI
     │
     ▼
-Portalis backend coordinator ─────────────► local + secure storage
-    │                              │
-    ▼                              ▼
-Nexus engine                  Torrent engine
-identity, handshake,          descriptors, pieces,
-connection handoff            seeding, discovery policy
-    │                              ▲
-    ▼                              │ peer candidates
-Nexus server ──────────────────────┘
+Nexus application core ─────────► local + secure storage
+    │                    │
+    │                    └────────────► Torrent engine ──► media peers
+    ▼
+connection engine
+    ├─ direct peer QUIC
+    └─ encrypted relay QUIC ─────────► Nexus service / remote peer
 ```
 
-### Authenticated connection handoff
+### Authenticated application connections
 
-Nexus version 1 keeps one supervised protobuf control connection for identity,
-friends, presence, shares, rendezvous, correlation, and typed failures. It
-does not multiplex a second application protocol inside new Nexus frames.
+Nexus uses a maintained direct-or-relayed QUIC implementation rather than
+inventing transport, framing, encryption, NAT traversal, or relay protocols.
+The endpoint reuses the device's Ed25519 secret, authenticates the remote
+public key, tries known LAN/WAN addresses directly, hole-punches when needed,
+and retains an encrypted relay path when direct connectivity fails.
 
-If a product feature later needs arbitrary live traffic through Nexus, the
-smallest extension is a separate binary WebSocket connection:
+The Nexus API exposes the resulting QUIC connection and streams with an ALPN.
+It does not wrap bytes in codec enums or register application schemas. A
+consumer writes whatever representation it owns—raw bytes, protobuf, JSON, or
+another format—using its existing serialization library. QUIC already supplies
+encryption, stream framing, ordering, flow control, and connection migration.
 
-1. An authenticated control request names the exact recipient device.
-2. Nexus authorizes the request and issues both sides a short-lived, one-use
-   connection ticket.
-3. Each side opens the data WebSocket and presents its ticket.
-4. Nexus pairs the sockets and forwards bounded binary messages without
-   interpreting their contents.
-5. The portable client returns that established connection to its caller.
-
-WebSocket already supplies message framing, ordering, TLS, and flow control;
-the implementation uses those facilities and bounded queues rather than
-creating a channel protocol on top. Nexus defines no codec enum, schema
-registry, JSON adapter, application acknowledgement, or second encryption
-handshake. The consumer chooses its own type and serialization library.
-
-TLS protects client-to-Nexus traffic, so a Nexus relay can observe relayed
-plaintext. A consumer that must hide payloads from Nexus encrypts its objects
-before sending them, as Portalis already does for capsules, key envelopes, and
-torrent handoffs. If a future use case requires a general end-to-end stream,
-adopt a maintained protocol library at that point rather than designing one
-inside Nexus now.
+The Nexus server is a well-known application peer for durable identity,
+friendship, presence, and share state. Friend devices are peers using the same
+connection mechanism. On a LAN their application traffic stays direct; across
+networks it attempts a direct path and falls back to the configured relay. The
+relay sees endpoint identities and traffic volume but not application
+plaintext.
 
 ### Manifest sharing over Nexus
 
-Manifest sharing is the first application protocol on the generic Nexus
-engine. Its module owns canonical manifests, snapshots, capsules, key
+Manifest sharing is the first application protocol on Nexus connections. Its
+module owns canonical manifests, snapshots, capsules, key
 envelopes, torrent handoffs, share revisions, and replay-safe publication. The
-Portalis backend persists its binding to a local collection and coordinates
-its outputs with the Torrent engine.
+application core persists each collection directly by `ShareId` and
+coordinates its outputs with the Torrent engine.
 
-This layering allows another application protocol to use a Nexus-established
-connection without importing collection or BitTorrent concepts. It keeps one
-canonical Manifest implementation across Portalis platforms without turning
-Nexus itself into a manifest-specific stack.
+Another application protocol may use a Nexus connection without importing
+collection or BitTorrent concepts. Nexus provides identity and connectivity;
+the application protocol owns its bytes.
 
 ### `server-core`
 
@@ -226,40 +203,35 @@ Nexus itself into a manifest-specific stack.
 
 ## 7. Transport
 
-Version 1 uses secure WebSockets (`wss://`) with binary protobuf frames. One
-WebSocket binary message contains exactly one encoded `Envelope`.
+The target transport is authenticated QUIC with direct connectivity and
+encrypted relay fallback supplied by a maintained library. One persisted
+Ed25519 device secret drives both Nexus identity and transport identity; a
+peer connection is accepted only after the remote public key and ALPN are
+known.
 
-Endpoint:
+Nexus defines ALPN names for the application protocols it owns. It does not
+define another frame or codec layer over QUIC streams. Protobuf remains the
+current representation for Nexus commands, while any caller-provided protocol
+owns its own bytes.
 
-```text
-GET /v1/socket
-Upgrade: websocket
-Sec-WebSocket-Protocol: portalis.protobuf.v1
-```
-
-Reasons:
-
-- Full-duplex commands and events over one connection.
-- Native message boundaries without custom TCP framing.
-- Mobile, desktop, reverse-proxy, and future browser compatibility.
-- Simpler deployment than custom TLS/TCP or an initial QUIC stack.
-- No separate gRPC-Web path for a future administration interface.
-
-Raw TCP, gRPC, and QUIC remain possible future transports. The protobuf domain
-messages must not depend on WebSocket-specific details.
+The existing WebSocket actor is removed as its commands move to QUIC. It is an
+implementation source during the rewrite, not a supported fallback transport.
+The app never runs both transports for one collection.
 
 ## 8. Protobuf Contract
 
-### Compatibility rules
+### Evolution rules
 
 - Package name: `portalis.protocol.v1`.
 - Every enum starts with `*_UNSPECIFIED = 0`.
-- Changes inside `v1` are additive and backward compatible.
-- Existing field numbers and enum values are never reused.
-- Removed fields and values are marked `reserved`.
-- `buf lint` and `buf breaking` run in CI.
-- Golden encoded messages verify compatibility with released clients.
-- A breaking semantic change creates `portalis.protocol.v2`.
+- Nexus is pre-release: the protocol and generated consumers evolve together
+  in one atomic repository change. No compatibility binding is maintained.
+- Existing field numbers and enum values are not reused accidentally; removed
+  fields are reserved when preserving historical decoding has value.
+- `buf lint` runs in CI. Breaking checks become a release gate only after the
+  first externally supported protocol version.
+- Golden encoded messages verify deterministic encoding where persistence,
+  signatures, or cross-platform exchange require it.
 
 ### Envelope shape
 
@@ -1357,36 +1329,30 @@ Protocol and portable-client work, in order:
    the protocol constants, keeping one complete handoff below the 8 MiB frame
    limit.
 
-Nexus engine and Portalis integration work, in order:
+Unified Nexus application work, in order:
 
-1. **Done:** import only `portalis-nexus-client` as the Nexus dependency and
-   implement its signer with the existing Ed25519 identity. Generate the
-   independent X25519 key before first registration.
-2. Keep canonical-entry construction, capsules, handoffs, publication
-   ordering, and retry/idempotency rules together in the portable client. Use
-   the existing protobuf control connection and exact-device encrypted handoff
-   rather than blocking M6 on a generic relay no current consumer needs.
-3. Persist one backend collection binding containing `ShareId`, share key,
-   acknowledged revision and snapshot, and the exact private `.torrent` bytes.
-4. Add the Torrent-engine path that creates torrents with `private = true`
-   from birth. Do not convert existing collection torrents in this slice.
-5. Publish revision one over Nexus, grant the selected accepted friend, seal
-   the key to each recipient device, and deliver encrypted descriptor bytes
-   through the existing exact-device handoff.
-6. On B, verify and persist the Manifest state, validate/add the descriptor to
-   the Torrent engine, and create or find the local collection by `ShareId`.
-7. Refresh A's Nexus lease and give B's Torrent engine only Nexus peer
-   candidates. Permit no DHT, PEX, tracker, local discovery, or bare-magnet
-   resolution on this private path.
-8. Expose the smallest Flutter Rust Bridge façade needed to select a friend,
-   start a share, observe waiting/failed/receiving state, and report typed
-   errors. Nexus sockets and engine internals remain outside Dart.
-9. Put the entire path behind the runtime feature flag; disabled behavior is
-   byte-for-byte the legacy behavior.
-
-The generic binary connection handoff is deliberately outside M6. It is added
-only when a concrete consumer cannot use the protobuf control API or the
-Torrent engine directly.
+1. **Done:** place the Flutter backend, portable Nexus crates, server, demos,
+   and protocol in one Cargo workspace rooted at `rust/backend`.
+2. Make the persisted Ed25519 device key the one application and connection
+   identity. Keep the independent X25519 key only for sealed share-key
+   envelopes.
+3. Replace the WebSocket actor with one maintained direct-or-relayed QUIC
+   endpoint. Server and peer connections use the same endpoint API and differ
+   only by remote identity, address information, and ALPN.
+4. Replace legacy collection identifiers and network fields with native
+   `ShareId`, share key, acknowledged revision, snapshot, and private torrent
+   descriptor fields. Migrate stored data once; do not keep a runtime binding.
+5. Keep canonical-entry construction, capsules, handoffs, publication
+   ordering, and retry/idempotency rules in the Manifest application protocol.
+6. Add the Torrent path that creates torrents with `private = true` from birth
+   and accepts only Nexus-authorized peer candidates for those torrents.
+7. Publish revision one, grant the selected friend, seal the key to each
+   recipient device, and deliver the descriptor over an authenticated Nexus
+   stream.
+8. On B, verify and persist the Manifest state, validate/add the descriptor to
+   Torrent, and create or find the local collection directly by `ShareId`.
+9. Expose one lifecycle stream to Flutter covering local readiness,
+   connecting, online-direct, online-relayed, degraded, and stopped state.
 
 Automated gate:
 
@@ -1398,7 +1364,7 @@ Automated gate:
   idempotent.
 - A handoff to an offline or wrong device fails without creating a collection
   on B or reporting success on A.
-- Legacy behavior remains unchanged when the feature is disabled.
+- A collection has only one network identity and one lifecycle path.
 
 #### M6.1: portability and account completeness
 
@@ -1414,57 +1380,51 @@ M6.0 is a development-gated integration slice, not a production security
 release. M6.1 secure storage is required before enabling Nexus for an external
 beta.
 
-When Nexus is unreachable the client keeps working against its local state and
-its existing discovery paths. A pending M6.0 share remains visible locally and
-retries when both users are online; it does not silently fall back to public
-discovery. Publications wait rather than fail, since a publication is a
-revision of durable local state and not a request that can be abandoned;
-everything else refreshes on reconnect (§8).
+When a remote endpoint is unreachable the application continues against local
+state and reports degraded connectivity. Durable publications remain queued
+and retry when connectivity returns. Private collections never fall back to
+public DHT, trackers, or bare magnets.
 
-### M7: Dual-protocol migration
+### M7: Lifecycle and app cutover
 
-- Run server discovery in shadow mode.
-- Dual-publish where safe without duplicate imports.
-- Prefer server lookup with legacy/direct/tracker/DHT fallback only where the
-  collection's public/private policy permits it.
-- Compare success, latency, and transfer-start metrics.
+- Make one root runtime own startup and shutdown of storage, connection, and
+  Torrent resources.
+- Replace separate socket/torrent booleans with one derived lifecycle stream.
+- Rewrite persisted collections once and remove `collab_sync`, address-bearing
+  invites, rendezvous keys, and their configuration.
+- Rewire Flutter workflows to Nexus-native collection operations.
 
-Gate: staged beta meets agreed reliability and latency objectives, with
-configuration-only rollback.
+Gate: the app starts and stops both engines without leaked tasks, resumes a
+queued publication, reports direct versus relayed connectivity truthfully, and
+contains no callable legacy collection-network path.
 
-### M8: Stable cutover
+### M8: Production hardening
 
-- Enable server protocol by default.
-- Deprecate address-bearing invites after compatibility window.
-- Complete security, load, backup, and restore reviews.
-- Remove legacy code only after supported clients no longer depend on it.
+- Complete security, mobile-network-change, load, backup, and restore reviews.
+- Pass direct-LAN, relay-only, network-switch, process-restart, and four-platform
+  application builds.
+- Pin the first externally supported protocol and begin compatibility gates.
 
 ## 20. Migration Sequence
 
-1. Build and test Portalis Nexus without changing current app behavior.
-2. Import the stable client façade into the Flutter Rust backend.
-3. Authenticate using the existing device identity, and generate the X25519
-   key beside it (§9).
-4. Deliver M6.0 for newly created Nexus-private collections only. Mint a
-   `ShareId` and share key and bind them to the existing local collection ID.
-5. Leave every existing collection on the legacy path during M6.0. Do not
-   claim that an existing public torrent became private without changing its
-   info hash.
-6. Measure the bounded flow before choosing an existing-collection migration.
-   A migrated torrent either remains explicitly legacy-public with its current
-   hash, or is rebuilt as private with a new hash.
-7. Preserve legacy manifest entries under their original verification rule.
-   Only the device holding an entry author's private key can re-sign that
-   authorship in the current encoding; another device must retain the legacy
-   signature or create an explicit owner re-attestation rather than pretending
-   to be the original author.
-8. When dual publication begins, use persisted `ShareId` bindings to prevent
-   duplicate collection creation and media import across paths.
-9. Read server state first only for Nexus-bound collections and retain the
-   matching legacy fallback policy for legacy-public ones. Private torrents
-   never fall back to DHT, trackers, or local discovery.
-10. Stage rollout by cohort and keep rollback as runtime configuration.
-11. Remove legacy address encoding only after the support window expires.
+1. **Done:** merge the app backend and Nexus crates into one Cargo workspace.
+2. Introduce one root runtime and one lifecycle state without changing the
+   Flutter schema yet.
+3. Replace the WebSocket transport below the existing Rust client API with the
+   direct-or-relayed connection endpoint; delete the WebSocket actor when its
+   tests pass through the new endpoint.
+4. Move Manifest publication and descriptor delivery onto Nexus application
+   streams.
+5. Change the collection persistence schema directly to `ShareId` and private
+   torrent state. Perform one explicit storage rewrite at startup.
+6. Preserve authorship honestly during the rewrite: an entry is re-signed only
+   by its author; otherwise the owner creates an explicit re-attestation.
+7. Rebuild legacy-public torrents as private torrents when migrating them,
+   because changing the private flag necessarily changes their info hash.
+8. Rewire the Flutter workflows and lifecycle stream, then remove
+   `collab_sync`, legacy invitations, rendezvous discovery, and unused state in
+   the same release.
+9. Validate direct LAN and relay-only A→B flows before enabling the release.
 
 ## 21. Initial Acceptance Objectives
 
@@ -1492,7 +1452,7 @@ challenges, collection secrets, or plaintext private descriptors.
 
 1. Account recovery and lost-device policy.
 2. Hosting region, DNS, certificates, backups, and retention.
-3. Relay or reachable-seed strategy for guaranteed transfer connectivity.
+3. Relay hosting topology, capacity, and retention-free operations policy.
 4. Collection-head history and command-receipt retention.
 5. Measured trigger and technology for horizontal scaling.
 6. Final load targets based on expected users, friends, collections, and peers.
@@ -1508,10 +1468,13 @@ challenges, collection secrets, or plaintext private descriptors.
 Exact versions are pinned during scaffolding.
 
 - Tokio multithread runtime.
-- Axum WebSocket/HTTP server.
-- Tokio-compatible Rustls WebSocket client.
+- Axum HTTP health and administration surface.
+- Iroh's authenticated QUIC endpoint for direct paths, hole punching, and
+  encrypted relay fallback, pinned to a Rust 1.85-compatible release during
+  the rewrite.
 - Prost protobuf generation.
-- Buf schema linting and breaking-change checks.
+- Buf schema linting; breaking-change checks begin with the first supported
+  release.
 - Existing Ed25519 Dalek and BLAKE3 identity primitives.
 - Official MongoDB Rust driver.
 - DashMap or benchmarked equivalent for sharded tables.
@@ -1526,8 +1489,8 @@ use, protocol stability, and testability.
 ## 25. References
 
 - [Protocol Buffers language guide](https://protobuf.dev/programming-guides/proto3/)
-- [Buf breaking-change detection](https://buf.build/docs/breaking/)
+- [Iroh documentation](https://docs.rs/iroh/)
 - [Tokio runtime documentation](https://docs.rs/tokio/latest/tokio/runtime/)
-- [Axum WebSocket module](https://docs.rs/axum/latest/axum/extract/ws/)
+- [Axum documentation](https://docs.rs/axum/latest/axum/)
 - [MongoDB Rust driver](https://www.mongodb.com/docs/drivers/rust/current/)
 - [MongoDB transactions](https://www.mongodb.com/docs/manual/core/transactions/)

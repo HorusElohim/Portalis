@@ -16,8 +16,7 @@
 ├── doc/                  # Build & setup guides (see doc/build.md)
 ├── portalis/             # Flutter project (Dart UI + Rust FFI bindings)
 │   ├── lib/              # Flutter widgets and FRB-generated API surface
-│   ├── rust/backend/     # Rust crate compiled into native libs / wasm
-│   ├── rust/nexus/       # Nexus client/server networking workspace
+│   ├── rust/backend/     # Unified Nexus app core + server workspace
 │   ├── rust/vendor/      # Locally maintained Rust dependencies
 │   └── tool/             # Platform-specific build helpers
 ├── setup/                # Environment bootstrap scripts for Linux, macOS & Windows
@@ -59,12 +58,12 @@ Detailed build instructions for every platform live in [`doc/build.md`](doc/buil
 
 ## Portalis Nexus
 
-[`portalis/rust/nexus/`](portalis/rust/nexus/) is Portalis's Rust networking workspace for reliable peer discovery, presence, friendships, and collection metadata exchange. Nexus coordinates peers only: collection media continues to move directly between clients with BitTorrent.
+[`portalis/rust/backend/`](portalis/rust/backend/) is the unified Nexus application core. It owns the Flutter boundary, local collection state, identity, application networking, and the Torrent engine that moves media directly between peers.
 
-The workspace owns the versioned protobuf contract, reusable client library, server domain logic, and Linux-first server binary. See the [Nexus README](portalis/rust/nexus/README.md) for commands and the [protocol specification](portalis/rust/nexus/SPEC.md) for the architecture and migration plan.
+The same workspace owns the versioned protobuf contract, portable networking crates, server domain logic, and Linux server binary. See the [Nexus README](portalis/rust/backend/README.md) and [protocol specification](portalis/rust/backend/SPEC.md).
 
 ```bash
-cd portalis/rust/nexus
+cd portalis/rust/backend
 
 # Validate the contract and Rust workspace.
 buf lint
@@ -77,7 +76,7 @@ PORTALIS_NEXUS_LISTEN_ADDR=127.0.0.1:8080 cargo run -p portalis-nexus-server
 curl http://127.0.0.1:8080/health
 ```
 
-Run coverage with `./scripts/coverage.sh`. On Linux, the server can also run with `docker compose -f docker/compose.yaml up --build` from `portalis/rust/nexus/`.
+Run coverage with `./scripts/coverage.sh`. On Linux, the server can also run with `docker compose -f docker/compose.yaml up --build` from `portalis/rust/backend/`.
 
 ## Building
 
