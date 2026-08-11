@@ -15,6 +15,8 @@ The architecture and migration contract live in [`SPEC.md`](SPEC.md).
 - `apps/server`: `config`, `state`, `shutdown`, `health`, `messages`, `socket`.
 - `proto`: authoritative protobuf schemas.
 - `demo`: runnable examples — see [`demo/README.md`](demo/README.md).
+- `demo-m6`: standalone server and concurrent-client M6 walkthrough — see
+  [`demo-m6/README.md`](demo-m6/README.md).
 
 Deterministic rules live in their own modules and are covered by tests; the
 socket plumbing they drive (`apps/server/src/socket.rs`, `crates/client/src/
@@ -43,6 +45,14 @@ See it work end to end, server and clients in one process:
 
 ```sh
 cargo run -p portalis-nexus-demo
+```
+
+Or run the M6 server and client story as two separate processes:
+
+```sh
+cargo run -p portalis-nexus-m6-demo --bin nexus-demo-server
+# In another terminal:
+cargo run -p portalis-nexus-m6-demo --bin nexus-demo-client
 ```
 
 Run the server:

@@ -43,6 +43,17 @@
   it consumes the returned recipient device, seals the descriptor, sends it
   live, and verifies that only the exact device receives and opens it.
 
+- Added the versioned client-side torrent-handoff codec: each descriptor is
+  encrypted with a fresh nonce and authenticated to its share, recipient
+  device, and info hash; malformed, oversized, non-NFC, tampered, or replayed
+  into another context handoffs are rejected.
+
+- Added a separate two-process Nexus M6 demo. Its standalone in-memory server
+  and concurrent-client executable exercise registration, pings, friendship,
+  socket-derived presence, capsule publication, recipient-device grants,
+  sealed key delivery, exact-device encrypted `.torrent` handoff, and private
+  swarm discovery over real connections.
+
 - Added Nexus share-membership revocation, so an owner can remove someone
   from a share rather than only ever adding them. Nexus stops answering that
   user with summaries, capsules, envelopes, and handoffs; it cannot reach the

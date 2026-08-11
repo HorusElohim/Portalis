@@ -8,6 +8,7 @@
 //! - [`error`]: deterministic protocol failures.
 //! - [`manifest`]: the canonical media manifest and its content root.
 //! - [`capsule`]: sealing that manifest into bytes Nexus cannot read.
+//! - [`handoff`]: encrypting one torrent descriptor for one recipient device.
 //! - [`protocol`]: client-side message construction and validation.
 //! - [`pending`]: the bounded request/response correlation registry.
 //! - [`reconnect`]: bounded exponential reconnect scheduling.
@@ -19,6 +20,7 @@ mod candidates;
 mod capsule;
 mod config;
 mod error;
+mod handoff;
 mod manifest;
 mod pending;
 mod protocol;
@@ -33,6 +35,9 @@ pub use capsule::{
 };
 pub use config::{ClientConfig, DEFAULT_REQUEST_TIMEOUT};
 pub use error::ClientError;
+pub use handoff::{
+    HANDOFF_VERSION, HandoffContext, HandoffError, TorrentHandoff, open_handoff, seal_handoff,
+};
 pub use manifest::{
     ENTRY_VERSION, INFO_HASH_BYTES, MAX_ENTRIES, MAX_ENTRY_NAME_BYTES, Manifest, ManifestEntry,
     ManifestError, SnapshotId, THUMBNAIL_HASH_BYTES,

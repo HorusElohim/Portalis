@@ -1,0 +1,26 @@
+[package]
+name = "portalis-nexus-m6-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "nexus-demo-server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "nexus-demo-client"
+path = "src/bin/client.rs"
+
+[dependencies]
+axum.workspace = true
+portalis-nexus-client.workspace = true
+portalis-nexus-demo = { path = "../demo" }
+portalis-nexus-protocol.workspace = true
+portalis-nexus-server.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

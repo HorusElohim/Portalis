@@ -6,7 +6,10 @@
 use std::error::Error;
 use std::net::SocketAddr;
 
-use portalis_nexus_client::{ClientError, DeviceSigner, NexusClient, TransportError};
+use portalis_nexus_client::{
+    ClientError, DeviceSigner, HandoffContext, NexusClient, SHARE_KEY_BYTES, TransportError,
+    open_handoff, seal_handoff,
+};
 use portalis_nexus_demo::{DemoDevice, short};
 use portalis_nexus_protocol::v1::AddressFamily;
 use portalis_nexus_protocol::v1::envelope::Payload;
@@ -253,14 +256,16 @@ async fn shares(
         .envelopes
         .first()
         .ok_or("Grace should have exactly one envelope")?;
-    let recovered = portalis_nexus_protocol::open(
+    let recovered: [u8; SHARE_KEY_BYTES] = portalis_nexus_protocol::open(
         &grace_device.encryption_secret(),
         &context,
         &portalis_nexus_protocol::SealedEnvelope {
             ephemeral_public_key: envelope.ephemeral_public_key.as_slice().try_into()?,
             ciphertext: envelope.ciphertext.clone(),
         },
-    )?;
+    )?
+    .try_into()
+    .map_err(|_| "the recovered share key has the wrong length")?;
     let opened = pretend_to_encrypt(&fetched.capsule, &recovered);
     step(
         13,
@@ -275,7 +280,13 @@ async fn shares(
     // Pass the encrypted torrent descriptor live to the exact device returned
     // by the grant. Nexus relays the bytes without storing or opening them.
     let info_hash = [1_u8; 20];
-    let handoff_ciphertext = pretend_to_encrypt(MAGNET, &recovered);
+    let handoff_context = HandoffContext {
+        share_id: share_id.as_slice().try_into()?,
+        recipient_device_id,
+        info_hash,
+    };
+    let handoff_ciphertext =
+        seal_handoff(&recovered, &handoff_context, "Ada's collection", MAGNET)?;
     ada.share_handoff(
         &share_id,
         &recipient_device_id,
@@ -295,15 +306,15 @@ async fn shares(
         }
     })
     .await??;
-    let received = pretend_to_encrypt(&handoff.ciphertext, &recovered);
+    let received = open_handoff(&recovered, &handoff_context, &handoff.ciphertext)?;
     step(
-        15,
+        14,
         "Ada handed the encrypted .torrent descriptor to Grace's exact device",
         &format!(
             "device {}, info hash {}, descriptor {:?}",
             short(&handoff.recipient_device_id),
             short(&handoff.info_hash),
-            String::from_utf8_lossy(&received)
+            String::from_utf8_lossy(&received.torrent_bytes)
         ),
     );
     Ok(())
@@ -323,7 +334,7 @@ async fn swarm(ada: &NexusClient, grace: &NexusClient) -> Result<(), Box<dyn Err
         .lookup_peers(&info_hash, AddressFamily::Unspecified, 0)
         .await?;
     step(
-        14,
+        15,
         "Two seeders announced and discovered each other",
         &format!(
             "lease until {}; Ada sees {} peer(s): {}",
