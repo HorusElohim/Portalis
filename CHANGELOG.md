@@ -178,12 +178,12 @@
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
 
 - Defined Portalis as the composition of two sibling engines before extending
-  M6 further. Nexus is the generic authenticated communication layer, with a
-  protobuf control plane and authorized, bounded byte channels exposed through
-  explicit raw, protobuf, or JSON adapters. Torrent remains responsible for
-  descriptors, file pieces, seeding, and discovery policy; Manifest sharing is
-  the first application protocol coordinating both engines rather than the
-  identity of Nexus itself.
+  M6 further. Nexus owns authenticated protobuf control and may hand a caller
+  a separately authenticated binary WebSocket when arbitrary live traffic is
+  actually needed; the caller owns its payload type and serialization. Nexus
+  adds no codec registry, JSON/protobuf adapters, custom framing, or second
+  encryption protocol. Torrent remains responsible for descriptors, pieces,
+  seeding, and discovery policy; Manifest sharing coordinates the two engines.
 
 - Specified everything the Portalis clients need before M6 can start. The
   capsule format and the canonical manifest encoding behind `SnapshotId` are
