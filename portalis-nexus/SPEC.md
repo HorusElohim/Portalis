@@ -2,9 +2,10 @@
 
 Status: M5 swarm discovery complete; the M6 online friend-to-friend sharing
 slice is in progress. The portable capsule and handoff codecs, recipient-device
-grant response, and exact-device routing are implemented; the backend collection
-binding and Flutter façade remain. Share revocation is complete; the remaining
-M5.5 account-control commands are not prerequisites for that slice.
+grant response, exact-device routing, and backend Ed25519/X25519 credential
+migration are implemented; the backend collection binding and Flutter façade
+remain. Share revocation is complete; the remaining M5.5 account-control
+commands are not prerequisites for that slice.
 
 Protocol: `portalis.protocol.v1`
 

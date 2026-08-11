@@ -39,6 +39,13 @@
   imports the portable Nexus client behind a private native seam, keeping
   protobuf transport details out of the Flutter bridge.
 
+- Started the native Portalis M6 integration with durable device credentials.
+  The backend now implements the portable Nexus signer over the existing
+  Ed25519 identity and generates an independent X25519 key for sealed share
+  keys. Existing `identity.json` files are upgraded atomically on first load,
+  without changing their signing key, legacy collection identity, or Flutter
+  bridge schema.
+
 - Extended the Nexus walkthrough demo through the complete online A→B path:
   it consumes the returned recipient device, seals the descriptor, sends it
   live, and verifies that only the exact device receives and opens it.

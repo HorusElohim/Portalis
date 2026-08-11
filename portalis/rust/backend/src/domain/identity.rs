@@ -68,6 +68,10 @@ impl DeviceIdentity {
         self.signing_key.to_bytes()
     }
 
+    pub fn public_key(&self) -> [u8; 32] {
+        self.signing_key.verifying_key().to_bytes()
+    }
+
     pub fn device_id(&self) -> DeviceId {
         DeviceId(self.signing_key.verifying_key())
     }

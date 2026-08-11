@@ -39,6 +39,7 @@ portalis-nexus-client = { path = "../../../portalis-nexus/crates/client" }
 # keys, manifest entry ids). Pure Rust, no OS-specific bits — safe on every
 # target including wasm32.
 ed25519-dalek = { version = "2", features = ["rand_core"] }
+x25519-dalek = { version = "3", features = ["static_secrets"] }
 rand = "0.8"
 blake3 = "1"
 hex = "0.4"
