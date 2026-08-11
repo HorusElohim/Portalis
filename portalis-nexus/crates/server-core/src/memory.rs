@@ -441,6 +441,18 @@ impl ShareRepository for InMemoryIdentities {
         async move { outage.map_or(Ok(()), Err) }
     }
 
+    fn revoke_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let outage = self.outage();
+        if outage.is_none() {
+            self.lock().share_memberships.remove(&(share_id, user_id));
+        }
+        async move { outage.map_or(Ok(()), Err) }
+    }
+
     fn has_share_access(
         &self,
         share_id: ShareId,

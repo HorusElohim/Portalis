@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use portalis_nexus_protocol::v1::{
     AddressFamily, Authenticated, DeviceLinked, Envelope, Friend, FriendAction, KeyEnvelopePut,
     LookupPeersResponse, PeerAnnounced, PeerWithdrawn, PublishShare, ResolveHandleResponse,
-    ServerHello, ShareAccessGranted, ShareSnapshot,
+    ServerHello, ShareAccessGranted, ShareAccessRevoked, ShareSnapshot,
 };
 use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame};
 use tokio::net::TcpStream;
@@ -21,8 +21,8 @@ use crate::protocol::{
     KeyEnvelopePage, validate_authenticated, validate_device_linked, validate_friend_event,
     validate_friend_list, validate_key_envelope_put, validate_key_envelopes,
     validate_peer_announced, validate_peer_lookup, validate_peer_withdrawn, validate_pong,
-    validate_resolved, validate_share_access_granted, validate_share_fetch, validate_share_handoff,
-    validate_share_list, validate_share_published,
+    validate_resolved, validate_share_access_granted, validate_share_access_revoked,
+    validate_share_fetch, validate_share_handoff, validate_share_list, validate_share_published,
 };
 use crate::signer::DeviceSigner;
 use crate::transport::connection::{Shared, start_connection, supervise};
@@ -338,6 +338,21 @@ impl NexusClient {
                 .grant_share_access(share_id, member_user_id, now_unix_ns());
         let response = self.request(&request).await?;
         Ok(validate_share_access_granted(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when the revocation is unauthorized or unavailable.
+    pub async fn revoke_share_access(
+        &self,
+        share_id: &[u8],
+        member_user_id: &[u8],
+    ) -> Result<ShareAccessRevoked, TransportError> {
+        let request =
+            self.shared
+                .protocol
+                .revoke_share_access(share_id, member_user_id, now_unix_ns());
+        let response = self.request(&request).await?;
+        Ok(validate_share_access_revoked(&request, &response)?)
     }
 
     /// # Errors

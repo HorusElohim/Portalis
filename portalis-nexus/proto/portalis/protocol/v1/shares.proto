@@ -94,6 +94,23 @@ message ShareAccessGranted {
   bytes member_user_id = 2;
 }
 
+// Removes a member's access to a share. Only the owner may send it, and the
+// owner cannot be removed from their own share.
+//
+// Nexus stops answering that user with summaries, capsules, envelopes, and
+// handoffs. It does not reach the share key they already hold, so an owner
+// who means to exclude them rotates the key and publishes the next revision
+// sealed only to the members who remain.
+message RevokeShareAccess {
+  bytes share_id = 1;
+  bytes member_user_id = 2;
+}
+
+message ShareAccessRevoked {
+  bytes share_id = 1;
+  bytes member_user_id = 2;
+}
+
 // Unsolicited notification that an authorized share has moved.
 message ShareEvent {
   ShareSnapshot share = 1;

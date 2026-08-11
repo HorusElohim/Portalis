@@ -646,6 +646,27 @@ impl ShareRepository for MongoStore {
         }
     }
 
+    fn revoke_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            // Deleting nothing is success: the edge is gone either way, which
+            // is what the caller asked for.
+            store
+                .share_memberships()
+                .delete_one(doc! {
+                    "share_id": binary(&share_id),
+                    "user_id": binary(&user_id),
+                })
+                .await
+                .map_err(unavailable)?;
+            Ok(())
+        }
+    }
+
     fn has_share_access(
         &self,
         share_id: ShareId,

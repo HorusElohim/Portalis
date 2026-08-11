@@ -18,6 +18,14 @@
   transactional snapshot history and compare-and-swap heads so revisions
   cannot regress. The portable client exposes the complete flow.
 
+- Added Nexus share-membership revocation, so an owner can remove someone
+  from a share rather than only ever adding them. Nexus stops answering that
+  user with summaries, capsules, envelopes, and handoffs; it cannot reach the
+  share key they already hold, so excluding them means rotating the key and
+  publishing the next revision sealed to the members who remain. Revoking is
+  idempotent, only the owner may do it, and the owner cannot be removed from
+  their own share.
+
 - Completed Nexus M5 swarm discovery. Authenticated seeders announce bounded
   short-lived leases using the IP observed by the socket, lookups prefer
   compatible recent peers across diverse network prefixes, and disconnects

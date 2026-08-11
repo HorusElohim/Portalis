@@ -61,6 +61,8 @@ pub enum ShareCommandError {
     NotTheOwner,
     #[error("that member was not found")]
     UnknownMember,
+    #[error("a share's owner cannot be removed from it")]
+    OwnerCannotBeRemoved,
     #[error(transparent)]
     Publication(#[from] ShareError),
     #[error(transparent)]
@@ -239,6 +241,40 @@ where
                 granted_at_unix_ns: self.clock.now_unix_ns(),
             })
             .await?;
+        Ok(())
+    }
+
+    /// Removes a member's access, or reports success when they had none.
+    ///
+    /// Revoking is what Nexus can do: it stops answering that user. The share
+    /// key they already hold is beyond its reach, so an owner who means to
+    /// exclude them rotates the key and publishes the next revision sealed
+    /// only to the members who remain.
+    ///
+    /// # Errors
+    /// Returns [`ShareCommandError`] when the share is absent, the actor is
+    /// not its owner, the member named is the owner, or storage is
+    /// unavailable.
+    pub async fn revoke(
+        &self,
+        owner: UserId,
+        share_id: ShareId,
+        member: UserId,
+    ) -> Result<(), ShareCommandError> {
+        let share = self
+            .store
+            .find_share(share_id)
+            .await?
+            .ok_or(ShareCommandError::NotFound)?;
+        if share.owner != owner {
+            return Err(ShareCommandError::NotTheOwner);
+        }
+        // Ownership is not a membership edge, so removing it would delete
+        // nothing while reporting success — a refusal is the honest answer.
+        if member == share.owner {
+            return Err(ShareCommandError::OwnerCannotBeRemoved);
+        }
+        self.store.revoke_share_access(share_id, member).await?;
         Ok(())
     }
 
@@ -594,10 +630,79 @@ mod tests {
 
         // Both sides now list it, and the share knows who may read it.
         assert_eq!(service.list(OWNER).await, Ok(vec![published.clone()]));
-        assert_eq!(service.list(STRANGER).await, Ok(vec![published]));
+        assert_eq!(service.list(STRANGER).await, Ok(vec![published.clone()]));
         let mut members = service.members(SHARE).await.expect("members");
         members.sort_unstable();
         assert_eq!(members, vec![OWNER, STRANGER]);
+
+        // Revoking takes it all back: no fetch, no listing, no membership.
+        assert_eq!(service.revoke(OWNER, SHARE, STRANGER).await, Ok(()));
+        assert_eq!(
+            service.fetch(STRANGER, SHARE).await,
+            Err(ShareCommandError::NotFound)
+        );
+        assert_eq!(service.list(STRANGER).await, Ok(Vec::new()));
+        assert_eq!(service.members(SHARE).await, Ok(vec![OWNER]));
+        assert_eq!(
+            service.fetch(OWNER, SHARE).await,
+            Ok(published),
+            "the owner still has their own share"
+        );
+    }
+
+    /// Revoking is the inverse of granting, and every way of getting it wrong
+    /// answers with something the caller can act on.
+    #[tokio::test]
+    async fn revoking_is_idempotent_and_refuses_what_it_cannot_do() {
+        use crate::memory::{FixedClock, InMemoryIdentities};
+
+        let store = InMemoryIdentities::default();
+        store.store_user(user(OWNER)).expect("owner");
+        store.store_user(user(STRANGER)).expect("member");
+        let service = ShareService::new(store, FixedClock::new(NOW));
+        let signature = [8; SIGNATURE_BYTES];
+        service
+            .publish(signed_publication(
+                OWNER,
+                1,
+                None,
+                FIRST_SNAPSHOT,
+                b"sealed",
+                &signature,
+            ))
+            .await
+            .expect("published");
+
+        // A member who was never granted access is already absent, which is
+        // the state the caller asked for.
+        assert_eq!(service.revoke(OWNER, SHARE, STRANGER).await, Ok(()));
+
+        service
+            .grant(OWNER, SHARE, STRANGER)
+            .await
+            .expect("granted");
+        assert_eq!(service.revoke(OWNER, SHARE, STRANGER).await, Ok(()));
+        assert_eq!(
+            service.revoke(OWNER, SHARE, STRANGER).await,
+            Ok(()),
+            "revoking twice is the same as revoking once"
+        );
+
+        // Ownership is not a membership edge, so removing it would delete
+        // nothing while reporting success.
+        assert_eq!(
+            service.revoke(OWNER, SHARE, OWNER).await,
+            Err(ShareCommandError::OwnerCannotBeRemoved)
+        );
+        assert_eq!(
+            service.revoke(STRANGER, SHARE, OWNER).await,
+            Err(ShareCommandError::NotTheOwner),
+            "a member cannot remove anyone, least of all the owner"
+        );
+        assert_eq!(
+            service.revoke(OWNER, [9; 16], STRANGER).await,
+            Err(ShareCommandError::NotFound)
+        );
     }
 
     #[tokio::test]
@@ -829,6 +934,17 @@ mod tests {
             }
         }
 
+        async fn revoke_share_access(
+            &self,
+            share_id: ShareId,
+            user_id: UserId,
+        ) -> Result<(), RepositoryError> {
+            match &self.fault {
+                Fault::Grant(error) => Err(error.clone()),
+                _ => self.inner.revoke_share_access(share_id, user_id).await,
+            }
+        }
+
         async fn has_share_access(
             &self,
             share_id: ShareId,
@@ -893,6 +1009,12 @@ mod tests {
             service.store.has_share_access(SHARE, STRANGER).await,
             Ok(true)
         );
+        assert_eq!(service.revoke(OWNER, SHARE, STRANGER).await, Ok(()));
+        assert_eq!(
+            service.store.has_share_access(SHARE, STRANGER).await,
+            Ok(false),
+            "and revoked again like any other share"
+        );
     }
 
     /// A share nobody managed to move reports contention rather than
@@ -929,6 +1051,10 @@ mod tests {
         assert_eq!(service.members(SHARE).await, Ok(Vec::new()));
         assert_eq!(
             service.grant(OWNER, SHARE, STRANGER).await,
+            Err(ShareCommandError::NotFound)
+        );
+        assert_eq!(
+            service.revoke(OWNER, SHARE, STRANGER).await,
             Err(ShareCommandError::NotFound)
         );
 
@@ -1030,6 +1156,13 @@ mod tests {
             Err(ShareCommandError::Repository(RepositoryError::Unavailable(
                 "disk".to_owned()
             )))
+        );
+        assert_eq!(
+            service.revoke(OWNER, SHARE, STRANGER).await,
+            Err(ShareCommandError::Repository(RepositoryError::Unavailable(
+                "disk".to_owned()
+            ))),
+            "a revocation that did not happen is not reported as done"
         );
     }
 }

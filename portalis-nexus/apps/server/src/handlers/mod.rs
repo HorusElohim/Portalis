@@ -89,6 +89,9 @@ pub async fn dispatch(
         Some(Payload::FetchShareRequest(fetch)) => {
             snapshots::fetch(session, state, request, fetch, now_unix_ns).await
         }
+        Some(Payload::RevokeShareAccess(revoke)) => {
+            snapshots::revoke(session, state, request, revoke, now_unix_ns).await
+        }
         Some(Payload::GrantShareAccess(grant)) => {
             snapshots::grant(session, state, request, grant, now_unix_ns).await
         }

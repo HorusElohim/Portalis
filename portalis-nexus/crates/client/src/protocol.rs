@@ -8,8 +8,8 @@ use portalis_nexus_protocol::v1::{
     ListKeyEnvelopesRequest, ListKeyEnvelopesResponse, ListSharesRequest, ListSharesResponse,
     LookupPeersRequest, LookupPeersResponse, PeerAnnounced, PeerWithdrawn, Ping, Pong,
     ProtocolErrorCode, PublishShare, PutKeyEnvelope, RegisterUser, ResolveHandleRequest,
-    ResolveHandleResponse, ServerHello, ShareAccessGranted, ShareHandoff, SharePublished,
-    ShareSnapshot, WithdrawPeer,
+    ResolveHandleResponse, RevokeShareAccess, ServerHello, ShareAccessGranted, ShareAccessRevoked,
+    ShareHandoff, SharePublished, ShareSnapshot, WithdrawPeer,
 };
 use portalis_nexus_protocol::{
     CURRENT_PROTOCOL_VERSION, SHARE_ID_BYTES, SNAPSHOT_ID_BYTES, SessionBinding,
@@ -224,6 +224,22 @@ impl ClientProtocol {
     ) -> Envelope {
         Self::envelope(
             Payload::GrantShareAccess(GrantShareAccess {
+                share_id: share_id.to_vec(),
+                member_user_id: member_user_id.to_vec(),
+            }),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn revoke_share_access(
+        &self,
+        share_id: &[u8],
+        member_user_id: &[u8],
+        timestamp_unix_ns: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::RevokeShareAccess(RevokeShareAccess {
                 share_id: share_id.to_vec(),
                 member_user_id: member_user_id.to_vec(),
             }),
@@ -621,6 +637,20 @@ pub fn validate_share_access_granted(
         Payload::ShareAccessGranted(granted) => Ok(granted.clone()),
         _ => Err(ClientError::UnexpectedEnvelope {
             expected: "ShareAccessGranted",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused or not a revocation.
+pub fn validate_share_access_revoked(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<ShareAccessRevoked, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::ShareAccessRevoked(revoked) => Ok(revoked.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "ShareAccessRevoked",
         }),
     }
 }
@@ -1546,6 +1576,7 @@ mod tests {
         assert!(validate_share_list(&request, &pong).is_err());
         assert!(validate_share_fetch(&request, &pong).is_err());
         assert!(validate_share_access_granted(&request, &pong).is_err());
+        assert!(validate_share_access_revoked(&request, &pong).is_err());
         assert!(validate_share_handoff(&request, &pong).is_err());
         assert!(validate_peer_announced(&request, &pong).is_err());
         assert!(validate_peer_lookup(&request, &pong).is_err());

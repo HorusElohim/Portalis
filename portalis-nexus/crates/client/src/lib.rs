@@ -31,7 +31,8 @@ pub use protocol::{
     validate_friend_event, validate_friend_list, validate_hello, validate_key_envelope_put,
     validate_key_envelopes, validate_peer_announced, validate_peer_lookup, validate_peer_withdrawn,
     validate_pong, validate_reply, validate_resolved, validate_share_access_granted,
-    validate_share_fetch, validate_share_handoff, validate_share_list, validate_share_published,
+    validate_share_access_revoked, validate_share_fetch, validate_share_handoff,
+    validate_share_list, validate_share_published,
 };
 pub use reconnect::{ReconnectPolicy, ReconnectPolicyError};
 pub use signer::DeviceSigner;

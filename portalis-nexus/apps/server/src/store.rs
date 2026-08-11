@@ -243,6 +243,17 @@ impl ShareRepository for NexusStore {
         }
     }
 
+    async fn revoke_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> Result<(), RepositoryError> {
+        match self {
+            Self::Memory(store) => store.revoke_share_access(share_id, user_id).await,
+            Self::Mongo(store) => store.revoke_share_access(share_id, user_id).await,
+        }
+    }
+
     async fn has_share_access(
         &self,
         share_id: ShareId,
@@ -402,6 +413,9 @@ mod tests {
                     granted_at_unix_ns: 1,
                 })
                 .await
+        ));
+        assert!(unavailable(
+            &store.revoke_share_access(share.share_id, GRACE).await
         ));
         assert!(unavailable(
             &store.has_share_access(share.share_id, ADA).await

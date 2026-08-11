@@ -55,6 +55,8 @@ message Envelope {
     KeyEnvelopePut key_envelope_put = 41;
     ListKeyEnvelopesRequest list_key_envelopes_request = 42;
     ListKeyEnvelopesResponse list_key_envelopes_response = 43;
+    RevokeShareAccess revoke_share_access = 44;
+    ShareAccessRevoked share_access_revoked = 45;
 
     PublishShare publish_share = 50;
     SharePublished share_published = 51;

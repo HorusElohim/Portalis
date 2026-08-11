@@ -434,6 +434,14 @@ mod tests {
             self.0.grant_share_access(membership).await
         }
 
+        async fn revoke_share_access(
+            &self,
+            share_id: ShareId,
+            user_id: UserId,
+        ) -> Result<(), RepositoryError> {
+            self.0.revoke_share_access(share_id, user_id).await
+        }
+
         async fn has_share_access(
             &self,
             share_id: ShareId,
@@ -537,6 +545,16 @@ mod tests {
             Ok(())
         );
         assert_eq!(store.has_share_access(SHARE, OTHER_USER).await, Ok(true));
+        assert_eq!(store.revoke_share_access(SHARE, OTHER_USER).await, Ok(()));
+        assert_eq!(store.has_share_access(SHARE, OTHER_USER).await, Ok(false));
+        store
+            .grant_share_access(crate::ShareMembershipRecord {
+                share_id: SHARE,
+                user_id: OTHER_USER,
+                granted_at_unix_ns: NOW,
+            })
+            .await
+            .expect("granted again");
         assert_eq!(
             store.list_authorized_shares(OTHER_USER).await,
             Ok(vec![head])

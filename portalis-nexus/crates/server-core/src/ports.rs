@@ -245,6 +245,17 @@ pub trait ShareRepository: Send + Sync {
         membership: ShareMembershipRecord,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
 
+    /// Removes a membership edge, or reports success when there was none.
+    ///
+    /// Idempotent because a revocation that has already happened is the state
+    /// the caller asked for, and an owner retrying one should not be told
+    /// their member is somehow still there.
+    fn revoke_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
     fn has_share_access(
         &self,
         share_id: ShareId,
@@ -411,6 +422,14 @@ impl<T: ShareRepository> ShareRepository for std::sync::Arc<T> {
         membership: ShareMembershipRecord,
     ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
         T::grant_share_access(self, membership)
+    }
+
+    fn revoke_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::revoke_share_access(self, share_id, user_id)
     }
 
     fn has_share_access(

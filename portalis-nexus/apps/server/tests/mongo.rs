@@ -1119,6 +1119,8 @@ async fn share_history_membership_and_head_cas_survive_a_restart() {
         vec![share.clone()]
     );
 
+    expect_revocation_to_survive_a_restart(&running, &restarted, share_id).await;
+
     let stale = ShareRecord {
         revision: 2,
         snapshot_id: [57; 32],
@@ -1145,5 +1147,42 @@ async fn share_history_membership_and_head_cas_survive_a_restart() {
             .unwrap()
             .is_none(),
         "the transaction leaves no orphan snapshot after a lost head CAS"
+    );
+}
+
+/// A membership removed is a membership gone: after a restart the edge is
+/// absent, the share is no longer listed for that user, and revoking again
+/// still succeeds because the state asked for is already the state stored.
+async fn expect_revocation_to_survive_a_restart(
+    running: &Running,
+    store: &MongoStore,
+    share_id: [u8; 16],
+) {
+    store
+        .revoke_share_access(share_id, GRACE)
+        .await
+        .expect("membership removed");
+
+    let restarted = running.restart().await;
+    assert!(
+        !restarted.has_share_access(share_id, GRACE).await.unwrap(),
+        "a revoked member stays revoked across a restart"
+    );
+    assert_eq!(
+        restarted
+            .list_authorized_shares(GRACE)
+            .await
+            .expect("listed"),
+        Vec::new()
+    );
+    assert_eq!(
+        restarted.list_share_members(share_id).await,
+        Ok(vec![ADA]),
+        "only the owner remains"
+    );
+    assert_eq!(
+        restarted.revoke_share_access(share_id, GRACE).await,
+        Ok(()),
+        "removing an edge that is already gone is the state asked for"
     );
 }

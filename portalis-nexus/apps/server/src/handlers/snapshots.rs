@@ -3,8 +3,8 @@
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
     Envelope, FetchShareRequest, FetchShareResponse, GrantShareAccess, ListSharesResponse,
-    ProtocolErrorCode, PublishShare, ShareAccessGranted, ShareEvent, ShareHandoff, SharePublished,
-    ShareSnapshot,
+    ProtocolErrorCode, PublishShare, RevokeShareAccess, ShareAccessGranted, ShareAccessRevoked,
+    ShareEvent, ShareHandoff, SharePublished, ShareSnapshot,
 };
 use portalis_nexus_protocol::{
     MAX_SHARE_HANDOFF_BYTES, SHARE_ID_BYTES, SNAPSHOT_ID_BYTES, USER_ID_BYTES,
@@ -133,6 +133,39 @@ pub(crate) async fn grant(
         Ok(()) => reply_with(
             request,
             Payload::ShareAccessGranted(ShareAccessGranted {
+                share_id: share_id.to_vec(),
+                member_user_id: member.to_vec(),
+            }),
+            now_unix_ns,
+        ),
+        Err(error) => rejection(request, &error, now_unix_ns),
+    }
+}
+
+pub(crate) async fn revoke(
+    session: &Session,
+    state: &AppState,
+    request: &Envelope,
+    revoke: &RevokeShareAccess,
+    now_unix_ns: u64,
+) -> Envelope {
+    let Some(identity) = session.identity() else {
+        return unauthenticated(request, now_unix_ns);
+    };
+    let Ok(share_id) = <[u8; SHARE_ID_BYTES]>::try_from(revoke.share_id.as_slice()) else {
+        return malformed(request, "share_id must name a share", now_unix_ns);
+    };
+    let Ok(member) = <[u8; USER_ID_BYTES]>::try_from(revoke.member_user_id.as_slice()) else {
+        return malformed(request, "member_user_id must name a user", now_unix_ns);
+    };
+    match state
+        .shares()
+        .revoke(identity.user.user_id, share_id, member)
+        .await
+    {
+        Ok(()) => reply_with(
+            request,
+            Payload::ShareAccessRevoked(ShareAccessRevoked {
                 share_id: share_id.to_vec(),
                 member_user_id: member.to_vec(),
             }),
@@ -277,9 +310,9 @@ fn rejection(request: &Envelope, error: &ShareCommandError, now: u64) -> Envelop
         | ShareCommandError::InvalidSignatureLength { .. }
         | ShareCommandError::Publication(_) => ProtocolErrorCode::InvalidMessage,
         ShareCommandError::NotFound => ProtocolErrorCode::NotFound,
-        ShareCommandError::NotTheOwner | ShareCommandError::UnknownMember => {
-            ProtocolErrorCode::Unauthorized
-        }
+        ShareCommandError::NotTheOwner
+        | ShareCommandError::UnknownMember
+        | ShareCommandError::OwnerCannotBeRemoved => ProtocolErrorCode::Unauthorized,
         ShareCommandError::Repository(_) => ProtocolErrorCode::Internal,
     };
     let message = if matches!(error, ShareCommandError::Repository(_)) {
@@ -322,6 +355,13 @@ mod tests {
                 ProtocolErrorCode::try_from(*code).unwrap_or(ProtocolErrorCode::Unspecified),
                 message.clone(),
             )),
+            _ => None,
+        }
+    }
+
+    fn revocation(reply: &Envelope) -> Option<ShareAccessRevoked> {
+        match &reply.payload {
+            Some(Payload::ShareAccessRevoked(revoked)) => Some(revoked.clone()),
             _ => None,
         }
     }
@@ -577,6 +617,7 @@ mod tests {
         assert!(fetched(&other).is_none());
         assert!(handed_off(&other).is_none());
         assert!(announced(&other).is_none());
+        assert!(revocation(&other).is_none());
         assert!(refusal(&other).is_none());
         assert!(pushed(&axum::extract::ws::Message::Text("not a frame".into())).is_none());
     }
@@ -835,6 +876,140 @@ mod tests {
         assert_eq!(
             refusal(&reply).expect("a refusal").0,
             ProtocolErrorCode::NotFound
+        );
+    }
+
+    /// Granting and revoking are inverses on the wire, and a revoked member
+    /// stops being able to reach the share at all.
+    #[tokio::test]
+    async fn revoking_takes_a_members_access_back() {
+        let state = AppState::default();
+        let owner = signed_in(&state, ADA, 1).await;
+        let member = signed_in(&state, GRACE, 2).await;
+        publish(&owner, &state, &request(), &publication(1, b"c"), NOW).await;
+        let membership = GrantShareAccess {
+            share_id: SHARE.to_vec(),
+            member_user_id: GRACE.to_vec(),
+        };
+        grant(&owner, &state, &request(), &membership, NOW).await;
+
+        let reply = revoke(
+            &owner,
+            &state,
+            &request(),
+            &RevokeShareAccess {
+                share_id: SHARE.to_vec(),
+                member_user_id: GRACE.to_vec(),
+            },
+            NOW,
+        )
+        .await;
+
+        let revoked = revocation(&reply).expect("a revocation");
+        assert_eq!(revoked.share_id, SHARE.to_vec());
+        assert_eq!(revoked.member_user_id, GRACE.to_vec());
+
+        let refused = fetch(
+            &member,
+            &state,
+            &request(),
+            &FetchShareRequest {
+                share_id: SHARE.to_vec(),
+            },
+            NOW,
+        )
+        .await;
+        assert_eq!(
+            refusal(&refused).expect("a refusal").0,
+            ProtocolErrorCode::NotFound
+        );
+        assert_eq!(
+            listed(&list(&member, &state, &request(), NOW).await).expect("a listing"),
+            Vec::new()
+        );
+    }
+
+    /// The commands a client would get wrong: an anonymous connection, bad
+    /// identifiers, someone else's share, and the owner themselves.
+    #[tokio::test]
+    async fn revoking_refuses_everything_it_should() {
+        let state = AppState::default();
+        let owner = signed_in(&state, ADA, 1).await;
+        let stranger = signed_in(&state, GRACE, 2).await;
+        publish(&owner, &state, &request(), &publication(1, b"c"), NOW).await;
+
+        let policy = ProtocolPolicy::new(1, 1).expect("range");
+        let anonymous = Session::new(&crate::messages::hello_payload(&policy, NOW));
+        let well_formed = RevokeShareAccess {
+            share_id: SHARE.to_vec(),
+            member_user_id: GRACE.to_vec(),
+        };
+
+        let reply = revoke(&anonymous, &state, &request(), &well_formed, NOW).await;
+        assert_eq!(
+            refusal(&reply).expect("a refusal"),
+            (
+                ProtocolErrorCode::Unauthenticated,
+                "authenticate before using shares".to_owned()
+            )
+        );
+
+        for (command, expected) in [
+            (
+                RevokeShareAccess {
+                    share_id: vec![3; SHARE_ID_BYTES - 1],
+                    member_user_id: GRACE.to_vec(),
+                },
+                "share_id must name a share",
+            ),
+            (
+                RevokeShareAccess {
+                    share_id: SHARE.to_vec(),
+                    member_user_id: vec![2; USER_ID_BYTES + 1],
+                },
+                "member_user_id must name a user",
+            ),
+        ] {
+            let reply = revoke(&owner, &state, &request(), &command, NOW).await;
+            let (code, message) = refusal(&reply).expect("a refusal");
+            assert_eq!(code, ProtocolErrorCode::InvalidMessage);
+            assert_eq!(message, expected);
+        }
+
+        // A member cannot revoke, and nobody can remove the owner.
+        let reply = revoke(&stranger, &state, &request(), &well_formed, NOW).await;
+        assert_eq!(
+            refusal(&reply).expect("a refusal").0,
+            ProtocolErrorCode::Unauthorized
+        );
+        let reply = revoke(
+            &owner,
+            &state,
+            &request(),
+            &RevokeShareAccess {
+                share_id: SHARE.to_vec(),
+                member_user_id: ADA.to_vec(),
+            },
+            NOW,
+        )
+        .await;
+        assert_eq!(
+            refusal(&reply).expect("a refusal"),
+            (
+                ProtocolErrorCode::Unauthorized,
+                "a share's owner cannot be removed from it".to_owned()
+            )
+        );
+
+        // Storage detail stays off the wire here too.
+        state.store().set_unavailable(true);
+        let reply = revoke(&owner, &state, &request(), &well_formed, NOW).await;
+        assert_eq!(
+            refusal(&reply).expect("a refusal"),
+            (
+                ProtocolErrorCode::Internal,
+                "the share store is unavailable".to_owned()
+            )
         );
     }
 
