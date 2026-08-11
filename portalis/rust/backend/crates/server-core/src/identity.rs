@@ -483,8 +483,7 @@ mod tests {
             user: crate::ports::UserId,
         ) -> impl std::future::Future<Output = Result<Vec<DeviceRecord>, RepositoryError>> + Send
         {
-            let inner = self.inner.list_devices(user);
-            async move { inner.await }
+            self.inner.list_devices(user)
         }
 
         fn link_device(

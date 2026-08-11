@@ -150,16 +150,17 @@ Then rebuild the Rust library for your platform. Never invoke the codegen with `
 ## Testing
 Use the scripts in `tests/` to exercise the codebase consistently:
 
-- `./tests/backend.sh` – Runs `cargo test` for the Rust crate.
+- `./tests/nexus.sh` – Validates and tests the complete Nexus workspace,
+  enforces coverage, and builds the server.
 - `./tests/frontend.sh` – Runs `flutter pub get`, `flutter analyze`, and `flutter test --no-pub`.
-- `./tests/all.sh` – Executes backend then frontend checks (same sequence used in CI).
+- `./tests/all.sh` – Executes Nexus then frontend checks (same sequence used in CI).
 
-CI invokes `./tests/all.sh` first and only builds artifacts if all suites pass.
+CI runs the independently rerunnable Nexus and frontend jobs before building artifacts.
 
 ## Continuous Integration
 The GitHub Actions workflow (`.github/workflows/pipeline.yml`) executes the following jobs on pushes and pull requests:
 
-1. **🧪 Tests** – Installs toolchains, runs `./tests/all.sh` (Rust + Flutter checks).
+1. **🦀 Backend Nexus** and **🐦 Frontend** – Run independently rerunnable checks.
 2. **Platform builds** – Each downloads the repo, reuses cached toolchains, and produces release artifacts. Parallel jobs for: 
 * 🕸️ Web
 * 🤖 Android

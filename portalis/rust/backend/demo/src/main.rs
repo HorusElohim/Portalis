@@ -21,6 +21,7 @@ use tokio::time::timeout;
 const MAGNET: &[u8] = b"magnet:?xt=urn:btih:0102030405060708090a0b0c0d0e0f1011121314";
 
 #[tokio::main]
+#[allow(clippy::too_many_lines)]
 async fn main() -> Result<(), Box<dyn Error>> {
     init_tracing("portalis_nexus_client=debug,portalis_nexus_server=debug");
     let (address, state, server) = start_server().await?;
@@ -154,6 +155,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 ///
 /// The point is what Nexus never holds: it stores an opaque capsule, decides
 /// who may fetch it, and relays a sealed key it cannot open.
+#[allow(clippy::too_many_lines)]
 async fn shares(
     ada: &NexusClient,
     ada_device: &DemoDevice,

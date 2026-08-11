@@ -1467,7 +1467,7 @@ mod native {
                     }
                 })
                 .collect();
-            entries.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+            entries.sort_by_key(|entry| std::cmp::Reverse(entry.bytes));
             entries
         })
         .await?;

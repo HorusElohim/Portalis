@@ -12,9 +12,10 @@
 - Optional but recommended to sync codegen: `./tool/frb_build.sh <platform>`.
 
 ## Testing
-- `./tests/backend.sh` – runs Rust unit tests (`cargo test`).
+- `./tests/nexus.sh` – validates and tests the complete Nexus workspace,
+  enforces coverage, and builds the server.
 - `./tests/frontend.sh` – runs Flutter checks (`flutter pub get`, `flutter analyze`, `flutter test --no-pub`).
-- `./tests/all.sh` – convenience wrapper that runs backend then frontend suites.
+- `./tests/all.sh` – convenience wrapper that runs Nexus then frontend suites.
 
 ## macOS (Desktop)
 - Just run: `flutter run -d macos`.
