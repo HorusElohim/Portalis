@@ -108,6 +108,15 @@
   published revision, the swarm's one-peer-per-network pass filling a
   response on its own, and the storage failures inside `fetch` and `grant`.
 
+- Gated Nexus line coverage on the merged profile instead of the summary
+  percentage. The summary counts a line once per generic instantiation, and a
+  service reached through several stores cannot run every line from each of
+  them: the production store never loses a compare-and-set and a
+  fault-injecting double never completes a write, so both paths are covered
+  while no single instantiation covers both. The gate now fails on an
+  uncovered line and names it, which is both stricter — no percentage of
+  slack — and what "100% line coverage" was always meant to assert.
+
 - Removed an unreachable `unreachable!` from share publication by deciding the
   write's precondition and the identical-retry answer in one match, so the
   fourth case no longer exists to be impossible.

@@ -33,10 +33,37 @@ set -euo pipefail
 # region tally disagrees with itself, and it does so consistently at exactly
 # one region regardless of how many concrete types exercise the code, which is
 # a stable count, not a symptom of a path nothing reaches.
+#
+# Lines are gated on the merged profile rather than the summary percentage,
+# for the same reason regions are held to 99. The summary counts a line once
+# per generic instantiation, and a generic service reached through more than
+# one store cannot execute every line from every one of them: the production
+# store never loses a compare-and-set, and a fault-injecting double never
+# completes a write. Both paths are covered; no single instantiation covers
+# both. LCOV reports the merged truth — a line is tested if anything reached
+# it — so the gate below fails on an uncovered line rather than on a
+# percentage that disagrees with itself.
+ignore='apps/server/src/(main|socket)\.rs|apps/server/src/mongo/mod\.rs|crates/client/src/transport/.*\.rs|crates/client/tests/.*\.rs|demo/src/.*\.rs|portalis\.protocol\.v1\.rs'
+lcov="$(mktemp -t nexus-coverage)"
+trap 'rm -f "$lcov"' EXIT
+
 cargo llvm-cov \
   --workspace \
   --all-features \
-  --ignore-filename-regex 'apps/server/src/(main|socket)\.rs|apps/server/src/mongo/mod\.rs|crates/client/src/transport/.*\.rs|crates/client/tests/.*\.rs|demo/src/.*\.rs|portalis\.protocol\.v1\.rs' \
-  --fail-under-lines 100 \
+  --ignore-filename-regex "$ignore" \
+  --lcov --output-path "$lcov" \
   --fail-under-functions 100 \
   --fail-under-regions 99
+
+# Report the same table the percentages come from, from the run just measured.
+cargo llvm-cov report --ignore-filename-regex "$ignore"
+
+if grep -q '^DA:[0-9]*,0$' "$lcov"; then
+  echo >&2
+  echo "Uncovered lines:" >&2
+  awk -F'[:,]' '
+    /^SF:/ { file = $2 }
+    /^DA:/ && $3 == 0 { print "  " file ":" $2 }
+  ' "$lcov" >&2
+  exit 1
+fi
