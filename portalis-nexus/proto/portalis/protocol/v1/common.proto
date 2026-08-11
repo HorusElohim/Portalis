@@ -13,6 +13,7 @@ enum ProtocolErrorCode {
   // Used for private resources too, so an unauthorized caller cannot probe
   // whether an identifier exists.
   PROTOCOL_ERROR_CODE_NOT_FOUND = 7;
+  PROTOCOL_ERROR_CODE_UNAVAILABLE = 8;
 }
 
 message ProtocolRange {

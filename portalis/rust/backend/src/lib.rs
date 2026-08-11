@@ -15,6 +15,9 @@ mod collab_store;
 mod import_store;
 /// Durable no-copy gallery source descriptors for seeding after restart.
 mod linked_source_store;
+/// Native backend seam for the online Nexus share client. It is intentionally
+/// private until the app-facing collection workflow is ready.
+mod nexus;
 // Real sockets — native targets only, like librqbit.
 /// Android-only bridge used by Rust-owned MediaStore storage.
 #[cfg(target_os = "android")]

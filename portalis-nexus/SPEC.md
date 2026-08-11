@@ -1,7 +1,8 @@
 # Portalis Nexus Specification
 
-Status: M5 swarm discovery complete; M5.5 account and membership control is
-next, then M6 Flutter integration.
+Status: M5 swarm discovery complete; the M6 online friend-to-friend sharing
+slice is next. Share revocation is complete; the remaining M5.5 account-control
+commands are not prerequisites for that slice.
 
 Protocol: `portalis.protocol.v1`
 
@@ -292,6 +293,10 @@ Binary identifiers use protobuf `bytes`, not hexadecimal strings.
 
 - Maximum binary frame: 8 MiB.
 - Maximum torrent descriptor: 4 MiB.
+- Maximum encrypted live handoff: 4 MiB + 1 KiB, including its authenticated
+  wrapper and bounded collection name.
+- Maximum encrypted manifest capsule: 256 KiB; both this byte limit and the
+  manifest entry-count quota apply.
 - Maximum handle: 32 UTF-8 bytes after normalization.
 - Maximum collection name: 256 UTF-8 bytes.
 - Maximum peer candidates returned: 64.
@@ -533,27 +538,37 @@ capsule  := u8      capsule_version = 1
 
 The plaintext is exactly the canonical manifest above, and the key is the
 share's random 32-byte secret. The nonce is
-`BLAKE3("portalis.capsule.v1/nonce" || share_id || revision_le)[..12]`: unique
-for every revision under one key, and identical for a retry of the same
-revision, so a publisher whose acknowledgement was lost re-encrypts to the
-same bytes and Nexus recognises the retry rather than refusing it. Associated
-data is `share_id || revision_le || snapshot_id`, so a capsule lifted from one
-share or revision fails to open under another.
+`BLAKE3("portalis.capsule.v1/nonce" || share_id || revision_le || snapshot_id)[..12]`.
+Including the snapshot prevents two owner devices that race with different
+candidate manifests for one revision from reusing a ChaCha20-Poly1305 nonce.
+It remains identical for an exact retry, so a publisher whose acknowledgement
+was lost re-encrypts to the same bytes and Nexus recognises the retry rather
+than refusing it. Associated data is
+`share_id || revision_le || snapshot_id`, so a capsule lifted from one share
+or revision fails to open under another.
 
 `capsule_version` is the only field a reader may act on before authenticating
 the rest. A version it does not know is a capsule it must not guess at.
 
 ### Media confidentiality
 
-Encrypting the capsule keeps the descriptor, file names, and directory
-structure away from Nexus. It does not encrypt the media: BitTorrent pieces
-move between peers exactly as stored.
+Encrypting the capsule keeps manifest entry names and info hashes away from
+Nexus. The separately encrypted live handoff keeps the `.torrent` descriptor,
+file names, and directory structure away from it. Neither mechanism encrypts
+the media: BitTorrent pieces move between peers exactly as stored.
 
 Version 1 therefore rests the confidentiality of a private share on the
-secrecy of its info hashes, and requires clients to treat a private share's
-torrents as private in the BitTorrent sense: the `private` flag set in the
-info dictionary, and no DHT, PEX, or local peer discovery for them. Nexus is
-their only discovery path (§12).
+secrecy of its info hashes. A torrent created for the Nexus path is private
+from birth: its info dictionary contains the `private` flag, and clients use
+no DHT, PEX, tracker, or local peer discovery for it. Nexus is its only
+discovery path (§12).
+
+An existing public torrent cannot be made private without changing its info
+hash, because the `private` flag is inside the hashed info dictionary. The M6
+slice therefore publishes newly created private torrents only. Existing
+collections keep their current hashes and legacy discovery behavior until a
+later migration explicitly replaces their torrents; they are never relabelled
+as private while retaining a public-torrent hash.
 
 This is a deliberate and weaker position than encrypting payloads, and it is
 stated rather than implied: anyone who learns an info hash can fetch the
@@ -576,17 +591,28 @@ BitTorrent library and never parses or validates what a capsule contains — it
 holds bytes it cannot read, and returns them to permitted devices so a newly
 linked device can synchronise while the original is offline.
 
-The signature covers the capsule and is made by the publishing device's
-Ed25519 key. Nexus relays it without checking it, holding no key that could;
-recipients verify it against the author they expect before opening anything.
+The signature is made by the publishing device's Ed25519 key over the
+domain-separated tuple `share_id`, revision, optional prior snapshot,
+`snapshot_id`, and `BLAKE3(capsule)`. Nexus verifies it against the
+authenticated device before storing the publication. A returned snapshot
+names the publisher device and carries its signing public key, so a recipient
+can derive the device ID and verify the same signature before opening the
+capsule.
+
+Opening a capsule also verifies every manifest entry against the
+`author_public_key` it carries. Canonical structure without valid authorship
+is not an accepted manifest. Names are NFC-normalized before signing; a decoder
+rejects a name that is not already NFC so decoding never silently changes
+signed bytes.
 
 ### Membership
 
 Membership is stored as separate edge documents. Server authorization is
 checked before a private share summary, capsule, or live handoff is returned.
-The live rendezvous path may also forward an authorized, encrypted magnet or
-`.torrent` from one online client to another; it is bounded, transient, and is
-not written to MongoDB.
+The live rendezvous path may also forward an authorized encrypted descriptor
+from one online client to another; it is bounded, transient, and is not written
+to MongoDB. M6 uses `.torrent` bytes and never a bare magnet on the private
+path.
 
 An owner grants and revokes membership. Revoking removes the edge, so Nexus
 stops returning summaries, capsules, envelopes, and handoffs to that user. It
@@ -598,13 +624,93 @@ implied otherwise would be lying about what removal buys.
 
 ### Collections become shares
 
-A Portalis collection keeps its local identifier and its info hashes when it
-is published (§20). Publishing mints a fresh `ShareId` (UUIDv7) and a fresh
-random 32-byte share key, and stores both beside the collection.
+A Portalis collection keeps its local identifier when it is published.
+Publishing mints a fresh `ShareId` (UUIDv7) and a fresh random 32-byte share
+key, and stores both beside the collection. M6.0 does this only for new
+collections whose torrents were private from birth; §20 defines the later
+choice for existing public info hashes.
 
 The existing invite secret never becomes the share key. It is a join
 credential that everyone holding an invite link has already seen, and a share
 key must be known only to the devices an owner has sealed it to.
+
+### M6 online friend-to-friend handoff
+
+The first M6 product slice is deliberately narrower than the complete share
+model. It proves this one journey:
+
+> A and B are accepted friends and each has one online device. A creates a new
+> private collection, shares it with B through Nexus, and B downloads its files
+> directly from A.
+
+The flow is:
+
+1. A creates each collection entry as a BitTorrent v1 torrent with
+   `private = true`, adds it locally from `.torrent` bytes, and retains those
+   exact bytes beside the local entry for handoff.
+2. A mints and persists the collection's `ShareId` and random share key, builds
+   the canonical manifest, seals it, signs the publication, and publishes
+   revision one.
+3. A selects B from its accepted friends and grants B access. The successful
+   response includes B's bounded list of non-revoked recipient devices, each
+   with `DeviceId` and X25519 public key. The per-user device quota bounds this
+   disclosure. It is available only to the share owner for a user who has
+   access to that share.
+4. A seals the share key to each returned device and stores the resulting key
+   envelope before sending torrent metadata.
+5. For each manifest entry, A sends an encrypted live handoff to B's device.
+   Its protocol wrapper carries `share_id`, `recipient_device_id`, `info_hash`,
+   and the ciphertext. Nexus forwards it only to that exact authenticated
+   device. An offline recipient produces a typed unavailable response; success
+   means the payload was queued to that live connection, not that its media
+   download completed.
+6. B fetches the authorized snapshot and its key envelope, opens the capsule,
+   decrypts the handoff, validates the torrent descriptor and info hash,
+   creates one local collection bound to the `ShareId`, and adds the torrent
+   from bytes with Nexus peer candidates as initial peers. If the live event
+   arrives before the envelope refresh completes, B retains that bounded event
+   locally and processes it after the key is available.
+7. A refreshes its Nexus swarm lease while seeding. B discovers A through
+   Nexus only and BitTorrent transfers the media directly between them.
+
+One handoff carries one entry and has this client-to-client format:
+
+```text
+handoff   := u8      handoff_version = 1
+             u8[12]  random_nonce
+             u8[]    ciphertext             ChaCha20-Poly1305, tag included
+
+plaintext := u32     collection_name_len
+             u8[]    collection_name         UTF-8, NFC-normalized
+             u8[20]  info_hash
+             u32     torrent_len
+             u8[]    torrent_bytes
+```
+
+The share key encrypts the plaintext. Associated data is
+`share_id || recipient_device_id || info_hash`. The sender draws a fresh nonce
+for every attempt. The receiver rejects a descriptor over the protocol limit,
+a descriptor whose info dictionary is not private, or a descriptor whose
+computed v1 info hash differs from the handoff and manifest. Receiving the
+same `share_id + info_hash` again is idempotent.
+
+The handoff uses `.torrent` bytes rather than asking librqbit to resolve a bare
+magnet. A magnet resolver does not know that a torrent is private until after
+it obtains metadata and may disclose the info hash to DHT first. Adding the
+validated descriptor as bytes gives the engine the private flag before it
+starts discovery.
+
+The collection name is included because the canonical manifest describes its
+entries, not the collection object. A keeps its existing local collection ID;
+B generates its own local ID. Both persist the same `ShareId`, which is the
+deduplication key for the Nexus path. The legacy invite secret remains a
+legacy-path credential and is not required by this flow.
+
+This slice intentionally defers offline handoff storage, share invitations and
+acceptance, collaborative member publication, linked-device key repair,
+cryptographic erasure after revocation, migration of existing public torrents,
+and relayed media transport. A and B must be online at the same time, and the
+transfer remains subject to ordinary BitTorrent reachability.
 
 ## 12. Swarm Discovery
 
@@ -632,10 +738,11 @@ recent leases, and diverse network prefixes. The client merges and de-duplicates
 server, direct, tracker, and DHT candidates before handing them to librqbit.
 
 A private share is the exception: its torrents carry the BitTorrent `private`
-flag, so DHT, PEX, and local discovery are not used for them and Nexus is the
-only source of candidates (§11). Its confidentiality rests on the secrecy of
-its info hashes, and announcing one to a public network spends that secrecy
-permanently.
+flag, so DHT, PEX, trackers, and local discovery are not used for them and
+Nexus is the only source of candidates (§11). A receiver adds a private
+torrent from validated descriptor bytes, never through a bare magnet resolver.
+Its confidentiality rests on the secrecy of its info hashes, and announcing
+one to a public network spends that secrecy permanently.
 
 The Portalis server is deterministic discovery, not guaranteed reachability.
 Symmetric NAT and restrictive firewalls still require a relay, reachable seed,
@@ -1115,11 +1222,16 @@ source-bound endpoints; disconnect and time-based expiry both remove leases.
 
 ### M5.5: Account and membership control
 
+Status: partial. `RevokeShareAccess` is complete. The other commands remain
+required before a production account UI, but do not block the bounded M6
+online-sharing slice below.
+
 Every command here is one a user-facing client must offer and cannot build
 today: the protocol can add a member but not remove one, mark a device revoked
 but never say so, and refuse a friend request that can be sent again a second
-later. M6 would otherwise ship a UI with buttons that have no messages behind
-them.
+later. A production account UI would otherwise ship buttons that have no
+messages behind them; the M6.0 development slice exposes none of those
+unfinished controls.
 
 - `RevokeShareAccess`: an owner removes a member (§11).
 - `ListDevices` and `RevokeDevice`: a user sees their devices and signs one
@@ -1137,31 +1249,93 @@ frees its handle.
 
 ### M6: Flutter integration
 
-- Add only `portalis-nexus-client` to the existing backend.
-- Add a Flutter Rust Bridge façade for connection, identity, device linking
-  and revocation, friends, presence, shares, key envelopes, swarm discovery,
-  and errors.
-- Implement the canonical manifest, `SnapshotId`, and capsule of §11, and the
-  device identity migration of §9.
-- Mark private shares' torrents private and keep them off DHT, PEX, and local
-  discovery (§11).
-- Keep protobuf and sockets out of Dart.
-- Add runtime feature flag.
+M6 is delivered in two slices. The first proves the product path without also
+solving offline delivery, account administration, or migration.
 
-Gate: macOS, iOS, Android, and Linux builds pass with legacy behavior
-unchanged when disabled; two devices of one user and two users exchange a
-share end to end; a capsule written by one platform opens on another.
+#### M6.0: one online friend receives one new private collection
+
+Protocol and portable-client work, in order:
+
+1. Change capsule nonce derivation to include `snapshot_id` and add fixed
+   cross-platform test vectors.
+2. Verify manifest-entry signatures and NFC on construction and capsule open.
+3. Define the publication signing payload. Add publisher device identity to a
+   returned snapshot and make Nexus verify the signature before storage.
+4. Extend `ShareAccessGranted` with the granted user's bounded non-revoked
+   recipient-device IDs and X25519 public keys. Add the entry info hash to the
+   outer `ShareHandoff` message so the receiver can construct its authenticated
+   context before decryption.
+5. Implement the versioned encrypted torrent-handoff codec from §11 in
+   `portalis-nexus-client`.
+6. Route a handoff to the exact requested device and return a typed unavailable
+   result when that device has no live connection.
+7. Align the documented torrent-descriptor and encrypted-handoff limits with
+   the protocol constants, keeping one complete handoff below the 8 MiB frame
+   limit.
+
+Portalis backend work, in order:
+
+1. Add only `portalis-nexus-client` as the Nexus dependency and implement its
+   signer with the existing Ed25519 identity. Generate the independent X25519
+   key before first registration.
+2. Add an optional local Nexus binding beside a collection: `ShareId`, share
+   key, acknowledged revision and snapshot, plus the exact private `.torrent`
+   bytes for each entry. It is one source of truth for retries and handoffs.
+3. Add a Nexus-only creation path that builds torrents with `private = true`
+   from birth. Do not convert existing collection torrents in this slice.
+4. Publish revision one, grant the selected accepted friend, seal the share key
+   to the returned device keys, and send one handoff per manifest entry.
+5. On B, consume the key envelope and handoff, validate both the descriptor and
+   manifest, create or find the local collection by `ShareId`, and add the
+   torrent from bytes.
+6. Announce A's lease and give B only Nexus lookup results as initial peers for
+   that private torrent. No DHT, PEX, tracker, local discovery, or bare-magnet
+   resolution is allowed on this path.
+7. Expose the smallest Flutter Rust Bridge façade needed to select a friend,
+   start the share, observe waiting/failed/receiving state, and report typed
+   errors. Protobuf and sockets remain outside Dart.
+8. Put the entire path behind the runtime feature flag; disabled behavior is
+   byte-for-byte the legacy behavior.
+
+Automated gate:
+
+- Two real backend instances and one real Nexus server execute the complete
+  flow from new files on A to verified downloaded bytes on B.
+- The received `.torrent` is private, its computed info hash matches the
+  manifest, and the test observes no DHT or tracker discovery for it.
+- Repeating publication, grant, envelope push, handoff, and receive is
+  idempotent.
+- A handoff to an offline or wrong device fails without creating a collection
+  on B or reporting success on A.
+- Legacy behavior remains unchanged when the feature is disabled.
+
+#### M6.1: portability and account completeness
+
+- Complete the remaining M5.5 device and account controls.
+- Move both private keys behind the platform secure-storage adapter.
+- Add linked-device key repair and the broader FRB façade.
+- Pass macOS, iOS, Android, and Linux builds; a capsule and handoff written on
+  one platform open on another.
+- Decide which deferred §11 capabilities enter the next product slice based on
+  observed use, rather than implementing them speculatively.
+
+M6.0 is a development-gated integration slice, not a production security
+release. M6.1 secure storage is required before enabling Nexus for an external
+beta.
 
 When Nexus is unreachable the client keeps working against its local state and
-its existing discovery paths. Publications wait rather than fail, since a
-publication is a revision of durable local state and not a request that can be
-abandoned; everything else refreshes on reconnect (§8).
+its existing discovery paths. A pending M6.0 share remains visible locally and
+retries when both users are online; it does not silently fall back to public
+discovery. Publications wait rather than fail, since a publication is a
+revision of durable local state and not a request that can be abandoned;
+everything else refreshes on reconnect (§8).
 
 ### M7: Dual-protocol migration
 
 - Run server discovery in shadow mode.
 - Dual-publish where safe without duplicate imports.
-- Prefer server lookup with legacy/direct/tracker/DHT fallback.
+- Prefer server lookup with legacy/direct/tracker/DHT fallback only where the
+  collection's public/private policy permits it.
 - Compare success, latency, and transfer-start metrics.
 
 Gate: staged beta meets agreed reliability and latency objectives, with
@@ -1180,19 +1354,25 @@ configuration-only rollback.
 2. Import the stable client façade into the Flutter Rust backend.
 3. Authenticate using the existing device identity, and generate the X25519
    key beside it (§9).
-4. Register existing collections without changing local IDs or info hashes,
-   minting a `ShareId` and share key for each (§11).
-5. Rewrite manifest entries into the canonical encoding as their collections
-   are published. Entries signed by earlier builds concatenate a
-   variable-length name directly before an optional thumbnail hash, so two
-   different names and thumbnails can produce the same signed bytes; the
-   length-prefixed encoding of §11 removes that, and re-signing is what
-   applies the fix.
-6. Publish heads through both paths during migration.
-7. Read server state first and retain current fallbacks.
-8. Prevent duplicate collection creation and media import across paths.
-9. Measure both paths and stage rollout by cohort.
-10. Keep rollback as runtime configuration.
+4. Deliver M6.0 for newly created Nexus-private collections only. Mint a
+   `ShareId` and share key and bind them to the existing local collection ID.
+5. Leave every existing collection on the legacy path during M6.0. Do not
+   claim that an existing public torrent became private without changing its
+   info hash.
+6. Measure the bounded flow before choosing an existing-collection migration.
+   A migrated torrent either remains explicitly legacy-public with its current
+   hash, or is rebuilt as private with a new hash.
+7. Preserve legacy manifest entries under their original verification rule.
+   Only the device holding an entry author's private key can re-sign that
+   authorship in the current encoding; another device must retain the legacy
+   signature or create an explicit owner re-attestation rather than pretending
+   to be the original author.
+8. When dual publication begins, use persisted `ShareId` bindings to prevent
+   duplicate collection creation and media import across paths.
+9. Read server state first only for Nexus-bound collections and retain the
+   matching legacy fallback policy for legacy-public ones. Private torrents
+   never fall back to DHT, trackers, or local discovery.
+10. Stage rollout by cohort and keep rollback as runtime configuration.
 11. Remove legacy address encoding only after the support window expires.
 
 ## 21. Initial Acceptance Objectives

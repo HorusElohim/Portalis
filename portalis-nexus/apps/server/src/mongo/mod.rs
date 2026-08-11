@@ -329,6 +329,30 @@ impl IdentityRepository for MongoStore {
         }
     }
 
+    fn list_devices(
+        &self,
+        user: UserId,
+    ) -> impl std::future::Future<Output = Result<Vec<DeviceRecord>, RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            let documents: Vec<DeviceDocument> = store
+                .devices()
+                .find(doc! { "user_id": binary(&user) })
+                .await
+                .map_err(unavailable)?
+                .try_collect()
+                .await
+                .map_err(unavailable)?;
+            let mut devices: Vec<_> = documents
+                .into_iter()
+                .filter_map(DeviceDocument::into_record)
+                .filter(|device| !device.is_revoked())
+                .collect();
+            devices.sort_by_key(|device| device.device_id);
+            Ok(devices)
+        }
+    }
+
     fn link_device(
         &self,
         device: DeviceRecord,

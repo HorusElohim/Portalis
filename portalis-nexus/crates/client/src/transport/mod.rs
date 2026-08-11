@@ -361,11 +361,13 @@ impl NexusClient {
         &self,
         share_id: &[u8],
         recipient_device_id: &[u8],
+        info_hash: &[u8],
         ciphertext: &[u8],
     ) -> Result<(), TransportError> {
         let request = self.shared.protocol.share_handoff(
             share_id,
             recipient_device_id,
+            info_hash,
             ciphertext,
             now_unix_ns(),
         );

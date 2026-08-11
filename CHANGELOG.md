@@ -27,6 +27,22 @@
   retried publication byte-identical, and a capsule is bound to its share,
   revision, and snapshot so it cannot be lifted onto another.
 
+- Hardened the Nexus manifest foundation for M6: names must be NFC-normalized,
+  capsule opens verify each entry signature, and capsule nonces include the
+  snapshot root so concurrent candidate revisions cannot reuse a key/nonce
+  pair.
+
+- Started the M6 app integration seam: granting a share now returns every
+  non-revoked recipient device and its encryption key, while live `.torrent`
+  handoffs carry the info hash and route only to the exact device (reporting
+  an offline recipient as a typed unavailable response). The backend now
+  imports the portable Nexus client behind a private native seam, keeping
+  protobuf transport details out of the Flutter bridge.
+
+- Extended the Nexus walkthrough demo through the complete online A→B path:
+  it consumes the returned recipient device, seals the descriptor, sends it
+  live, and verifies that only the exact device receives and opens it.
+
 - Added Nexus share-membership revocation, so an owner can remove someone
   from a share rather than only ever adding them. Nexus stops answering that
   user with summaries, capsules, envelopes, and handoffs; it cannot reach the

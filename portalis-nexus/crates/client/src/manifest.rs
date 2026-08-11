@@ -13,8 +13,10 @@
 //! entries lacked: a name written directly before an optional thumbnail could
 //! be read as a longer name and no thumbnail.
 
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use portalis_nexus_protocol::{DEVICE_KEY_BYTES, SIGNATURE_BYTES, SNAPSHOT_ID_BYTES};
 use thiserror::Error;
+use unicode_normalization::UnicodeNormalization;
 
 /// Prefix bound into every canonical manifest, so bytes hashed here can never
 /// collide with bytes hashed for another purpose.
@@ -41,8 +43,12 @@ pub enum ManifestError {
     /// client, so a length that cannot be encoded is refused before hashing.
     #[error("entry name is {actual} bytes, over the {MAX_ENTRY_NAME_BYTES}-byte limit")]
     NameTooLong { actual: usize },
+    #[error("entry name is not NFC-normalized")]
+    NameNotNfc,
     #[error("a manifest holds at most {MAX_ENTRIES} entries, got {actual}")]
     TooManyEntries { actual: usize },
+    #[error("entry for info hash {} has an invalid signature", hex(.info_hash))]
+    InvalidSignature { info_hash: [u8; INFO_HASH_BYTES] },
 }
 
 /// The per-snapshot entry bound from §8's quota, so one manifest cannot grow
@@ -68,6 +74,16 @@ pub struct ManifestEntry {
 }
 
 impl ManifestEntry {
+    /// Returns the representation that must be signed and placed on the wire.
+    ///
+    /// Callers normalize before constructing/signing an entry. A decoder does
+    /// not normalize authenticated bytes after the fact; it rejects a name
+    /// that is not already in this form.
+    #[must_use]
+    pub fn normalize_name(name: &str) -> String {
+        name.nfc().collect()
+    }
+
     /// Everything except the signature: exactly what a signature covers.
     ///
     /// Split out so a client signs and verifies the same bytes it hashes,
@@ -77,6 +93,18 @@ impl ManifestEntry {
         let mut bytes = Vec::new();
         self.encode_signed_fields(&mut bytes);
         bytes
+    }
+
+    /// Verifies the signature against the public key carried by this entry.
+    #[must_use]
+    pub fn verify(&self) -> bool {
+        let Ok(public_key) = VerifyingKey::from_bytes(&self.author_public_key) else {
+            return false;
+        };
+        let signature = Signature::from_bytes(&self.signature);
+        public_key
+            .verify(self.signing_payload().as_slice(), &signature)
+            .is_ok()
     }
 
     fn encode_signed_fields(&self, bytes: &mut Vec<u8>) {
@@ -113,20 +141,28 @@ impl Manifest {
     /// # Errors
     ///
     /// Returns [`ManifestError`] when an info hash repeats, a name is too
-    /// long, or there are more entries than a snapshot may carry.
+    /// long or not NFC-normalized, an entry signature is invalid, or there
+    /// are more entries than a snapshot may carry.
     pub fn new(mut entries: Vec<ManifestEntry>) -> Result<Self, ManifestError> {
         if entries.len() > MAX_ENTRIES {
             return Err(ManifestError::TooManyEntries {
                 actual: entries.len(),
             });
         }
-        if let Some(entry) = entries
-            .iter()
-            .find(|entry| entry.name.len() > MAX_ENTRY_NAME_BYTES)
-        {
-            return Err(ManifestError::NameTooLong {
-                actual: entry.name.len(),
-            });
+        for entry in &entries {
+            if entry.name.len() > MAX_ENTRY_NAME_BYTES {
+                return Err(ManifestError::NameTooLong {
+                    actual: entry.name.len(),
+                });
+            }
+            if ManifestEntry::normalize_name(&entry.name) != entry.name {
+                return Err(ManifestError::NameNotNfc);
+            }
+            if !entry.verify() {
+                return Err(ManifestError::InvalidSignature {
+                    info_hash: entry.info_hash,
+                });
+            }
         }
 
         entries.sort_unstable_by_key(|entry| entry.info_hash);
@@ -196,17 +232,33 @@ fn hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use ed25519_dalek::{Signer, SigningKey};
+
     use super::*;
 
+    fn key(seed: u8) -> SigningKey {
+        SigningKey::from_bytes(&[seed; 32])
+    }
+
+    fn signed(mut entry: ManifestEntry, seed: u8) -> ManifestEntry {
+        let signing_key = key(seed);
+        entry.author_public_key = signing_key.verifying_key().to_bytes();
+        entry.signature = signing_key.sign(&entry.signing_payload()).to_bytes();
+        entry
+    }
+
     fn entry(info_hash: u8, name: &str) -> ManifestEntry {
-        ManifestEntry {
-            info_hash: [info_hash; INFO_HASH_BYTES],
-            name: name.to_owned(),
-            thumbnail_hash: None,
-            author_public_key: [7; DEVICE_KEY_BYTES],
-            added_at_unix_ns: 1_700_000_000_000_000_000,
-            signature: [9; SIGNATURE_BYTES],
-        }
+        signed(
+            ManifestEntry {
+                info_hash: [info_hash; INFO_HASH_BYTES],
+                name: name.to_owned(),
+                thumbnail_hash: None,
+                author_public_key: [0; DEVICE_KEY_BYTES],
+                added_at_unix_ns: 1_700_000_000_000_000_000,
+                signature: [0; SIGNATURE_BYTES],
+            },
+            7,
+        )
     }
 
     #[test]
@@ -234,10 +286,13 @@ mod tests {
     #[test]
     fn every_meaningful_difference_changes_the_content_root() {
         let base = Manifest::new(vec![entry(1, "one")]).expect("built");
-        let with_thumbnail = ManifestEntry {
-            thumbnail_hash: Some([4; THUMBNAIL_HASH_BYTES]),
-            ..entry(1, "one")
-        };
+        let with_thumbnail = signed(
+            ManifestEntry {
+                thumbnail_hash: Some([4; THUMBNAIL_HASH_BYTES]),
+                ..entry(1, "one")
+            },
+            7,
+        );
 
         let roots = [
             base.snapshot_id(),
@@ -253,24 +308,18 @@ mod tests {
             Manifest::new(vec![with_thumbnail])
                 .expect("built")
                 .snapshot_id(),
-            Manifest::new(vec![ManifestEntry {
-                added_at_unix_ns: 1,
-                ..entry(1, "one")
-            }])
+            Manifest::new(vec![signed(
+                ManifestEntry {
+                    added_at_unix_ns: 1,
+                    ..entry(1, "one")
+                },
+                7,
+            )])
             .expect("built")
             .snapshot_id(),
-            Manifest::new(vec![ManifestEntry {
-                author_public_key: [8; DEVICE_KEY_BYTES],
-                ..entry(1, "one")
-            }])
-            .expect("built")
-            .snapshot_id(),
-            Manifest::new(vec![ManifestEntry {
-                signature: [1; SIGNATURE_BYTES],
-                ..entry(1, "one")
-            }])
-            .expect("built")
-            .snapshot_id(),
+            Manifest::new(vec![signed(ManifestEntry { ..entry(1, "one") }, 8)])
+                .expect("built")
+                .snapshot_id(),
             Manifest::default().snapshot_id(),
         ];
 
@@ -287,16 +336,22 @@ mod tests {
     #[test]
     fn a_name_cannot_be_confused_with_the_field_after_it() {
         let thumbnail = [0x61; THUMBNAIL_HASH_BYTES]; // "aaaa…" as UTF-8.
-        let with_thumbnail = Manifest::new(vec![ManifestEntry {
-            thumbnail_hash: Some(thumbnail),
-            ..entry(1, "photo")
-        }])
+        let with_thumbnail = Manifest::new(vec![signed(
+            ManifestEntry {
+                thumbnail_hash: Some(thumbnail),
+                ..entry(1, "photo")
+            },
+            7,
+        )])
         .expect("built");
-        let swallowed = Manifest::new(vec![ManifestEntry {
-            name: format!("photo{}", "a".repeat(THUMBNAIL_HASH_BYTES)),
-            thumbnail_hash: None,
-            ..entry(1, "photo")
-        }])
+        let swallowed = Manifest::new(vec![signed(
+            ManifestEntry {
+                name: format!("photo{}", "a".repeat(THUMBNAIL_HASH_BYTES)),
+                thumbnail_hash: None,
+                ..entry(1, "photo")
+            },
+            7,
+        )])
         .expect("built");
 
         assert_ne!(with_thumbnail.encode(), swallowed.encode());
@@ -352,10 +407,30 @@ mod tests {
         );
         assert!(Manifest::new(vec![entry(1, &"n".repeat(MAX_ENTRY_NAME_BYTES))]).is_ok());
 
+        assert_eq!(
+            Manifest::new(vec![entry(1, "e\u{301}")]),
+            Err(ManifestError::NameNotNfc)
+        );
+        assert_eq!(ManifestEntry::normalize_name("e\u{301}"), "é");
+
+        let mut forged = entry(1, "one");
+        forged.signature[0] ^= 1;
+        assert_eq!(
+            Manifest::new(vec![forged]),
+            Err(ManifestError::InvalidSignature {
+                info_hash: [1; INFO_HASH_BYTES]
+            })
+        );
+
         let crowd: Vec<_> = (0..=MAX_ENTRIES)
-            .map(|index| ManifestEntry {
-                info_hash: index_hash(index),
-                ..entry(0, "many")
+            .map(|index| {
+                signed(
+                    ManifestEntry {
+                        info_hash: index_hash(index),
+                        ..entry(0, "many")
+                    },
+                    7,
+                )
             })
             .collect();
         assert_eq!(

@@ -9,6 +9,7 @@ use std::net::SocketAddr;
 use portalis_nexus_client::{ClientError, DeviceSigner, NexusClient, TransportError};
 use portalis_nexus_demo::{DemoDevice, short};
 use portalis_nexus_protocol::v1::AddressFamily;
+use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_server::{AppState, GRACEFUL_DRAIN_TIMEOUT};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -58,6 +59,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // 3. A different device asking for the same name gets its own handle.
     let grace_device = DemoDevice::ephemeral(9);
     let grace = NexusClient::connect(&endpoint).await?;
+    let mut grace_events = grace
+        .events()
+        .ok_or("Grace's event stream is unavailable")?;
     let shared_name = grace.register("ada", &grace_device).await?;
     step(
         4,
@@ -115,17 +119,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         &grace,
         &grace_device,
         &shared_name.user_id,
+        &mut grace_events,
     )
     .await?;
 
     // 9. Swarm discovery over the addresses the sockets observed.
     swarm(&returning, &grace).await?;
 
-    // 15. Draining closes every live socket within a bounded wait.
+    // 16. Draining closes every live socket within a bounded wait.
     let live = [returning, grace, stranger];
     timeout(GRACEFUL_DRAIN_TIMEOUT, state.shutdown().drain()).await?;
     step(
-        16,
+        17,
         "The server drained",
         &format!("{} connections were asked to close", live.len()),
     );
@@ -151,6 +156,7 @@ async fn shares(
     grace: &NexusClient,
     grace_device: &DemoDevice,
     grace_id: &[u8],
+    grace_events: &mut tokio::sync::mpsc::Receiver<portalis_nexus_protocol::v1::Envelope>,
 ) -> Result<(), Box<dyn Error>> {
     let share_id = portalis_nexus_protocol::new_message_id();
     let share_key = portalis_nexus_protocol::new_challenge();
@@ -212,13 +218,20 @@ async fn shares(
         &format!("{} / {}", describe(&probed), describe(&invented)),
     );
 
-    // Ada grants Grace access and seals the share key to Grace's device.
-    ada.grant_share_access(&share_id, grace_id).await?;
-    let sealed =
-        portalis_nexus_protocol::seal(&grace_device.encryption_public_key(), &context, &share_key)?;
+    // Ada grants Grace access. The response identifies the exact live device
+    // and supplies the public key needed to seal the share key to it.
+    let granted = ada.grant_share_access(&share_id, grace_id).await?;
+    let recipient = granted
+        .recipient_devices
+        .first()
+        .ok_or("the grant should return Grace's device")?;
+    let recipient_device_id: [u8; 32] = recipient.device_id.as_slice().try_into()?;
+    let recipient_encryption_key: [u8; 32] =
+        recipient.encryption_public_key.as_slice().try_into()?;
+    let sealed = portalis_nexus_protocol::seal(&recipient_encryption_key, &context, &share_key)?;
     ada.put_key_envelope(
         &share_id,
-        &grace_device.device_id(),
+        &recipient_device_id,
         &sealed.ephemeral_public_key,
         &sealed.ciphertext,
     )
@@ -256,6 +269,41 @@ async fn shares(
             "revision {} decrypts to {:?}",
             fetched.revision,
             String::from_utf8_lossy(&opened)
+        ),
+    );
+
+    // Pass the encrypted torrent descriptor live to the exact device returned
+    // by the grant. Nexus relays the bytes without storing or opening them.
+    let info_hash = [1_u8; 20];
+    let handoff_ciphertext = pretend_to_encrypt(MAGNET, &recovered);
+    ada.share_handoff(
+        &share_id,
+        &recipient_device_id,
+        &info_hash,
+        &handoff_ciphertext,
+    )
+    .await?;
+    let handoff = timeout(std::time::Duration::from_secs(1), async {
+        loop {
+            let event = grace_events
+                .recv()
+                .await
+                .ok_or("Grace's event stream ended")?;
+            if let Some(Payload::ShareHandoff(handoff)) = event.payload {
+                break Ok::<_, Box<dyn Error>>(handoff);
+            }
+        }
+    })
+    .await??;
+    let received = pretend_to_encrypt(&handoff.ciphertext, &recovered);
+    step(
+        15,
+        "Ada handed the encrypted .torrent descriptor to Grace's exact device",
+        &format!(
+            "device {}, info hash {}, descriptor {:?}",
+            short(&handoff.recipient_device_id),
+            short(&handoff.info_hash),
+            String::from_utf8_lossy(&received)
         ),
     );
     Ok(())
@@ -296,7 +344,7 @@ async fn swarm(ada: &NexusClient, grace: &NexusClient) -> Result<(), Box<dyn Err
         .lookup_peers(&info_hash, AddressFamily::Unspecified, 0)
         .await?;
     step(
-        15,
+        16,
         "A withdrawn seeder disappears immediately",
         &format!("{} peer(s) remain", after.peers.len()),
     );

@@ -103,6 +103,13 @@ impl IdentityRepository for NexusStore {
         }
     }
 
+    async fn list_devices(&self, user: UserId) -> Result<Vec<DeviceRecord>, RepositoryError> {
+        match self {
+            Self::Memory(store) => store.list_devices(user).await,
+            Self::Mongo(store) => store.list_devices(user).await,
+        }
+    }
+
     async fn link_device(&self, device: DeviceRecord) -> Result<(), RepositoryError> {
         match self {
             Self::Memory(store) => store.link_device(device).await,

@@ -125,6 +125,12 @@ pub trait IdentityRepository: UserDirectory {
         device_id: DeviceId,
     ) -> impl Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send;
 
+    /// Lists the non-revoked devices currently authorized for `user`.
+    fn list_devices(
+        &self,
+        user: UserId,
+    ) -> impl Future<Output = Result<Vec<DeviceRecord>, RepositoryError>> + Send;
+
     /// Enrols an additional device for a user who already exists, authorized
     /// by one of that user's other devices rather than by claiming a handle.
     ///
@@ -325,6 +331,13 @@ impl<T: IdentityRepository> IdentityRepository for std::sync::Arc<T> {
         device_id: DeviceId,
     ) -> impl Future<Output = Result<Option<DeviceRecord>, RepositoryError>> + Send {
         T::find_device(self, device_id)
+    }
+
+    fn list_devices(
+        &self,
+        user: UserId,
+    ) -> impl Future<Output = Result<Vec<DeviceRecord>, RepositoryError>> + Send {
+        T::list_devices(self, user)
     }
 
     fn link_device(

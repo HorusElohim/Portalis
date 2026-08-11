@@ -123,7 +123,11 @@ async fn arrived(session: &Session, state: &AppState, now_unix_ns: u64) {
     let user = identity.user.user_id;
     let connection = session.connection_id();
 
-    if state.presence().arrive(user, connection).is_some() {
+    if state
+        .presence()
+        .arrive_for_device(user, identity.device.device_id, connection)
+        .is_some()
+    {
         presence::announce(state, user, true, now_unix_ns).await;
     }
     // Told on every authentication, not only the first device, so each new

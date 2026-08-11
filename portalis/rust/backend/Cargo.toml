@@ -30,6 +30,11 @@ anyhow = "1.0"
 # swap it. See docs/future-engine.md.
 async-trait = "0.1"
 
+# The canonical online-share wire client. Keep protobufs and transport types
+# behind the native backend boundary; the Flutter bridge will expose only
+# domain operations once the app integration is ready.
+portalis-nexus-client = { path = "../../../portalis-nexus/crates/client" }
+
 # Domain layer: device identity (signing) and content-addressing (rendezvous
 # keys, manifest entry ids). Pure Rust, no OS-specific bits — safe on every
 # target including wasm32.

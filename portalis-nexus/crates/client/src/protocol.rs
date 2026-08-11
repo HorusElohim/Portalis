@@ -12,9 +12,9 @@ use portalis_nexus_protocol::v1::{
     ShareHandoff, SharePublished, ShareSnapshot, WithdrawPeer,
 };
 use portalis_nexus_protocol::{
-    CURRENT_PROTOCOL_VERSION, SHARE_ID_BYTES, SNAPSHOT_ID_BYTES, SessionBinding,
-    authentication_payload, link_device_payload, new_message_id, registration_payload,
-    validate_server_hello,
+    CURRENT_PROTOCOL_VERSION, DEVICE_ID_BYTES, ENCRYPTION_KEY_BYTES, SHARE_ID_BYTES,
+    SNAPSHOT_ID_BYTES, SessionBinding, authentication_payload, link_device_payload, new_message_id,
+    registration_payload, validate_server_hello,
 };
 
 use crate::error::ClientError;
@@ -252,6 +252,7 @@ impl ClientProtocol {
         &self,
         share_id: &[u8],
         recipient_device_id: &[u8],
+        info_hash: &[u8],
         ciphertext: &[u8],
         timestamp_unix_ns: u64,
     ) -> Envelope {
@@ -260,6 +261,7 @@ impl ClientProtocol {
                 share_id: share_id.to_vec(),
                 recipient_device_id: recipient_device_id.to_vec(),
                 ciphertext: ciphertext.to_vec(),
+                info_hash: info_hash.to_vec(),
             }),
             timestamp_unix_ns,
         )
@@ -634,7 +636,17 @@ pub fn validate_share_access_granted(
     response: &Envelope,
 ) -> Result<ShareAccessGranted, ClientError> {
     match validate_reply(request, response)? {
-        Payload::ShareAccessGranted(granted) => Ok(granted.clone()),
+        Payload::ShareAccessGranted(granted)
+            if granted.share_id.len() == SHARE_ID_BYTES
+                && granted.member_user_id.len() == portalis_nexus_protocol::USER_ID_BYTES
+                && granted.recipient_devices.len() <= 16
+                && granted.recipient_devices.iter().all(|device| {
+                    device.device_id.len() == DEVICE_ID_BYTES
+                        && device.encryption_public_key.len() == ENCRYPTION_KEY_BYTES
+                }) =>
+        {
+            Ok(granted.clone())
+        }
         _ => Err(ClientError::UnexpectedEnvelope {
             expected: "ShareAccessGranted",
         }),
@@ -1419,7 +1431,7 @@ mod tests {
         ));
         assert!(matches!(
             client
-                .share_handoff(&[1; 16], &[2; 32], b"sealed", 1)
+                .share_handoff(&[1; 16], &[2; 32], &[3; 20], b"sealed", 1)
                 .payload,
             Some(Payload::ShareHandoff(_))
         ));
@@ -1465,6 +1477,7 @@ mod tests {
         let grant = ShareAccessGranted {
             share_id: vec![1; 16],
             member_user_id: vec![2; 16],
+            recipient_devices: Vec::new(),
         };
         assert_eq!(
             validate_share_access_granted(
@@ -1481,7 +1494,8 @@ mod tests {
                     Payload::ShareHandoff(ShareHandoff {
                         share_id: vec![1; 16],
                         recipient_device_id: Vec::new(),
-                        ciphertext: Vec::new()
+                        ciphertext: Vec::new(),
+                        info_hash: Vec::new()
                     })
                 )
             ),

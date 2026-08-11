@@ -11,7 +11,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use portalis_nexus_protocol::CONNECTION_ID_BYTES;
 
-use crate::ports::UserId;
+use crate::ports::{DeviceId, UserId};
 
 /// Identifies one live socket, as issued in its `ServerHello`.
 pub type ConnectionId = [u8; CONNECTION_ID_BYTES];
@@ -36,6 +36,7 @@ struct Presence {
     /// Only users with at least one live connection appear here, so an entry
     /// existing is the same as being online.
     connections: HashMap<UserId, HashSet<ConnectionId>>,
+    device_connections: HashMap<DeviceId, HashSet<ConnectionId>>,
     last_seen: HashMap<UserId, u64>,
 }
 
@@ -58,6 +59,26 @@ impl PresenceRegistry {
         None
     }
 
+    /// Records a live connection and binds it to the authenticated device.
+    /// This is the form used by request routing; the older [`Self::arrive`]
+    /// helper remains useful for user-only presence tests.
+    #[must_use]
+    pub fn arrive_for_device(
+        &self,
+        user: UserId,
+        device: DeviceId,
+        connection: ConnectionId,
+    ) -> Option<PresenceChange> {
+        let change = self.arrive(user, connection);
+        let mut state = self.lock();
+        state
+            .device_connections
+            .entry(device)
+            .or_default()
+            .insert(connection);
+        change
+    }
+
     /// Records that `connection` has gone.
     ///
     /// Returns [`PresenceChange::WentOffline`] only when it was the user's
@@ -71,11 +92,25 @@ impl PresenceRegistry {
         at_unix_ns: u64,
     ) -> Option<PresenceChange> {
         let mut state = self.lock();
-        let devices = state.connections.get_mut(&user)?;
-        if !devices.remove(&connection) || !devices.is_empty() {
+        let remaining = {
+            let devices = state.connections.get_mut(&user)?;
+            if !devices.remove(&connection) {
+                return None;
+            }
+            devices.len()
+        };
+        if remaining == 0 {
+            state.connections.remove(&user);
+        }
+        for connections in state.device_connections.values_mut() {
+            connections.remove(&connection);
+        }
+        state
+            .device_connections
+            .retain(|_, connections| !connections.is_empty());
+        if remaining != 0 {
             return None;
         }
-        state.connections.remove(&user);
         state.last_seen.insert(user, at_unix_ns);
         Some(PresenceChange::WentOffline)
     }
@@ -88,6 +123,16 @@ impl PresenceRegistry {
             .connections
             .get(&user)
             .map(|devices| devices.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    /// Every live connection for one exact device.
+    #[must_use]
+    pub fn connections_of_device(&self, device: DeviceId) -> Vec<ConnectionId> {
+        self.lock()
+            .device_connections
+            .get(&device)
+            .map(|connections| connections.iter().copied().collect())
             .unwrap_or_default()
     }
 

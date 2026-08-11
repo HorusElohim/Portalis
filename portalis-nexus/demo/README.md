@@ -17,10 +17,13 @@ unenrolled device being refused, and a correlated ping.
 It then publishes an encrypted share, refuses a revision built on a snapshot
 the share has moved past, shows a private share and a nonexistent one
 answering identically, grants a second user access, and has her open the
-sealed key and decrypt the capsule. The key is a real X25519 exchange: the
-server relays bytes it cannot read. Finally two seeders announce to a swarm,
-discover each other at the addresses their sockets were observed on, and one
-withdraws before its lease expires. Then the server drains.
+sealed key and decrypt the capsule. It then uses the grant's returned device
+record to send an encrypted `.torrent`/magnet descriptor to Grace's exact
+live device; the server relays the ciphertext and the info hash but cannot
+read either. The key is a real X25519 exchange: the server relays bytes it
+cannot read. Finally two seeders announce to a swarm, discover each other at
+the addresses their sockets were observed on, and one withdraws before its
+lease expires. Then the server drains.
 
 ## Two processes
 

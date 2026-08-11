@@ -92,6 +92,15 @@ message GrantShareAccess {
 message ShareAccessGranted {
   bytes share_id = 1;
   bytes member_user_id = 2;
+  repeated ShareRecipientDevice recipient_devices = 3;
+}
+
+// A currently authorized device that can receive the share key. The public
+// key is returned with the grant so the owner can envelope the key without
+// another identity lookup round trip.
+message ShareRecipientDevice {
+  bytes device_id = 1;
+  bytes encryption_public_key = 2;
 }
 
 // Removes a member's access to a share. Only the owner may send it, and the
@@ -123,4 +132,7 @@ message ShareHandoff {
   bytes share_id = 1;
   bytes recipient_device_id = 2;
   bytes ciphertext = 3;
+  // The torrent's info hash is authenticated by the client-side handoff
+  // envelope and lets the recipient identify the exact bytes before opening.
+  bytes info_hash = 4;
 }

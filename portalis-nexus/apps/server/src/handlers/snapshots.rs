@@ -4,10 +4,10 @@ use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
     Envelope, FetchShareRequest, FetchShareResponse, GrantShareAccess, ListSharesResponse,
     ProtocolErrorCode, PublishShare, RevokeShareAccess, ShareAccessGranted, ShareAccessRevoked,
-    ShareEvent, ShareHandoff, SharePublished, ShareSnapshot,
+    ShareEvent, ShareHandoff, SharePublished, ShareRecipientDevice, ShareSnapshot,
 };
 use portalis_nexus_protocol::{
-    MAX_SHARE_HANDOFF_BYTES, SHARE_ID_BYTES, SNAPSHOT_ID_BYTES, USER_ID_BYTES,
+    INFO_HASH_V1_BYTES, MAX_SHARE_HANDOFF_BYTES, SHARE_ID_BYTES, SNAPSHOT_ID_BYTES, USER_ID_BYTES,
 };
 use portalis_nexus_server_core::{
     DeviceId, IdentityRepository, Publication, ShareCommandError, ShareRecord, ShareRepository,
@@ -130,14 +130,30 @@ pub(crate) async fn grant(
         .grant(identity.user.user_id, share_id, member)
         .await
     {
-        Ok(()) => reply_with(
-            request,
-            Payload::ShareAccessGranted(ShareAccessGranted {
-                share_id: share_id.to_vec(),
-                member_user_id: member.to_vec(),
-            }),
-            now_unix_ns,
-        ),
+        Ok(()) => match state.store().list_devices(member).await {
+            Ok(devices) => reply_with(
+                request,
+                Payload::ShareAccessGranted(ShareAccessGranted {
+                    share_id: share_id.to_vec(),
+                    member_user_id: member.to_vec(),
+                    recipient_devices: devices
+                        .into_iter()
+                        .take(16)
+                        .map(|device| ShareRecipientDevice {
+                            device_id: device.device_id.to_vec(),
+                            encryption_public_key: device.encryption_public_key.to_vec(),
+                        })
+                        .collect(),
+                }),
+                now_unix_ns,
+            ),
+            Err(_) => protocol_error(
+                ProtocolErrorCode::Internal,
+                request.message_id.clone(),
+                "the identity store is unavailable".to_owned(),
+                now_unix_ns,
+            ),
+        },
         Err(error) => rejection(request, &error, now_unix_ns),
     }
 }
@@ -198,6 +214,9 @@ pub(crate) async fn handoff(
     if handoff.ciphertext.len() > MAX_SHARE_HANDOFF_BYTES {
         return malformed(request, "encrypted handoff is too large", now_unix_ns);
     }
+    if handoff.info_hash.len() != INFO_HASH_V1_BYTES {
+        return malformed(request, "info_hash must be a v1 info hash", now_unix_ns);
+    }
     let sender_allowed = state
         .store()
         .has_share_access(share_id, identity.user.user_id)
@@ -215,13 +234,17 @@ pub(crate) async fn handoff(
         return private(request, now_unix_ns);
     }
 
+    let connections = state.presence().connections_of_device(recipient);
+    if connections.is_empty() {
+        return unavailable(request, now_unix_ns);
+    }
     let event = Envelope {
         message_id: portalis_nexus_protocol::new_message_id(),
         correlation_id: Vec::new(),
         timestamp_unix_ns: now_unix_ns,
         payload: Some(Payload::ShareHandoff(handoff.clone())),
     };
-    for connection in state.presence().connections_of(recipient_device.user_id) {
+    for connection in connections {
         state.connections().send(connection, binary_frame(&event));
     }
     reply_with(
@@ -230,6 +253,7 @@ pub(crate) async fn handoff(
             share_id: share_id.to_vec(),
             recipient_device_id: Vec::new(),
             ciphertext: Vec::new(),
+            info_hash: handoff.info_hash.clone(),
         }),
         now_unix_ns,
     )
@@ -300,6 +324,15 @@ fn private(request: &Envelope, now: u64) -> Envelope {
         ProtocolErrorCode::NotFound,
         request.message_id.clone(),
         "that share was not found".to_owned(),
+        now,
+    )
+}
+
+fn unavailable(request: &Envelope, now: u64) -> Envelope {
+    protocol_error(
+        ProtocolErrorCode::Unavailable,
+        request.message_id.clone(),
+        "the recipient device is offline".to_owned(),
         now,
     )
 }
@@ -492,6 +525,7 @@ mod tests {
                     share_id: SHARE.to_vec(),
                     recipient_device_id: vec![2; 32],
                     ciphertext: b"sealed".to_vec(),
+                    info_hash: vec![7; 20],
                 },
                 NOW,
             )
@@ -670,10 +704,15 @@ mod tests {
             NOW,
         )
         .await;
-        assert!(matches!(
-            granted.payload,
-            Some(Payload::ShareAccessGranted(_))
-        ));
+        let Some(Payload::ShareAccessGranted(granted)) = granted.payload else {
+            panic!("grant should return recipient devices");
+        };
+        assert_eq!(granted.recipient_devices.len(), 1);
+        assert_eq!(granted.recipient_devices[0].device_id, vec![2; 32]);
+        assert_eq!(
+            granted.recipient_devices[0].encryption_public_key,
+            vec![2; 32]
+        );
 
         let allowed = fetch(
             &stranger,
@@ -718,7 +757,15 @@ mod tests {
         assert!(
             state
                 .presence()
-                .arrive(GRACE, member.connection_id())
+                .arrive_for_device(
+                    GRACE,
+                    member
+                        .identity()
+                        .expect("member is signed in")
+                        .device
+                        .device_id,
+                    member.connection_id(),
+                )
                 .is_some(),
             "the member is online"
         );
@@ -772,6 +819,7 @@ mod tests {
             share_id: SHARE.to_vec(),
             recipient_device_id: vec![2; 32],
             ciphertext: b"magnet".to_vec(),
+            info_hash: vec![7; 20],
         };
 
         // Not yet a member: refused, and told only that it was not found.
@@ -799,7 +847,15 @@ mod tests {
         assert!(
             state
                 .presence()
-                .arrive(GRACE, member.connection_id())
+                .arrive_for_device(
+                    GRACE,
+                    member
+                        .identity()
+                        .expect("member is signed in")
+                        .device
+                        .device_id,
+                    member.connection_id(),
+                )
                 .is_some(),
             "the member is online"
         );
@@ -832,6 +888,7 @@ mod tests {
             share_id: SHARE.to_vec(),
             recipient_device_id: vec![1; 32],
             ciphertext: vec![0; MAX_SHARE_HANDOFF_BYTES + 1],
+            info_hash: vec![7; 20],
         };
         let reply = handoff(&owner, &state, &request(), &oversized, NOW).await;
         assert_eq!(
@@ -848,6 +905,7 @@ mod tests {
                     share_id: vec![3; SHARE_ID_BYTES - 1],
                     recipient_device_id: vec![1; 32],
                     ciphertext: b"m".to_vec(),
+                    info_hash: vec![7; 20],
                 },
                 "share_id must name a share",
             ),
@@ -856,8 +914,18 @@ mod tests {
                     share_id: SHARE.to_vec(),
                     recipient_device_id: vec![1; 31],
                     ciphertext: b"m".to_vec(),
+                    info_hash: vec![7; 20],
                 },
                 "recipient_device_id must name a device",
+            ),
+            (
+                ShareHandoff {
+                    share_id: SHARE.to_vec(),
+                    recipient_device_id: vec![1; 32],
+                    ciphertext: b"m".to_vec(),
+                    info_hash: vec![7; 19],
+                },
+                "info_hash must be a v1 info hash",
             ),
         ] {
             let reply = handoff(&owner, &state, &request(), &command, NOW).await;
@@ -871,6 +939,7 @@ mod tests {
             share_id: SHARE.to_vec(),
             recipient_device_id: vec![9; 32],
             ciphertext: b"m".to_vec(),
+            info_hash: vec![7; 20],
         };
         let reply = handoff(&owner, &state, &request(), &unknown, NOW).await;
         assert_eq!(

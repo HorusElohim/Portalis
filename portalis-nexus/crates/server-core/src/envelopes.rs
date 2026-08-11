@@ -357,6 +357,14 @@ mod tests {
             self.0.find_device(device_id)
         }
 
+        fn list_devices(
+            &self,
+            user: UserId,
+        ) -> impl std::future::Future<Output = Result<Vec<DeviceRecord>, RepositoryError>> + Send
+        {
+            self.0.list_devices(user)
+        }
+
         fn link_device(
             &self,
             device: DeviceRecord,

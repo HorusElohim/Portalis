@@ -71,6 +71,7 @@ impl CapsuleContext {
         hasher.update(NONCE_CONTEXT);
         hasher.update(&self.share_id);
         hasher.update(&self.revision.to_le_bytes());
+        hasher.update(&self.snapshot_id);
         let digest = hasher.finalize();
         let mut nonce = [0_u8; NONCE_BYTES];
         nonce.copy_from_slice(&digest.as_bytes()[..NONCE_BYTES]);
@@ -258,7 +259,8 @@ impl<'a> Reader<'a> {
 
 #[cfg(test)]
 mod tests {
-    use portalis_nexus_protocol::{DEVICE_KEY_BYTES, SIGNATURE_BYTES};
+    use ed25519_dalek::{Signer, SigningKey};
+    use portalis_nexus_protocol::SIGNATURE_BYTES;
 
     use super::*;
     use crate::manifest::{INFO_HASH_BYTES, THUMBNAIL_HASH_BYTES};
@@ -266,15 +268,22 @@ mod tests {
     const KEY: ShareKey = [3; SHARE_KEY_BYTES];
     const SHARE: [u8; SHARE_ID_BYTES] = [5; SHARE_ID_BYTES];
 
+    fn signing_key() -> SigningKey {
+        SigningKey::from_bytes(&[7; 32])
+    }
+
     fn entry(info_hash: u8, name: &str, thumbnail: bool) -> ManifestEntry {
-        ManifestEntry {
+        let signing_key = signing_key();
+        let mut entry = ManifestEntry {
             info_hash: [info_hash; INFO_HASH_BYTES],
             name: name.to_owned(),
             thumbnail_hash: thumbnail.then_some([4; THUMBNAIL_HASH_BYTES]),
-            author_public_key: [7; DEVICE_KEY_BYTES],
+            author_public_key: signing_key.verifying_key().to_bytes(),
             added_at_unix_ns: 1_700_000_000_000_000_000,
-            signature: [9; SIGNATURE_BYTES],
-        }
+            signature: [0; SIGNATURE_BYTES],
+        };
+        entry.signature = signing_key.sign(&entry.signing_payload()).to_bytes();
+        entry
     }
 
     fn manifest() -> Manifest {
@@ -332,6 +341,18 @@ mod tests {
             seal(&KEY, SHARE, 7, &manifest).expect("sealed"),
             seal(&KEY, SHARE, 8, &manifest).expect("next revision"),
             "a different revision is a different nonce"
+        );
+    }
+
+    #[test]
+    fn a_different_snapshot_at_the_same_revision_gets_a_different_nonce() {
+        let first = manifest();
+        let second = Manifest::new(vec![entry(1, "changed.jpg", false)]).expect("built");
+
+        assert_ne!(
+            seal(&KEY, SHARE, 7, &first).expect("sealed"),
+            seal(&KEY, SHARE, 7, &second).expect("sealed candidate"),
+            "different candidate plaintexts must not reuse a key and nonce"
         );
     }
 

@@ -253,6 +253,22 @@ impl IdentityRepository for InMemoryIdentities {
         async move { outage.map_or(Ok(found), Err) }
     }
 
+    fn list_devices(
+        &self,
+        user: UserId,
+    ) -> impl std::future::Future<Output = Result<Vec<DeviceRecord>, RepositoryError>> + Send {
+        let outage = self.outage();
+        let mut found: Vec<_> = self
+            .lock()
+            .devices
+            .values()
+            .filter(|device| device.user_id == user && !device.is_revoked())
+            .cloned()
+            .collect();
+        found.sort_by_key(|device| device.device_id);
+        async move { outage.map_or(Ok(found), Err) }
+    }
+
     fn link_device(
         &self,
         device: DeviceRecord,

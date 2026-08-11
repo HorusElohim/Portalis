@@ -29,7 +29,12 @@ async fn expect_handoff(
     recipient_device_id: &[u8; 32],
 ) {
     owner
-        .share_handoff(&SHARE, recipient_device_id, b"live encrypted torrent")
+        .share_handoff(
+            &SHARE,
+            recipient_device_id,
+            &[7; 20],
+            b"live encrypted torrent",
+        )
         .await
         .expect("authorized live handoff");
     let delivered = tokio::time::timeout(std::time::Duration::from_secs(1), async {
