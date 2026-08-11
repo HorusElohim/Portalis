@@ -17,8 +17,9 @@
 ├── portalis/             # Flutter project (Dart UI + Rust FFI bindings)
 │   ├── lib/              # Flutter widgets and FRB-generated API surface
 │   ├── rust/backend/     # Rust crate compiled into native libs / wasm
+│   ├── rust/nexus/       # Nexus client/server networking workspace
+│   ├── rust/vendor/      # Locally maintained Rust dependencies
 │   └── tool/             # Platform-specific build helpers
-├── portalis-nexus/       # Protobuf client/server control-plane workspace
 ├── setup/                # Environment bootstrap scripts for Linux, macOS & Windows
 ├── tests/                # Shell helpers to run Rust/Flutter test suites
 ├── scripts/              # Utility scripts (e.g., project migration)
@@ -58,12 +59,12 @@ Detailed build instructions for every platform live in [`doc/build.md`](doc/buil
 
 ## Portalis Nexus
 
-[`portalis-nexus/`](portalis-nexus/) is the standalone Rust control plane for reliable peer discovery, presence, friendships, and collection metadata exchange. Nexus coordinates peers only: collection media continues to move directly between clients with BitTorrent.
+[`portalis/rust/nexus/`](portalis/rust/nexus/) is Portalis's Rust networking workspace for reliable peer discovery, presence, friendships, and collection metadata exchange. Nexus coordinates peers only: collection media continues to move directly between clients with BitTorrent.
 
-The workspace owns the versioned protobuf contract, reusable client library, server domain logic, and Linux-first server binary. See the [Nexus README](portalis-nexus/README.md) for commands and the [protocol specification](portalis-nexus/SPEC.md) for the architecture and migration plan.
+The workspace owns the versioned protobuf contract, reusable client library, server domain logic, and Linux-first server binary. See the [Nexus README](portalis/rust/nexus/README.md) for commands and the [protocol specification](portalis/rust/nexus/SPEC.md) for the architecture and migration plan.
 
 ```bash
-cd portalis-nexus
+cd portalis/rust/nexus
 
 # Validate the contract and Rust workspace.
 buf lint
@@ -76,7 +77,7 @@ PORTALIS_NEXUS_LISTEN_ADDR=127.0.0.1:8080 cargo run -p portalis-nexus-server
 curl http://127.0.0.1:8080/health
 ```
 
-Run coverage with `./scripts/coverage.sh`. On Linux, the server can also run with `docker compose -f docker/compose.yaml up --build` from `portalis-nexus/`.
+Run coverage with `./scripts/coverage.sh`. On Linux, the server can also run with `docker compose -f docker/compose.yaml up --build` from `portalis/rust/nexus/`.
 
 ## Building
 

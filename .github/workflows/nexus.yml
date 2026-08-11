@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "portalis-nexus/**"
+      - "portalis/rust/nexus/**"
       - ".github/workflows/nexus.yml"
   pull_request:
     branches: [main]
     paths:
-      - "portalis-nexus/**"
+      - "portalis/rust/nexus/**"
       - ".github/workflows/nexus.yml"
 
 concurrency:
@@ -18,7 +18,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: portalis-nexus
+    working-directory: portalis/rust/nexus
 
 jobs:
   quality:
@@ -31,7 +31,7 @@ jobs:
           components: clippy, rustfmt, llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: portalis-nexus
+          workspaces: portalis/rust/nexus
       - uses: bufbuild/buf-setup-action@v1
       - uses: taiki-e/install-action@cargo-llvm-cov
       - name: Validate protobuf
@@ -40,10 +40,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git fetch --depth=1 origin "${{ github.base_ref }}"
-          if git cat-file -e FETCH_HEAD:portalis-nexus/buf.yaml; then
+          if git cat-file -e FETCH_HEAD:portalis/rust/nexus/buf.yaml; then
             buf breaking \
               --against \
-              "https://github.com/${{ github.repository }}.git#branch=${{ github.base_ref }},subdir=portalis-nexus"
+              "https://github.com/${{ github.repository }}.git#branch=${{ github.base_ref }},subdir=portalis/rust/nexus"
           else
             echo "No released Nexus schema exists on the base branch yet."
           fi

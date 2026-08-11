@@ -6,7 +6,7 @@ walks through the M6 control-plane path: identity, friendship and presence,
 canonical capsule publication, recipient-device discovery, sealed key
 delivery, encrypted `.torrent` handoff, and Nexus swarm lookup.
 
-From `portalis-nexus`, start the prototype server in one terminal:
+From `portalis/rust/nexus`, start the prototype server in one terminal:
 
 ```sh
 cargo run -p portalis-nexus-m6-demo --bin nexus-demo-server

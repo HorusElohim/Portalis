@@ -56,53 +56,50 @@ continue to move directly between peers.
 6. MongoDB documents never contain unbounded friend, member, or event arrays.
 7. Deleted protobuf field numbers and enum values are permanently reserved.
 8. The Flutter backend imports only the portable client crate.
-9. The legacy protocol remains available behind a fallback flag until cutover.
+9. Nexus replaces legacy collection networking through a one-way migration;
+   there is no parallel compatibility binding or second runtime source of truth.
 10. Backend integration changes are recorded in the root `CHANGELOG.md`.
 
 ## 5. Repository Layout
 
 ```text
 Portalis/
-├── portalis/                         # Existing Flutter application
-│   └── rust/backend/                 # Imports portalis-nexus-client only
-└── portalis-nexus/                   # Independent Cargo workspace
-    ├── Cargo.toml
-    ├── Cargo.lock
-    ├── SPEC.md
-    ├── README.md
-    ├── buf.yaml
-    ├── buf.gen.yaml
-    ├── proto/
-    │   └── portalis/protocol/v1/
-    │       ├── common.proto
-    │       ├── connection.proto
-    │       ├── identity.proto
-    │       ├── friends.proto
-    │       ├── presence.proto
-    │       ├── shares.proto
-    │       └── swarm.proto
-    ├── crates/
-    │   ├── protocol/                 # limits, ids, frame, validate
-    │   ├── client/                   # Portable Nexus engine: identity,
-    │   │                             #   sessions, connection handoff,
-    │   │                             #   transport, reconnect
-    │   └── server-core/              # Pure domain/application logic
-    ├── apps/
-    │   └── server/                   # config, state, shutdown, health,
-    │                                 #   messages, session, socket,
-    │                                 #   handlers/ (one per subsystem)
-    ├── demo/                         # Runnable server/client examples
-    ├── tests/
-    │   └── integration/              # Real server/client/MongoDB tests
-    └── docker/
-        ├── Dockerfile
-        └── compose.yaml
+└── portalis/                         # Flutter application and Rust engines
+    └── rust/
+        ├── backend/                  # Imports portalis-nexus-client only
+        ├── vendor/                   # Locally maintained dependencies
+        └── nexus/                    # Focused Nexus Cargo workspace
+            ├── Cargo.toml
+            ├── Cargo.lock
+            ├── SPEC.md
+            ├── README.md
+            ├── buf.yaml
+            ├── proto/
+            │   └── portalis/protocol/v1/
+            │       ├── common.proto
+            │       ├── connection.proto
+            │       ├── identity.proto
+            │       ├── friends.proto
+            │       ├── presence.proto
+            │       ├── shares.proto
+            │       └── swarm.proto
+            ├── crates/
+            │   ├── protocol/         # Wire contract and validation
+            │   ├── client/           # Portable Nexus engine
+            │   └── server-core/      # Domain/application logic
+            ├── apps/
+            │   └── server/           # Deployable Nexus service
+            ├── demo/                     # Runnable examples
+            ├── demo-m6/                  # Two-process M6 walkthrough
+            └── docker/
+                ├── Dockerfile
+                └── compose.yaml
 ```
 
-The existing backend eventually imports:
+The backend imports:
 
 ```toml
-portalis-nexus-client = { path = "../../../portalis-nexus/crates/client" }
+portalis-nexus-client = { path = "../nexus/crates/client" }
 ```
 
 ## 6. Crate Boundaries

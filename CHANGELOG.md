@@ -84,6 +84,11 @@
 
 <!-- Behaviour and UX changes go here before the next release. -->
 
+- Moved the Nexus workspace under `portalis/rust/nexus` beside the native
+  backend and torrent dependency. Portalis now has one Rust engine tree, and
+  the backend imports the Nexus client directly from that tree rather than
+  reaching into a repository-level sibling workspace.
+
 - Standardized structured tracing across every Nexus executable and both
   WebSocket boundaries. Clients and servers now correlate safe operation and
   response labels with message IDs, report connection, retry, timeout, and
