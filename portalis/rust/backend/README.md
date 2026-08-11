@@ -17,8 +17,8 @@ The architecture and migration contract live in [`SPEC.md`](SPEC.md).
 - `src`: Flutter boundary, application lifecycle, collections, persistence,
   and Torrent-engine adapter.
 - `crates/protocol`: `limits`, `ids`, `frame`, `validate`.
-- `crates/client`: `error`, `protocol`, `pending`, `reconnect`, `config`, and
-  the `transport` socket actor.
+- `crates/client`: canonical Manifest data, protocol rules, the current
+  command actor, and the authenticated direct-or-relayed QUIC endpoint.
 - `crates/server-core`: transport-independent server rules.
 - `apps/server`: `config`, `state`, `shutdown`, `health`, `messages`, `socket`.
 - `proto`: authoritative protobuf schemas.
@@ -29,6 +29,12 @@ The architecture and migration contract live in [`SPEC.md`](SPEC.md).
 Deterministic rules live in their own modules and are covered by tests; the
 socket plumbing they drive (`apps/server/src/socket.rs`, `crates/client/src/
 transport/`) is excluded from the coverage gate as a platform adapter.
+
+The QUIC endpoint uses Iroh 0.92 with default metrics disabled. That is the
+newest Rust-1.85-compatible line before Iroh's pre-release Curve25519
+transition, so it coexists with Portalis's final X25519 v3 share-key stack
+without downgrading either cryptographic dependency. The endpoint surface is
+small enough to move forward when the workspace raises its Rust baseline.
 
 ## Development
 

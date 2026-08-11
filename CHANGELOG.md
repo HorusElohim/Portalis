@@ -6,6 +6,13 @@
 
 <!-- New user-visible features go here before the next release. -->
 
+- Added the first unified Nexus connection primitive. A `NexusEndpoint`
+  reuses the app's existing Ed25519 device secret, returns raw authenticated
+  QUIC connections and streams to its caller, and reports whether a peer path
+  is direct, relayed, mixed, or unavailable. Direct/relay connectivity, TLS,
+  framing, flow control, and NAT traversal come from Iroh rather than a custom
+  Nexus channel or codec layer.
+
 - Added truthful per-media torrent piece activity. Verified byte ranges now
   appear at their real relative positions around media previews, while live
   worker markers appear only for peers the engine has actually assigned to
