@@ -84,6 +84,27 @@
   card also shows the cost of one operation, and a run too fast for the clock
   no longer reports an infinite rate.
 
+- Fixed the Nexus server ignoring `SIGTERM`, so every container restart killed
+  it rather than stopping it. Only `SIGINT` was listened for, which no
+  orchestrator sends: `docker compose stop` waited out its grace period and
+  killed the process with exit 137, severing live sockets instead of draining
+  them. It now stops on either signal, and a signal handler that cannot be
+  installed waits rather than reporting an immediate shutdown.
+
+- Fixed the Nexus server refusing every signature anywhere but local
+  development. The authority a signature is bound to was a compile-time
+  constant of `127.0.0.1:8080` that the server process never applied, so any
+  deployment reached by another name — including the bundled Docker compose,
+  where clients dial `localhost` — answered `Unauthenticated`. It is now
+  `PORTALIS_NEXUS_SERVER_AUTHORITY`, defaulting to the listen address, set in
+  compose, and logged at startup so a mismatch is diagnosable.
+
+- Fixed every Nexus WebSocket upgrade failing with HTTP 500 in the demo.
+  Swarm discovery binds a peer lease to the address the socket observed, which
+  needs the service to carry connect info; the demo served its router without
+  it. The server process and the test harness already did, which is why the
+  suite stayed green.
+
 - Fixed a Nexus key-envelope write that could drop a rotated share key while
   reporting a storage outage: two devices pushing for the same share and
   recipient at once made the unique index reject the loser, which is a lost
@@ -95,6 +116,15 @@
 ### Engineering
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+- Extended the Nexus demo walkthrough through M4 and M5, so both milestones
+  are exercised by running them rather than only by their tests: an encrypted
+  share published and advanced, a stale revision refused, a private share and
+  a nonexistent one answering identically, access granted, and the share key
+  sealed to a second user's device and opened there. `DemoDevice` now carries
+  a real X25519 keypair beside its signing key — the placeholder it held
+  before could not have sealed anything — and persists both. Two seeders then
+  announce, discover each other at their observed addresses, and withdraw.
 
 - Closed the Nexus M4 and M5 coverage gap. Both new handlers shipped without
   test modules, so the share and swarm commands are now covered at the socket

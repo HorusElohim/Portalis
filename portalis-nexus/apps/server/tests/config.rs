@@ -17,9 +17,11 @@ fn a_missing_mongo_uri_reports_a_clear_startup_error() {
 fn a_configured_mongo_uri_is_available_to_the_server_process() {
     let config = ServerConfig {
         listen_addr: DEFAULT_LISTEN_ADDR.parse().expect("the default is valid"),
+        server_authority: "nexus.example:443".to_owned(),
         mongodb_uri: Some("mongodb://nexus.example/".to_owned()),
         database: "nexus".to_owned(),
     };
 
     assert_eq!(config.require_mongodb_uri(), Ok("mongodb://nexus.example/"));
+    assert_eq!(config.server_authority, "nexus.example:443");
 }

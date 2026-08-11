@@ -32,6 +32,9 @@ services:
       dockerfile: docker/Dockerfile
     environment:
       PORTALIS_NEXUS_LISTEN_ADDR: 0.0.0.0:8080
+      # The name clients dial, which is never the address a container binds.
+      # Signatures are bound to it, so a mismatch refuses every one of them.
+      PORTALIS_NEXUS_SERVER_AUTHORITY: localhost:8080
       # Without this the server keeps identities in memory and loses them on
       # restart, which is right for a local run and wrong here.
       PORTALIS_NEXUS_MONGODB_URI: mongodb://mongo:27017/?directConnection=true

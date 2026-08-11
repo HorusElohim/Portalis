@@ -2008,11 +2008,13 @@ name = "portalis-nexus-demo"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "blake3",
  "ed25519-dalek",
  "portalis-nexus-client",
  "portalis-nexus-protocol",
  "portalis-nexus-server",
  "tokio",
+ "x25519-dalek",
 ]
 
 [[package]]

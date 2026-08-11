@@ -25,6 +25,11 @@ impl std::error::Error for MissingMongoUri {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServerConfig {
     pub listen_addr: SocketAddr,
+    /// The host clients believe they are talking to. Every signature is bound
+    /// to it, so a deployment reached by any other name refuses them all;
+    /// behind a proxy or in a container this is not the listen address, which
+    /// is why it is configured rather than derived.
+    pub server_authority: String,
     /// Where durable state lives. The server process refuses to start without
     /// this value; retaining the optional representation keeps configuration
     /// parsing independently testable.
@@ -42,6 +47,9 @@ impl ServerConfig {
         let listen_addr = value.unwrap_or(DEFAULT_LISTEN_ADDR).parse()?;
         Ok(Self {
             listen_addr,
+            // The address dialled and the address bound are the same thing
+            // for local development, and nowhere else.
+            server_authority: listen_addr.to_string(),
             mongodb_uri: None,
             database: DEFAULT_DATABASE.to_owned(),
         })
@@ -61,11 +69,14 @@ impl ServerConfig {
     /// real process environment, which every test would otherwise share.
     fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Result<Self, AddrParseError> {
         let listen = lookup("PORTALIS_NEXUS_LISTEN_ADDR");
+        let defaults = Self::from_listen_value(listen.as_deref())?;
         Ok(Self {
+            server_authority: lookup("PORTALIS_NEXUS_SERVER_AUTHORITY")
+                .unwrap_or(defaults.server_authority),
             mongodb_uri: lookup("PORTALIS_NEXUS_MONGODB_URI"),
             database: lookup("PORTALIS_NEXUS_DATABASE")
                 .unwrap_or_else(|| DEFAULT_DATABASE.to_owned()),
-            ..Self::from_listen_value(listen.as_deref())?
+            listen_addr: defaults.listen_addr,
         })
     }
 
@@ -117,6 +128,7 @@ mod tests {
         let config = ServerConfig::from_lookup(|_name| None).expect("defaults are valid");
 
         assert_eq!(config.listen_addr.to_string(), DEFAULT_LISTEN_ADDR);
+        assert_eq!(config.server_authority, DEFAULT_LISTEN_ADDR);
         assert_eq!(config.mongodb_uri, None);
         assert_eq!(config.database, DEFAULT_DATABASE);
         assert_eq!(config.require_mongodb_uri(), Err(MissingMongoUri));
@@ -126,6 +138,7 @@ mod tests {
     fn reads_every_variable_that_is_set() {
         let set = [
             ("PORTALIS_NEXUS_LISTEN_ADDR", "0.0.0.0:9000"),
+            ("PORTALIS_NEXUS_SERVER_AUTHORITY", "nexus.example"),
             ("PORTALIS_NEXUS_MONGODB_URI", "mongodb://example/"),
             ("PORTALIS_NEXUS_DATABASE", "custom_db"),
         ];
@@ -137,9 +150,29 @@ mod tests {
         .expect("every value is valid");
 
         assert_eq!(config.listen_addr.to_string(), "0.0.0.0:9000");
+        assert_eq!(config.server_authority, "nexus.example");
         assert_eq!(config.mongodb_uri.as_deref(), Some("mongodb://example/"));
         assert_eq!(config.database, "custom_db");
         assert_eq!(config.require_mongodb_uri(), Ok("mongodb://example/"));
+    }
+
+    /// Bound and dialled are the same only for local development. A container
+    /// binds `0.0.0.0` and is never reached by that name, so leaving the
+    /// authority to follow the listen address would refuse every signature.
+    #[test]
+    fn the_authority_follows_the_listen_address_until_it_is_set() {
+        let derived = ServerConfig::from_listen_value(Some("0.0.0.0:9000")).expect("valid");
+        assert_eq!(derived.server_authority, "0.0.0.0:9000");
+
+        let configured = ServerConfig::from_lookup(|name| match name {
+            "PORTALIS_NEXUS_LISTEN_ADDR" => Some("0.0.0.0:9000".to_owned()),
+            "PORTALIS_NEXUS_SERVER_AUTHORITY" => Some("nexus.example:443".to_owned()),
+            _ => None,
+        })
+        .expect("valid");
+
+        assert_eq!(configured.listen_addr.to_string(), "0.0.0.0:9000");
+        assert_eq!(configured.server_authority, "nexus.example:443");
     }
 
     /// The only path that touches the real process environment. Asserting it

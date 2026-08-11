@@ -12,7 +12,15 @@ cargo run -p portalis-nexus-demo
 Starts a server on an ephemeral port and narrates one story end to end:
 greeting, registration, two devices sharing a username, a replayed challenge
 being refused, the same device authenticating on a fresh connection, an
-unenrolled device being refused, a correlated ping, and a graceful drain.
+unenrolled device being refused, and a correlated ping.
+
+It then publishes an encrypted share, refuses a revision built on a snapshot
+the share has moved past, shows a private share and a nonexistent one
+answering identically, grants a second user access, and has her open the
+sealed key and decrypt the capsule. The key is a real X25519 exchange: the
+server relays bytes it cannot read. Finally two seeders announce to a swarm,
+discover each other at the addresses their sockets were observed on, and one
+withdraws before its lease expires. Then the server drains.
 
 ## Two processes
 
@@ -31,10 +39,22 @@ cargo run -p portalis-nexus-demo --bin client
 ```
 
 Arguments are `[endpoint] [username]`, and `PORTALIS_NEXUS_DEMO_KEY` chooses
-where the device key is written (`demo-device.key` by default).
+where the device keys are written (`demo-device.key` by default). That file
+holds two 32-byte secrets side by side: the Ed25519 signing seed and the
+X25519 encryption secret. Delete it to start over as a new device.
 
-Identities are held in memory, so restarting the server forgets them. Delete
-the key file to start over as a new device.
+The server keeps identities in memory unless `PORTALIS_NEXUS_MONGODB_URI` is
+set, so without it a restart forgets them. With it, the same key authenticates
+across restarts:
+
+```sh
+PORTALIS_NEXUS_MONGODB_URI='mongodb://localhost:27017/?directConnection=true' \
+PORTALIS_NEXUS_SERVER_AUTHORITY=localhost:8080 \
+  cargo run -p portalis-nexus-server
+```
+
+MongoDB must be a replica set: registration writes a user and its first device
+in one transaction. `docker/compose.yaml` starts one.
 
 ## What to read
 
@@ -53,3 +73,11 @@ A signature is bound to the server it was meant for. The client derives that
 authority from the endpoint it dials, and the server carries its configured
 one; they must agree or every signature is refused. The walkthrough binds the
 server to its ephemeral address for exactly this reason.
+
+For a separately started server, `PORTALIS_NEXUS_SERVER_AUTHORITY` is that
+name, and it defaults to the listen address. Bound and dialled are the same
+thing only in local development: a container binds `0.0.0.0` and is reached as
+something else, so set it explicitly anywhere real. Dialling
+`ws://127.0.0.1:8080` a server that calls itself `localhost:8080` fails with
+`Unauthenticated: signature does not match the signed payload`, which is the
+binding working rather than a bug.

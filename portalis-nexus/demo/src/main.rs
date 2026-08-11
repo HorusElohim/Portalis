@@ -6,11 +6,15 @@
 use std::error::Error;
 use std::net::SocketAddr;
 
-use portalis_nexus_client::{ClientError, NexusClient, TransportError};
+use portalis_nexus_client::{ClientError, DeviceSigner, NexusClient, TransportError};
 use portalis_nexus_demo::{DemoDevice, short};
+use portalis_nexus_protocol::v1::AddressFamily;
 use portalis_nexus_server::{AppState, GRACEFUL_DRAIN_TIMEOUT};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
+
+/// Stands in for the torrent descriptor a real capsule carries.
+const MAGNET: &[u8] = b"magnet:?xt=urn:btih:0102030405060708090a0b0c0d0e0f1011121314";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -103,11 +107,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         &format!("correlated to {}", short(&pong.correlation_id)),
     );
 
-    // 8. Draining closes every live socket within a bounded wait.
+    // 8. Encrypted shares, end to end: publish, refuse a stale revision,
+    //    keep it private, then grant and hand over the key.
+    shares(
+        &returning,
+        &ada_device,
+        &grace,
+        &grace_device,
+        &shared_name.user_id,
+    )
+    .await?;
+
+    // 9. Swarm discovery over the addresses the sockets observed.
+    swarm(&returning, &grace).await?;
+
+    // 15. Draining closes every live socket within a bounded wait.
     let live = [returning, grace, stranger];
     timeout(GRACEFUL_DRAIN_TIMEOUT, state.shutdown().drain()).await?;
     step(
-        9,
+        16,
         "The server drained",
         &format!("{} connections were asked to close", live.len()),
     );
@@ -122,6 +140,169 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Publishing an encrypted share, keeping it private, and handing its key to
+/// one other user's device.
+///
+/// The point is what Nexus never holds: it stores an opaque capsule, decides
+/// who may fetch it, and relays a sealed key it cannot open.
+async fn shares(
+    ada: &NexusClient,
+    ada_device: &DemoDevice,
+    grace: &NexusClient,
+    grace_device: &DemoDevice,
+    grace_id: &[u8],
+) -> Result<(), Box<dyn Error>> {
+    let share_id = portalis_nexus_protocol::new_message_id();
+    let share_key = portalis_nexus_protocol::new_challenge();
+    let capsule = pretend_to_encrypt(MAGNET, &share_key);
+    let snapshot_id = *blake3::hash(&capsule).as_bytes();
+    let context = portalis_nexus_protocol::EnvelopeContext {
+        share_id: share_id.as_slice().try_into()?,
+        recipient_device_id: grace_device.device_id(),
+    };
+
+    let published = ada
+        .publish_share(
+            &share_id,
+            1,
+            None,
+            &snapshot_id,
+            &capsule,
+            &ada_device.sign(&capsule),
+        )
+        .await?;
+    step(
+        9,
+        "Ada published an encrypted share",
+        &format!(
+            "share {} at revision {}, a {}-byte capsule Nexus cannot read",
+            short(&published.share_id),
+            published.revision,
+            published.capsule.len()
+        ),
+    );
+
+    // A revision built on a snapshot the share has moved past is refused,
+    // so two devices publishing at once cannot overwrite each other.
+    let replaced = ada
+        .publish_share(
+            &share_id,
+            2,
+            Some(&[0; 32]),
+            &snapshot_id,
+            &capsule,
+            &ada_device.sign(&capsule),
+        )
+        .await;
+    step(
+        10,
+        "A publication built on a snapshot the share has moved past is refused",
+        &describe(&replaced),
+    );
+
+    // A private share and one that was never published answer identically,
+    // so an outsider cannot learn which identifiers exist.
+    let probed = grace.fetch_share(&share_id).await;
+    let invented = grace
+        .fetch_share(&portalis_nexus_protocol::new_message_id())
+        .await;
+    step(
+        11,
+        "A private share and one that does not exist answer identically",
+        &format!("{} / {}", describe(&probed), describe(&invented)),
+    );
+
+    // Ada grants Grace access and seals the share key to Grace's device.
+    ada.grant_share_access(&share_id, grace_id).await?;
+    let sealed =
+        portalis_nexus_protocol::seal(&grace_device.encryption_public_key(), &context, &share_key)?;
+    ada.put_key_envelope(
+        &share_id,
+        &grace_device.device_id(),
+        &sealed.ephemeral_public_key,
+        &sealed.ciphertext,
+    )
+    .await?;
+    step(
+        12,
+        "Ada granted Grace access and sealed the share key to her device",
+        &format!(
+            "one envelope, {} bytes of ciphertext",
+            sealed.ciphertext.len()
+        ),
+    );
+
+    // Grace fetches the capsule, opens her envelope, and reads the descriptor
+    // Nexus only ever saw encrypted.
+    let fetched = grace.fetch_share(&share_id).await?;
+    let page = grace.list_key_envelopes(None).await?;
+    let envelope = page
+        .envelopes
+        .first()
+        .ok_or("Grace should have exactly one envelope")?;
+    let recovered = portalis_nexus_protocol::open(
+        &grace_device.encryption_secret(),
+        &context,
+        &portalis_nexus_protocol::SealedEnvelope {
+            ephemeral_public_key: envelope.ephemeral_public_key.as_slice().try_into()?,
+            ciphertext: envelope.ciphertext.clone(),
+        },
+    )?;
+    let opened = pretend_to_encrypt(&fetched.capsule, &recovered);
+    step(
+        13,
+        "Grace opened her envelope and read the capsule",
+        &format!(
+            "revision {} decrypts to {:?}",
+            fetched.revision,
+            String::from_utf8_lossy(&opened)
+        ),
+    );
+    Ok(())
+}
+
+/// Announcing to a swarm and finding peers at the addresses their sockets
+/// were observed on, never one a client asked to advertise.
+async fn swarm(ada: &NexusClient, grace: &NexusClient) -> Result<(), Box<dyn Error>> {
+    let info_hash = [3_u8; 20];
+    let lease = ada
+        .announce_peer(&info_hash, 6881, AddressFamily::Ipv4, 1, 90)
+        .await?;
+    grace
+        .announce_peer(&info_hash, 51413, AddressFamily::Ipv4, 1, 90)
+        .await?;
+    let found = ada
+        .lookup_peers(&info_hash, AddressFamily::Unspecified, 0)
+        .await?;
+    step(
+        14,
+        "Two seeders announced and discovered each other",
+        &format!(
+            "lease until {}; Ada sees {} peer(s): {}",
+            lease.expires_at_unix_ns,
+            found.peers.len(),
+            found
+                .peers
+                .iter()
+                .map(|peer| format!("{}:{}", render_ip(&peer.ip_address), peer.port))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    );
+
+    // Withdrawing removes a lease before it expires.
+    grace.withdraw_peer(&info_hash).await?;
+    let after = ada
+        .lookup_peers(&info_hash, AddressFamily::Unspecified, 0)
+        .await?;
+    step(
+        15,
+        "A withdrawn seeder disappears immediately",
+        &format!("{} peer(s) remain", after.peers.len()),
+    );
+    Ok(())
+}
+
 /// Starts the real server on an ephemeral port.
 ///
 /// The authority must match the address clients dial, because a signature is
@@ -131,13 +312,43 @@ async fn start_server() -> Result<(SocketAddr, AppState, JoinHandle<()>), Box<dy
     let address = listener.local_addr()?;
     let state = AppState::default().with_server_authority(&address.to_string());
     state.mark_ready();
-    // Hosting the router is ordinary axum; the control plane adds nothing to
-    // it beyond the routes themselves.
+    // Hosting the router is ordinary axum, with one requirement: swarm
+    // discovery binds a peer lease to the address the socket observed, so the
+    // service has to carry connect info or every upgrade is refused.
     let router = portalis_nexus_server::app(&state);
     let handle = tokio::spawn(async move {
-        let _ = axum::serve(listener, router).await;
+        let _ = axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await;
     });
     Ok((address, state, handle))
+}
+
+/// Stands in for encrypting a capsule under a share key.
+///
+/// A real client uses an AEAD; the point being demonstrated is who holds the
+/// key, not which cipher runs, and a self-inverse keeps the demo honest about
+/// Nexus storing only bytes it cannot read. Applying it twice recovers the
+/// plaintext, which is why decrypting calls the same function.
+fn pretend_to_encrypt(plaintext: &[u8], key: &[u8]) -> Vec<u8> {
+    plaintext
+        .iter()
+        .zip(key.iter().cycle())
+        .map(|(byte, key_byte)| byte ^ key_byte)
+        .collect()
+}
+
+/// Renders the address a lookup returned, in whichever family it arrived.
+fn render_ip(bytes: &[u8]) -> String {
+    match <[u8; 4]>::try_from(bytes) {
+        Ok(octets) => std::net::Ipv4Addr::from(octets).to_string(),
+        Err(_) => match <[u8; 16]>::try_from(bytes) {
+            Ok(octets) => std::net::Ipv6Addr::from(octets).to_string(),
+            Err(_) => "unknown".to_owned(),
+        },
+    }
 }
 
 /// Describes a refusal in one line, or says it unexpectedly succeeded.
