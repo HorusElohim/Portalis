@@ -7,7 +7,8 @@
 use portalis_nexus_server_core::{
     DeviceId, DeviceRecord, EnvelopeRepository, FriendRepository, FriendshipEdge, FriendshipRecord,
     IdentityRepository, InMemoryIdentities, KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError,
-    ShareId, UserDirectory, UserId, UserRecord,
+    ShareId, ShareMembershipRecord, ShareRecord, ShareRepository, ShareSnapshotRecord,
+    UserDirectory, UserId, UserRecord,
 };
 
 use crate::mongo::MongoStore;
@@ -17,14 +18,14 @@ use crate::mongo::MongoStore;
 pub enum NexusStore {
     /// Held in memory and lost on restart. The default for local runs, the
     /// demo, and tests.
-    Memory(InMemoryIdentities),
+    Memory(Box<InMemoryIdentities>),
     /// Durable, indexed, and transactional.
     Mongo(Box<MongoStore>),
 }
 
 impl Default for NexusStore {
     fn default() -> Self {
-        Self::Memory(InMemoryIdentities::default())
+        Self::Memory(Box::default())
     }
 }
 
@@ -193,6 +194,84 @@ impl EnvelopeRepository for NexusStore {
     }
 }
 
+impl ShareRepository for NexusStore {
+    async fn find_share(&self, share_id: ShareId) -> Result<Option<ShareRecord>, RepositoryError> {
+        match self {
+            Self::Memory(store) => store.find_share(share_id).await,
+            Self::Mongo(store) => store.find_share(share_id).await,
+        }
+    }
+
+    async fn save_publication(
+        &self,
+        share: ShareRecord,
+        snapshot: ShareSnapshotRecord,
+        expected_revision: Option<u64>,
+    ) -> Result<(), RepositoryError> {
+        match self {
+            Self::Memory(store) => {
+                store
+                    .save_publication(share, snapshot, expected_revision)
+                    .await
+            }
+            Self::Mongo(store) => {
+                store
+                    .save_publication(share, snapshot, expected_revision)
+                    .await
+            }
+        }
+    }
+
+    async fn find_snapshot(
+        &self,
+        share_id: ShareId,
+        revision: u64,
+    ) -> Result<Option<ShareSnapshotRecord>, RepositoryError> {
+        match self {
+            Self::Memory(store) => store.find_snapshot(share_id, revision).await,
+            Self::Mongo(store) => store.find_snapshot(share_id, revision).await,
+        }
+    }
+
+    async fn grant_share_access(
+        &self,
+        membership: ShareMembershipRecord,
+    ) -> Result<(), RepositoryError> {
+        match self {
+            Self::Memory(store) => store.grant_share_access(membership).await,
+            Self::Mongo(store) => store.grant_share_access(membership).await,
+        }
+    }
+
+    async fn has_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> Result<bool, RepositoryError> {
+        match self {
+            Self::Memory(store) => store.has_share_access(share_id, user_id).await,
+            Self::Mongo(store) => store.has_share_access(share_id, user_id).await,
+        }
+    }
+
+    async fn list_authorized_shares(
+        &self,
+        user_id: UserId,
+    ) -> Result<Vec<ShareRecord>, RepositoryError> {
+        match self {
+            Self::Memory(store) => store.list_authorized_shares(user_id).await,
+            Self::Mongo(store) => store.list_authorized_shares(user_id).await,
+        }
+    }
+
+    async fn list_share_members(&self, share_id: ShareId) -> Result<Vec<UserId>, RepositoryError> {
+        match self {
+            Self::Memory(store) => store.list_share_members(share_id).await,
+            Self::Mongo(store) => store.list_share_members(share_id).await,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,5 +371,42 @@ mod tests {
         assert!(unavailable(&store.list_friendships(ADA).await));
         assert!(unavailable(&store.put_key_envelope(key_envelope()).await));
         assert!(unavailable(&store.list_key_envelopes([1; 32], None).await));
+        let share = ShareRecord {
+            share_id: [3; 16],
+            owner: ADA,
+            revision: 1,
+            snapshot_id: [4; 32],
+            capsule: b"sealed".to_vec(),
+            capsule_signature: vec![5; 64],
+            created_at_unix_ns: 1,
+            updated_at_unix_ns: 1,
+        };
+        let snapshot = ShareSnapshotRecord {
+            share_id: share.share_id,
+            revision: 1,
+            snapshot_id: share.snapshot_id,
+            capsule: share.capsule.clone(),
+            capsule_signature: share.capsule_signature.clone(),
+            created_at_unix_ns: 1,
+        };
+        assert!(unavailable(&store.find_share(share.share_id).await));
+        assert!(unavailable(
+            &store.save_publication(share.clone(), snapshot, None).await
+        ));
+        assert!(unavailable(&store.find_snapshot(share.share_id, 1).await));
+        assert!(unavailable(
+            &store
+                .grant_share_access(ShareMembershipRecord {
+                    share_id: share.share_id,
+                    user_id: GRACE,
+                    granted_at_unix_ns: 1,
+                })
+                .await
+        ));
+        assert!(unavailable(
+            &store.has_share_access(share.share_id, ADA).await
+        ));
+        assert!(unavailable(&store.list_authorized_shares(ADA).await));
+        assert!(unavailable(&store.list_share_members(share.share_id).await));
     }
 }

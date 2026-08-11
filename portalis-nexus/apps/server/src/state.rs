@@ -4,12 +4,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use portalis_nexus_protocol::CURRENT_PROTOCOL_VERSION;
-use portalis_nexus_server_core::{PresenceRegistry, ProtocolPolicy};
+use portalis_nexus_server_core::{PresenceRegistry, ProtocolPolicy, SwarmRegistry};
 
 use crate::config::DEFAULT_SERVER_AUTHORITY;
 use crate::connections::Connections;
 use crate::identity::{
-    DefaultStore, NexusEnvelopes, NexusFriends, NexusIdentities, envelopes, friends, identities,
+    DefaultStore, NexusEnvelopes, NexusFriends, NexusIdentities, NexusShares, envelopes, friends,
+    identities, shares,
 };
 use crate::shutdown::Shutdown;
 use crate::store::NexusStore;
@@ -23,7 +24,9 @@ pub struct AppState {
     identities: Arc<NexusIdentities<DefaultStore>>,
     friends: Arc<NexusFriends<DefaultStore>>,
     envelopes: Arc<NexusEnvelopes<DefaultStore>>,
+    shares: Arc<NexusShares<DefaultStore>>,
     presence: Arc<PresenceRegistry>,
+    swarm: Arc<SwarmRegistry>,
     connections: Arc<Connections>,
     /// The host clients believe they are talking to. Signatures are bound to
     /// it, so a signature captured by one deployment cannot be replayed
@@ -58,8 +61,10 @@ impl Default for AppState {
             identities: Arc::new(identities(Arc::clone(&store))),
             friends: Arc::new(friends(Arc::clone(&store))),
             envelopes: Arc::new(envelopes(Arc::clone(&store))),
+            shares: Arc::new(shares(Arc::clone(&store))),
             store,
             presence: Arc::new(PresenceRegistry::default()),
+            swarm: Arc::new(SwarmRegistry::default()),
             connections: Arc::new(Connections::default()),
             server_authority: Arc::from(DEFAULT_SERVER_AUTHORITY),
         }
@@ -75,6 +80,7 @@ impl AppState {
             identities: Arc::new(identities(Arc::clone(&store))),
             friends: Arc::new(friends(Arc::clone(&store))),
             envelopes: Arc::new(envelopes(Arc::clone(&store))),
+            shares: Arc::new(shares(Arc::clone(&store))),
             store,
             ..Self::default()
         }
@@ -105,6 +111,16 @@ impl AppState {
     #[must_use]
     pub fn envelopes(&self) -> &NexusEnvelopes<DefaultStore> {
         &self.envelopes
+    }
+
+    #[must_use]
+    pub fn shares(&self) -> &NexusShares<DefaultStore> {
+        &self.shares
+    }
+
+    #[must_use]
+    pub fn swarm(&self) -> &SwarmRegistry {
+        &self.swarm
     }
 
     /// The store behind both services, so a caller can seed or fault it.

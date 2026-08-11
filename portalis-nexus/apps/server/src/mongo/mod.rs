@@ -13,14 +13,16 @@ use mongodb::{Client, ClientSession, Collection, Database, IndexModel};
 use portalis_nexus_server_core::{
     DeviceId, DeviceRecord, EnvelopeRepository, FriendRepository, FriendshipEdge, FriendshipRecord,
     IdentityRepository, KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId,
-    UserDirectory, UserId, UserRecord,
+    ShareMembershipRecord, ShareRecord, ShareRepository, ShareSnapshotRecord, UserDirectory,
+    UserId, UserRecord,
 };
 use tracing::debug;
 
 mod documents;
 
 use documents::{
-    DeviceDocument, FriendshipDocument, KeyEnvelopeDocument, UserDocument, binary, signed,
+    DeviceDocument, FriendshipDocument, KeyEnvelopeDocument, ShareDocument,
+    ShareMembershipDocument, ShareSnapshotDocument, UserDocument, binary, signed,
 };
 
 /// The duplicate-key code every unique index reports.
@@ -35,6 +37,9 @@ const USERS: &str = "users";
 const DEVICES: &str = "devices";
 const FRIENDSHIPS: &str = "friendships";
 const KEY_ENVELOPES: &str = "key_envelopes";
+const SHARES: &str = "shares";
+const SHARE_SNAPSHOTS: &str = "share_snapshots";
+const SHARE_MEMBERSHIPS: &str = "share_memberships";
 
 /// Identity and friend storage backed by `MongoDB`.
 #[derive(Clone, Debug)]
@@ -139,6 +144,24 @@ impl MongoStore {
                     .keys(doc! { "recipient_device_id": 1 })
                     .build(),
             ),
+            (
+                SHARES,
+                IndexModel::builder()
+                    .keys(doc! { "owner_user_id": 1 })
+                    .build(),
+            ),
+            (
+                SHARE_SNAPSHOTS,
+                unique(doc! { "share_id": 1, "revision": 1 }),
+            ),
+            (
+                SHARE_MEMBERSHIPS,
+                unique(doc! { "share_id": 1, "user_id": 1 }),
+            ),
+            (
+                SHARE_MEMBERSHIPS,
+                IndexModel::builder().keys(doc! { "user_id": 1 }).build(),
+            ),
         ];
         for (collection, index) in indexes {
             self.database
@@ -165,6 +188,18 @@ impl MongoStore {
 
     fn key_envelopes(&self) -> Collection<KeyEnvelopeDocument> {
         self.database.collection(KEY_ENVELOPES)
+    }
+
+    fn shares(&self) -> Collection<ShareDocument> {
+        self.database.collection(SHARES)
+    }
+
+    fn share_snapshots(&self) -> Collection<ShareSnapshotDocument> {
+        self.database.collection(SHARE_SNAPSHOTS)
+    }
+
+    fn share_memberships(&self) -> Collection<ShareMembershipDocument> {
+        self.database.collection(SHARE_MEMBERSHIPS)
     }
 
     /// Writes a user and its first device inside one transaction.
@@ -493,6 +528,219 @@ impl EnvelopeRepository for MongoStore {
                     .filter_map(KeyEnvelopeDocument::into_record)
                     .collect(),
             ))
+        }
+    }
+}
+
+impl ShareRepository for MongoStore {
+    fn find_share(
+        &self,
+        share_id: ShareId,
+    ) -> impl std::future::Future<Output = Result<Option<ShareRecord>, RepositoryError>> + Send
+    {
+        let store = self.clone();
+        async move {
+            let found = store
+                .shares()
+                .find_one(doc! { "_id": binary(&share_id) })
+                .await
+                .map_err(unavailable)?;
+            Ok(found.and_then(ShareDocument::into_record))
+        }
+    }
+
+    fn save_publication(
+        &self,
+        share: ShareRecord,
+        snapshot: ShareSnapshotRecord,
+        expected_revision: Option<u64>,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            let mut session = store.client.start_session().await.map_err(unavailable)?;
+            session.start_transaction().await.map_err(unavailable)?;
+            let write = async {
+                store
+                    .share_snapshots()
+                    .insert_one(ShareSnapshotDocument::from_record(&snapshot))
+                    .session(&mut session)
+                    .await
+                    .map_err(|error| classify(&error, RepositoryError::VersionConflict))?;
+
+                if let Some(expected) = expected_revision {
+                    let outcome = store
+                        .shares()
+                        .replace_one(
+                            doc! {
+                                "_id": binary(&share.share_id),
+                                "revision": signed(expected),
+                            },
+                            ShareDocument::from_record(&share),
+                        )
+                        .session(&mut session)
+                        .await
+                        .map_err(unavailable)?;
+                    if outcome.matched_count == 0 {
+                        return Err(RepositoryError::VersionConflict);
+                    }
+                } else {
+                    store
+                        .shares()
+                        .insert_one(ShareDocument::from_record(&share))
+                        .session(&mut session)
+                        .await
+                        .map_err(|error| classify(&error, RepositoryError::VersionConflict))?;
+                }
+                Ok(())
+            }
+            .await;
+            match write {
+                Ok(()) => session.commit_transaction().await.map_err(unavailable),
+                Err(error) => {
+                    let _ = session.abort_transaction().await;
+                    Err(error)
+                }
+            }
+        }
+    }
+
+    fn find_snapshot(
+        &self,
+        share_id: ShareId,
+        revision: u64,
+    ) -> impl std::future::Future<Output = Result<Option<ShareSnapshotRecord>, RepositoryError>> + Send
+    {
+        let store = self.clone();
+        async move {
+            let found = store
+                .share_snapshots()
+                .find_one(doc! {
+                    "share_id": binary(&share_id),
+                    "revision": signed(revision),
+                })
+                .await
+                .map_err(unavailable)?;
+            Ok(found.and_then(ShareSnapshotDocument::into_record))
+        }
+    }
+
+    fn grant_share_access(
+        &self,
+        membership: ShareMembershipRecord,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            store
+                .share_memberships()
+                .replace_one(
+                    doc! {
+                        "share_id": binary(&membership.share_id),
+                        "user_id": binary(&membership.user_id),
+                    },
+                    ShareMembershipDocument::from_record(&membership),
+                )
+                .upsert(true)
+                .await
+                .map_err(unavailable)?;
+            Ok(())
+        }
+    }
+
+    fn has_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl std::future::Future<Output = Result<bool, RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            if store
+                .shares()
+                .find_one(doc! { "_id": binary(&share_id), "owner_user_id": binary(&user_id) })
+                .await
+                .map_err(unavailable)?
+                .is_some()
+            {
+                return Ok(true);
+            }
+            Ok(store
+                .share_memberships()
+                .find_one(doc! { "share_id": binary(&share_id), "user_id": binary(&user_id) })
+                .await
+                .map_err(unavailable)?
+                .is_some())
+        }
+    }
+
+    fn list_authorized_shares(
+        &self,
+        user_id: UserId,
+    ) -> impl std::future::Future<Output = Result<Vec<ShareRecord>, RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            let memberships: Vec<_> = store
+                .share_memberships()
+                .find(doc! { "user_id": binary(&user_id) })
+                .await
+                .map_err(unavailable)?
+                .try_collect()
+                .await
+                .map_err(unavailable)?;
+            let share_ids: Vec<_> = memberships
+                .into_iter()
+                .filter_map(ShareMembershipDocument::into_record)
+                .map(|membership| binary(&membership.share_id))
+                .collect();
+            let filter = doc! {
+                "$or": [
+                    { "owner_user_id": binary(&user_id) },
+                    { "_id": { "$in": share_ids } },
+                ]
+            };
+            let found: Vec<_> = store
+                .shares()
+                .find(filter)
+                .sort(doc! { "_id": 1 })
+                .limit(
+                    i64::try_from(portalis_nexus_protocol::MAX_SHARES_PER_RESPONSE)
+                        .map_err(|error| RepositoryError::Unavailable(error.to_string()))?,
+                )
+                .await
+                .map_err(unavailable)?
+                .try_collect()
+                .await
+                .map_err(unavailable)?;
+            Ok(found
+                .into_iter()
+                .filter_map(ShareDocument::into_record)
+                .collect())
+        }
+    }
+
+    fn list_share_members(
+        &self,
+        share_id: ShareId,
+    ) -> impl std::future::Future<Output = Result<Vec<UserId>, RepositoryError>> + Send {
+        let store = self.clone();
+        async move {
+            let mut members: Vec<_> = store
+                .share_memberships()
+                .find(doc! { "share_id": binary(&share_id) })
+                .await
+                .map_err(unavailable)?
+                .try_collect()
+                .await
+                .map_err(unavailable)?;
+            let mut users: Vec<_> = members
+                .drain(..)
+                .filter_map(ShareMembershipDocument::into_record)
+                .map(|membership| membership.user_id)
+                .collect();
+            if let Some(owner) = store.find_share(share_id).await?.map(|share| share.owner) {
+                users.push(owner);
+            }
+            users.sort_unstable();
+            users.dedup();
+            Ok(users)
         }
     }
 }

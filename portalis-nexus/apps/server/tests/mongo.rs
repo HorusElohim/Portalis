@@ -18,7 +18,8 @@ use portalis_nexus_server_core::{
     AuthenticationRequest, DeviceId, DeviceRecord, EnvelopeRepository, FixedClock,
     FriendRepository, FriendshipEdge, FriendshipRecord, FriendshipState, IdentityError,
     IdentityRepository, IdentityService, KeyEnvelopeRecord, LinkDeviceRequest, RegistrationRequest,
-    RepositoryError, ScriptedRandom, ShareId, UserDirectory, UserId, UserRecord,
+    RepositoryError, ScriptedRandom, ShareId, ShareMembershipRecord, ShareRecord, ShareRepository,
+    ShareSnapshotRecord, UserDirectory, UserId, UserRecord,
 };
 use testcontainers_modules::mongo::Mongo;
 use testcontainers_modules::testcontainers::ContainerAsync;
@@ -1056,5 +1057,93 @@ async fn a_linked_device_outlives_the_process_that_linked_it() {
     assert_eq!(
         authenticated.device.encryption_public_key,
         candidate_encryption_key
+    );
+}
+
+#[tokio::test]
+async fn share_history_membership_and_head_cas_survive_a_restart() {
+    let Some(running) = mongo().await else {
+        return;
+    };
+    let share_id = [55; 16];
+    let snapshot_id = [56; 32];
+    let share = ShareRecord {
+        share_id,
+        owner: ADA,
+        revision: 1,
+        snapshot_id,
+        capsule: b"encrypted capsule".to_vec(),
+        capsule_signature: vec![9; 64],
+        created_at_unix_ns: NOW,
+        updated_at_unix_ns: NOW,
+    };
+    let snapshot = ShareSnapshotRecord {
+        share_id,
+        revision: 1,
+        snapshot_id,
+        capsule: share.capsule.clone(),
+        capsule_signature: share.capsule_signature.clone(),
+        created_at_unix_ns: NOW,
+    };
+
+    running
+        .store
+        .save_publication(share.clone(), snapshot.clone(), None)
+        .await
+        .expect("first publication");
+    running
+        .store
+        .grant_share_access(ShareMembershipRecord {
+            share_id,
+            user_id: GRACE,
+            granted_at_unix_ns: NOW,
+        })
+        .await
+        .expect("membership stored");
+
+    let restarted = running.restart().await;
+    assert_eq!(
+        restarted.find_share(share_id).await,
+        Ok(Some(share.clone()))
+    );
+    assert_eq!(
+        restarted.find_snapshot(share_id, 1).await,
+        Ok(Some(snapshot))
+    );
+    assert!(restarted.has_share_access(share_id, GRACE).await.unwrap());
+    assert_eq!(
+        restarted
+            .list_authorized_shares(GRACE)
+            .await
+            .expect("listed"),
+        vec![share.clone()]
+    );
+
+    let stale = ShareRecord {
+        revision: 2,
+        snapshot_id: [57; 32],
+        ..share
+    };
+    let stale_snapshot = ShareSnapshotRecord {
+        share_id,
+        revision: 2,
+        snapshot_id: [57; 32],
+        capsule: b"next".to_vec(),
+        capsule_signature: vec![8; 64],
+        created_at_unix_ns: NOW + 1,
+    };
+    assert_eq!(
+        restarted
+            .save_publication(stale, stale_snapshot, Some(0))
+            .await,
+        Err(RepositoryError::VersionConflict)
+    );
+    assert!(
+        restarted
+            .find_snapshot(share_id, 2)
+            .await
+            .unwrap()
+            .is_none(),
+        "the transaction leaves no orphan snapshot after a lost head CAS"
     );
 }

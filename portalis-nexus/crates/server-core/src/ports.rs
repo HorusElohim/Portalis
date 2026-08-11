@@ -14,6 +14,7 @@ use portalis_nexus_protocol::{
 use thiserror::Error;
 
 use crate::friendship::{FriendshipEdge, FriendshipRecord};
+use crate::share::{ShareRecord, SnapshotId};
 
 pub type UserId = [u8; USER_ID_BYTES];
 pub type DeviceId = [u8; DEVICE_ID_BYTES];
@@ -196,6 +197,71 @@ pub struct KeyEnvelopePage {
     pub next_after_share_id: Option<ShareId>,
 }
 
+/// One immutable encrypted snapshot. The mutable share record only points at
+/// the latest one; keeping revisions separately makes history append-only.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShareSnapshotRecord {
+    pub share_id: ShareId,
+    pub revision: u64,
+    pub snapshot_id: SnapshotId,
+    pub capsule: Vec<u8>,
+    pub capsule_signature: Vec<u8>,
+    pub created_at_unix_ns: u64,
+}
+
+/// A private share edge. Ownership remains on [`ShareRecord`]; this only
+/// records additional users who may discover and fetch it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShareMembershipRecord {
+    pub share_id: ShareId,
+    pub user_id: UserId,
+    pub granted_at_unix_ns: u64,
+}
+
+/// Durable encrypted-share storage.
+pub trait ShareRepository: Send + Sync {
+    fn find_share(
+        &self,
+        share_id: ShareId,
+    ) -> impl Future<Output = Result<Option<ShareRecord>, RepositoryError>> + Send;
+
+    /// Appends `snapshot` and moves the share head only if its revision still
+    /// equals `expected_revision`. `None` means the share must not exist.
+    fn save_publication(
+        &self,
+        share: ShareRecord,
+        snapshot: ShareSnapshotRecord,
+        expected_revision: Option<u64>,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    fn find_snapshot(
+        &self,
+        share_id: ShareId,
+        revision: u64,
+    ) -> impl Future<Output = Result<Option<ShareSnapshotRecord>, RepositoryError>> + Send;
+
+    fn grant_share_access(
+        &self,
+        membership: ShareMembershipRecord,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send;
+
+    fn has_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<bool, RepositoryError>> + Send;
+
+    fn list_authorized_shares(
+        &self,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<Vec<ShareRecord>, RepositoryError>> + Send;
+
+    fn list_share_members(
+        &self,
+        share_id: ShareId,
+    ) -> impl Future<Output = Result<Vec<UserId>, RepositoryError>> + Send;
+}
+
 /// Durable key-envelope storage, one row per share and recipient device.
 pub trait EnvelopeRepository: Send + Sync {
     /// Stores `envelope`, replacing any earlier one for the same share and
@@ -312,6 +378,61 @@ impl<T: EnvelopeRepository> EnvelopeRepository for std::sync::Arc<T> {
         after_share_id: Option<ShareId>,
     ) -> impl Future<Output = Result<KeyEnvelopePage, RepositoryError>> + Send {
         T::list_key_envelopes(self, recipient_device_id, after_share_id)
+    }
+}
+
+impl<T: ShareRepository> ShareRepository for std::sync::Arc<T> {
+    fn find_share(
+        &self,
+        share_id: ShareId,
+    ) -> impl Future<Output = Result<Option<ShareRecord>, RepositoryError>> + Send {
+        T::find_share(self, share_id)
+    }
+
+    fn save_publication(
+        &self,
+        share: ShareRecord,
+        snapshot: ShareSnapshotRecord,
+        expected_revision: Option<u64>,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::save_publication(self, share, snapshot, expected_revision)
+    }
+
+    fn find_snapshot(
+        &self,
+        share_id: ShareId,
+        revision: u64,
+    ) -> impl Future<Output = Result<Option<ShareSnapshotRecord>, RepositoryError>> + Send {
+        T::find_snapshot(self, share_id, revision)
+    }
+
+    fn grant_share_access(
+        &self,
+        membership: ShareMembershipRecord,
+    ) -> impl Future<Output = Result<(), RepositoryError>> + Send {
+        T::grant_share_access(self, membership)
+    }
+
+    fn has_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<bool, RepositoryError>> + Send {
+        T::has_share_access(self, share_id, user_id)
+    }
+
+    fn list_authorized_shares(
+        &self,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<Vec<ShareRecord>, RepositoryError>> + Send {
+        T::list_authorized_shares(self, user_id)
+    }
+
+    fn list_share_members(
+        &self,
+        share_id: ShareId,
+    ) -> impl Future<Output = Result<Vec<UserId>, RepositoryError>> + Send {
+        T::list_share_members(self, share_id)
     }
 }
 

@@ -25,6 +25,7 @@ mod negotiation;
 mod ports;
 mod presence;
 mod share;
+mod swarm;
 
 pub use challenge::{ChallengeError, IssuedChallenge};
 pub use envelopes::{EnvelopeError, EnvelopeService, PutKeyEnvelopeRequest};
@@ -46,9 +47,11 @@ pub use portalis_nexus_protocol::v1::{FriendAction, FriendshipState};
 pub use ports::{
     Clock, DeviceId, DeviceKey, DeviceRecord, EncryptionKey, EnvelopeRepository, FriendRepository,
     IdentityRepository, KeyEnvelopePage, KeyEnvelopeRecord, RandomSource, RepositoryError, ShareId,
-    UserDirectory, UserId, UserRecord,
+    ShareMembershipRecord, ShareRepository, ShareSnapshotRecord, UserDirectory, UserId, UserRecord,
 };
 pub use presence::{ConnectionId, PresenceChange, PresenceRegistry};
 pub use share::{
-    Publication, Publish, ShareError, ShareRecord, SnapshotId, publish as publish_snapshot,
+    Publication, Publish, ShareCommandError, ShareError, ShareRecord, ShareService, SnapshotId,
+    publish as publish_snapshot,
 };
+pub use swarm::{AddressFamily, PeerAnnouncement, PeerLease, SwarmError, SwarmRegistry};

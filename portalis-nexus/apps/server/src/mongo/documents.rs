@@ -8,7 +8,8 @@
 use mongodb::bson::{Binary, spec::BinarySubtype};
 use portalis_nexus_protocol::v1::FriendshipState;
 use portalis_nexus_server_core::{
-    DeviceRecord, FriendshipEdge, FriendshipRecord, KeyEnvelopeRecord, UserRecord,
+    DeviceRecord, FriendshipEdge, FriendshipRecord, KeyEnvelopeRecord, ShareMembershipRecord,
+    ShareRecord, ShareSnapshotRecord, UserRecord,
 };
 use serde::{Deserialize, Serialize};
 
@@ -182,6 +183,112 @@ impl KeyEnvelopeDocument {
             ephemeral_public_key: fixed(&self.ephemeral_public_key)?,
             ciphertext: self.ciphertext.bytes,
             created_at_unix_ns: unsigned(self.created_at_unix_ns),
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct ShareDocument {
+    #[serde(rename = "_id")]
+    pub share_id: Binary,
+    pub owner_user_id: Binary,
+    pub revision: i64,
+    pub snapshot_id: Binary,
+    pub capsule: Binary,
+    pub capsule_signature: Binary,
+    pub created_at_unix_ns: i64,
+    pub updated_at_unix_ns: i64,
+    pub schema_version: i32,
+}
+
+impl ShareDocument {
+    pub(crate) fn from_record(share: &ShareRecord) -> Self {
+        Self {
+            share_id: binary(&share.share_id),
+            owner_user_id: binary(&share.owner),
+            revision: signed(share.revision),
+            snapshot_id: binary(&share.snapshot_id),
+            capsule: binary(&share.capsule),
+            capsule_signature: binary(&share.capsule_signature),
+            created_at_unix_ns: signed(share.created_at_unix_ns),
+            updated_at_unix_ns: signed(share.updated_at_unix_ns),
+            schema_version: SCHEMA_VERSION,
+        }
+    }
+
+    pub(crate) fn into_record(self) -> Option<ShareRecord> {
+        Some(ShareRecord {
+            share_id: fixed(&self.share_id)?,
+            owner: fixed(&self.owner_user_id)?,
+            revision: unsigned(self.revision),
+            snapshot_id: fixed(&self.snapshot_id)?,
+            capsule: self.capsule.bytes,
+            capsule_signature: self.capsule_signature.bytes,
+            created_at_unix_ns: unsigned(self.created_at_unix_ns),
+            updated_at_unix_ns: unsigned(self.updated_at_unix_ns),
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct ShareSnapshotDocument {
+    pub share_id: Binary,
+    pub revision: i64,
+    pub snapshot_id: Binary,
+    pub capsule: Binary,
+    pub capsule_signature: Binary,
+    pub created_at_unix_ns: i64,
+    pub schema_version: i32,
+}
+
+impl ShareSnapshotDocument {
+    pub(crate) fn from_record(snapshot: &ShareSnapshotRecord) -> Self {
+        Self {
+            share_id: binary(&snapshot.share_id),
+            revision: signed(snapshot.revision),
+            snapshot_id: binary(&snapshot.snapshot_id),
+            capsule: binary(&snapshot.capsule),
+            capsule_signature: binary(&snapshot.capsule_signature),
+            created_at_unix_ns: signed(snapshot.created_at_unix_ns),
+            schema_version: SCHEMA_VERSION,
+        }
+    }
+
+    pub(crate) fn into_record(self) -> Option<ShareSnapshotRecord> {
+        Some(ShareSnapshotRecord {
+            share_id: fixed(&self.share_id)?,
+            revision: unsigned(self.revision),
+            snapshot_id: fixed(&self.snapshot_id)?,
+            capsule: self.capsule.bytes,
+            capsule_signature: self.capsule_signature.bytes,
+            created_at_unix_ns: unsigned(self.created_at_unix_ns),
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct ShareMembershipDocument {
+    pub share_id: Binary,
+    pub user_id: Binary,
+    pub granted_at_unix_ns: i64,
+    pub schema_version: i32,
+}
+
+impl ShareMembershipDocument {
+    pub(crate) fn from_record(membership: &ShareMembershipRecord) -> Self {
+        Self {
+            share_id: binary(&membership.share_id),
+            user_id: binary(&membership.user_id),
+            granted_at_unix_ns: signed(membership.granted_at_unix_ns),
+            schema_version: SCHEMA_VERSION,
+        }
+    }
+
+    pub(crate) fn into_record(self) -> Option<ShareMembershipRecord> {
+        Some(ShareMembershipRecord {
+            share_id: fixed(&self.share_id)?,
+            user_id: fixed(&self.user_id)?,
+            granted_at_unix_ns: unsigned(self.granted_at_unix_ns),
         })
     }
 }

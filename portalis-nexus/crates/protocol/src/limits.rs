@@ -35,4 +35,15 @@ pub const MAX_KEY_ENVELOPE_CIPHERTEXT_BYTES: usize = 4 * 1024;
 /// Key envelopes are fetched in deterministic pages so a device with many
 /// shares cannot exceed the frame or memory budget in one response.
 pub const MAX_KEY_ENVELOPES_PER_PAGE: usize = 128;
+/// An encrypted torrent descriptor is metadata, never media. Keeping it at
+/// 256 KiB leaves ample room for large torrents without turning Nexus into an
+/// opaque file store.
+pub const MAX_SHARE_CAPSULE_BYTES: usize = 256 * 1024;
+pub const MAX_SHARE_HANDOFF_BYTES: usize = 256 * 1024;
+pub const MAX_SHARES_PER_RESPONSE: usize = 128;
+pub const INFO_HASH_V1_BYTES: usize = 20;
+pub const INFO_HASH_V2_BYTES: usize = 32;
+pub const SWARM_LEASE_SECONDS: u64 = 90;
+pub const SWARM_REFRESH_SECONDS: u64 = 30;
+pub const MAX_SWARM_CANDIDATES: usize = 32;
 pub const WEBSOCKET_SUBPROTOCOL: &str = "portalis.protobuf.v1";

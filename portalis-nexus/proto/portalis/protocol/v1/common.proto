@@ -10,6 +10,9 @@ enum ProtocolErrorCode {
   PROTOCOL_ERROR_CODE_UNAUTHORIZED = 4;
   PROTOCOL_ERROR_CODE_RATE_LIMITED = 5;
   PROTOCOL_ERROR_CODE_INTERNAL = 6;
+  // Used for private resources too, so an unauthorized caller cannot probe
+  // whether an identifier exists.
+  PROTOCOL_ERROR_CODE_NOT_FOUND = 7;
 }
 
 message ProtocolRange {

@@ -91,7 +91,11 @@ pub async fn serve(address: SocketAddr, router: Router) -> JoinHandle<()> {
         .await
         .expect("bind test server");
     tokio::spawn(async move {
-        let _ = axum::serve(listener, router).await;
+        let _ = axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await;
     })
 }
 

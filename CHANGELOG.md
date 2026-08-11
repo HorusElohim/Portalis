@@ -12,10 +12,17 @@
   in-flight pieces; sequential downloads remain sequential instead of being
   visually spread across unrelated files.
 
-- Started Nexus M4 with the share publication rules: a share's owner is fixed
-  by its first publication, revisions only ever move forward one at a time and
-  must follow the snapshot the share is on, and an identical retry succeeds
-  without republishing.
+- Completed Nexus M4 encrypted shares and snapshots. Private share discovery,
+  fetches, live events, key delivery, and transient handoffs now require
+  membership; encrypted capsules are bounded and immutable; publication uses
+  transactional snapshot history and compare-and-swap heads so revisions
+  cannot regress. The portable client exposes the complete flow.
+
+- Completed Nexus M5 swarm discovery. Authenticated seeders announce bounded
+  short-lived leases using the IP observed by the socket, lookups prefer
+  compatible recent peers across diverse network prefixes, and disconnects
+  or expiration remove stale endpoints. Client candidates from direct,
+  Nexus, tracker, and DHT discovery now merge without duplicates.
 
 - Added Nexus M2.5 encrypted share-key delivery between a user's approved
   devices. Nexus stores only per-device X25519 envelopes, never plaintext
@@ -88,6 +95,22 @@
 ### Engineering
 
 <!-- Tests, tooling, refactors, and maintenance notes go here. -->
+
+- Closed the Nexus M4 and M5 coverage gap. Both new handlers shipped without
+  test modules, so the share and swarm commands are now covered at the socket
+  boundary: every command refusing an unauthenticated connection, malformed
+  identifiers, private shares answering the same way whether or not they
+  exist, members hearing a publication, handoffs reaching only devices that
+  may already read the share, and each domain refusal reaching the wire as a
+  typed code. Also covers the publication retry loop — losing a
+  compare-and-set to an identical publication, and exhausting the retries —
+  the in-memory store's refusal to move a head that moved or rewrite a
+  published revision, the swarm's one-peer-per-network pass filling a
+  response on its own, and the storage failures inside `fetch` and `grant`.
+
+- Removed an unreachable `unreachable!` from share publication by deciding the
+  write's precondition and the identical-retry answer in one match, so the
+  fourth case no longer exists to be impossible.
 
 - Closed the Nexus M2.5 coverage gap, restoring the 100% line and function
   gate. Covers the durable key-envelope store against a real replica set

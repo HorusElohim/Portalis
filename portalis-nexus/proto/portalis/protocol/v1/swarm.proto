@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package portalis.protocol.v1;
+
+enum AddressFamily {
+  ADDRESS_FAMILY_UNSPECIFIED = 0;
+  ADDRESS_FAMILY_IPV4 = 1;
+  ADDRESS_FAMILY_IPV6 = 2;
+}
+
+message AnnouncePeer {
+  bytes info_hash = 1;
+  uint32 listen_port = 2;
+  AddressFamily address_family = 3;
+  uint32 transport_capabilities = 4;
+  uint32 requested_lease_seconds = 5;
+}
+
+message PeerAnnounced {
+  bytes info_hash = 1;
+  uint64 expires_at_unix_ns = 2;
+}
+
+message LookupPeersRequest {
+  bytes info_hash = 1;
+  AddressFamily address_family = 2;
+  uint32 transport_capabilities = 3;
+}
+
+message PeerEndpoint {
+  bytes device_id = 1;
+  bytes ip_address = 2;
+  uint32 port = 3;
+  AddressFamily address_family = 4;
+  uint32 transport_capabilities = 5;
+  uint64 expires_at_unix_ns = 6;
+}
+
+message LookupPeersResponse {
+  bytes info_hash = 1;
+  repeated PeerEndpoint peers = 2;
+}
+
+message WithdrawPeer {
+  bytes info_hash = 1;
+}
+
+message PeerWithdrawn {
+  bytes info_hash = 1;
+}

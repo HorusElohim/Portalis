@@ -7,6 +7,7 @@ import "portalis/protocol/v1/friends.proto";
 import "portalis/protocol/v1/identity.proto";
 import "portalis/protocol/v1/presence.proto";
 import "portalis/protocol/v1/shares.proto";
+import "portalis/protocol/v1/swarm.proto";
 
 message ServerHello {
   bytes connection_id = 1;
@@ -50,10 +51,27 @@ message Envelope {
     ListFriendsResponse list_friends_response = 35;
     PresenceEvent presence_event = 36;
 
-    // 50+ is reserved for M4's Share/Snapshot messages.
     PutKeyEnvelope put_key_envelope = 40;
     KeyEnvelopePut key_envelope_put = 41;
     ListKeyEnvelopesRequest list_key_envelopes_request = 42;
     ListKeyEnvelopesResponse list_key_envelopes_response = 43;
+
+    PublishShare publish_share = 50;
+    SharePublished share_published = 51;
+    ListSharesRequest list_shares_request = 52;
+    ListSharesResponse list_shares_response = 53;
+    FetchShareRequest fetch_share_request = 54;
+    FetchShareResponse fetch_share_response = 55;
+    GrantShareAccess grant_share_access = 56;
+    ShareAccessGranted share_access_granted = 57;
+    ShareEvent share_event = 58;
+    ShareHandoff share_handoff = 59;
+
+    AnnouncePeer announce_peer = 60;
+    PeerAnnounced peer_announced = 61;
+    LookupPeersRequest lookup_peers_request = 62;
+    LookupPeersResponse lookup_peers_response = 63;
+    WithdrawPeer withdraw_peer = 64;
+    PeerWithdrawn peer_withdrawn = 65;
   }
 }

@@ -135,6 +135,8 @@ fn rejection(request: &Envelope, error: &EnvelopeError, now_unix_ns: u64) -> Env
         | EnvelopeError::CiphertextTooLarge { .. } => ProtocolErrorCode::InvalidMessage,
         EnvelopeError::UnknownRecipient
         | EnvelopeError::NotYourDevice
+        | EnvelopeError::NotShareOwner
+        | EnvelopeError::RecipientNotMember
         | EnvelopeError::RecipientRevoked => ProtocolErrorCode::Unauthorized,
         EnvelopeError::Repository(_) => ProtocolErrorCode::Internal,
     };

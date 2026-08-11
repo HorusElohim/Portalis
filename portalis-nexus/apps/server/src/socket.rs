@@ -2,6 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use axum::extract::ConnectInfo;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::{extract::State, response::IntoResponse};
 use futures_util::stream::{SplitSink, SplitStream};
@@ -10,6 +11,7 @@ use portalis_nexus_protocol::v1::ProtocolErrorCode;
 use portalis_nexus_protocol::{
     MAX_FRAME_BYTES, MAX_OUTBOUND_QUEUE, WEBSOCKET_SUBPROTOCOL, decode_frame, format_id,
 };
+use std::net::SocketAddr;
 use tokio::sync::{mpsc, watch};
 use tracing::{Instrument, debug, info_span, warn};
 
@@ -23,12 +25,13 @@ use crate::state::AppState;
 pub(crate) async fn upgrade(
     websocket: WebSocketUpgrade,
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     websocket
         .protocols([WEBSOCKET_SUBPROTOCOL])
         .max_frame_size(MAX_FRAME_BYTES)
         .max_message_size(MAX_FRAME_BYTES)
-        .on_upgrade(move |socket| handle_socket(socket, state))
+        .on_upgrade(move |socket| handle_socket(socket, state, peer))
 }
 
 /// Runs one socket as a bounded read loop feeding a single writer task.
@@ -36,7 +39,7 @@ pub(crate) async fn upgrade(
 /// The writer owns the sink, so every outbound message crosses one queue of at
 /// most [`MAX_OUTBOUND_QUEUE`] entries. A peer that stops reading fills that
 /// queue and loses its connection instead of growing server memory.
-async fn handle_socket(socket: WebSocket, state: AppState) {
+async fn handle_socket(socket: WebSocket, state: AppState, peer: SocketAddr) {
     let issued_at = now_unix_ns();
     let hello = hello_payload(state.protocol_policy(), issued_at);
     let span = info_span!(
@@ -50,7 +53,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         let (outbound, inbox) = mpsc::channel(MAX_OUTBOUND_QUEUE);
         let writer = tokio::spawn(write_outbound(sink, inbox));
 
-        let mut session = Session::new(&hello);
+        let mut session = Session::new(&hello).with_observed_ip(peer.ip());
         // Published before the greeting, so an event triggered by this
         // connection's own first command can already reach it.
         state

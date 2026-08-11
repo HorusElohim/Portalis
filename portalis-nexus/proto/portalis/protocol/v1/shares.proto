@@ -41,3 +41,69 @@ message ListKeyEnvelopesResponse {
   // The next request's after_share_id. Empty means this was the last page.
   bytes next_after_share_id = 2;
 }
+
+// The immutable, encrypted state published at one share revision. Nexus can
+// route and bound these bytes but cannot inspect the torrent capsule.
+message ShareSnapshot {
+  bytes share_id = 1;
+  bytes owner_user_id = 2;
+  uint64 revision = 3;
+  bytes snapshot_id = 4;
+  bytes capsule = 5;
+  bytes capsule_signature = 6;
+  uint64 created_at_unix_ns = 7;
+}
+
+message PublishShare {
+  bytes share_id = 1;
+  uint64 revision = 2;
+  // Empty only for revision one.
+  bytes prior_snapshot_id = 3;
+  bytes snapshot_id = 4;
+  bytes capsule = 5;
+  // The owner's signature is relayed so recipients can authenticate the
+  // opaque capsule without trusting Nexus with its plaintext.
+  bytes capsule_signature = 6;
+}
+
+message SharePublished {
+  ShareSnapshot share = 1;
+}
+
+message ListSharesRequest {}
+
+message ListSharesResponse {
+  repeated ShareSnapshot shares = 1;
+}
+
+message FetchShareRequest {
+  bytes share_id = 1;
+}
+
+message FetchShareResponse {
+  ShareSnapshot share = 1;
+}
+
+message GrantShareAccess {
+  bytes share_id = 1;
+  bytes member_user_id = 2;
+}
+
+message ShareAccessGranted {
+  bytes share_id = 1;
+  bytes member_user_id = 2;
+}
+
+// Unsolicited notification that an authorized share has moved.
+message ShareEvent {
+  ShareSnapshot share = 1;
+}
+
+// A bounded, encrypted live payload. It is forwarded to an authorized device
+// and never persisted by Nexus. An empty recipient_device_id is the sender's
+// acknowledgement; a non-empty one addresses the event.
+message ShareHandoff {
+  bytes share_id = 1;
+  bytes recipient_device_id = 2;
+  bytes ciphertext = 3;
+}

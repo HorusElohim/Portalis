@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::ports::{
     Clock, DeviceId, DeviceRecord, EncryptionKey, EnvelopeRepository, IdentityRepository,
-    KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId, UserId,
+    KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId, ShareRepository, UserId,
 };
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -24,6 +24,10 @@ pub enum EnvelopeError {
     UnknownRecipient,
     #[error("that device does not belong to you")]
     NotYourDevice,
+    #[error("only the share owner may distribute its key")]
+    NotShareOwner,
+    #[error("that device's user is not a member of the share")]
+    RecipientNotMember,
     #[error("that device was revoked")]
     RecipientRevoked,
     #[error(transparent)]
@@ -47,7 +51,7 @@ pub struct EnvelopeService<S, C> {
 
 impl<S, C> EnvelopeService<S, C>
 where
-    S: EnvelopeRepository + IdentityRepository,
+    S: EnvelopeRepository + IdentityRepository + ShareRepository,
     C: Clock,
 {
     pub const fn new(store: S, clock: C) -> Self {
@@ -87,11 +91,26 @@ where
             .find_device(request.recipient_device_id)
             .await?
             .ok_or(EnvelopeError::UnknownRecipient)?;
-        if recipient.user_id != sender {
-            return Err(EnvelopeError::NotYourDevice);
-        }
         if recipient.is_revoked() {
             return Err(EnvelopeError::RecipientRevoked);
+        }
+
+        // Before M4 creates the share record, preserve M2.5's linked-device
+        // delivery. Once the share exists, its owner may distribute the key
+        // to any authorized member device, and nobody else may rotate it.
+        if let Some(share) = self.store.find_share(request.share_id).await? {
+            if share.owner != sender {
+                return Err(EnvelopeError::NotShareOwner);
+            }
+            if !self
+                .store
+                .has_share_access(request.share_id, recipient.user_id)
+                .await?
+            {
+                return Err(EnvelopeError::RecipientNotMember);
+            }
+        } else if recipient.user_id != sender {
+            return Err(EnvelopeError::NotYourDevice);
         }
 
         self.store
@@ -191,6 +210,69 @@ mod tests {
         assert_eq!(listed.envelopes[0].ephemeral_public_key, EPHEMERAL_KEY);
         assert_eq!(listed.envelopes[0].ciphertext, b"sealed");
         assert_eq!(listed.envelopes[0].created_at_unix_ns, NOW);
+    }
+
+    #[tokio::test]
+    async fn a_share_owner_distributes_keys_only_to_authorized_member_devices() {
+        let service = service();
+        service
+            .store
+            .enrol_device(device(SENDER_DEVICE, SENDER))
+            .expect("owner device");
+        service
+            .store
+            .enrol_device(device(RECIPIENT_DEVICE, OTHER_USER))
+            .expect("recipient device");
+        let share = crate::ShareRecord {
+            share_id: SHARE,
+            owner: SENDER,
+            revision: 1,
+            snapshot_id: [8; 32],
+            capsule: b"capsule".to_vec(),
+            capsule_signature: vec![7; 64],
+            created_at_unix_ns: NOW,
+            updated_at_unix_ns: NOW,
+        };
+        service
+            .store
+            .save_publication(
+                share.clone(),
+                crate::ShareSnapshotRecord {
+                    share_id: SHARE,
+                    revision: 1,
+                    snapshot_id: share.snapshot_id,
+                    capsule: share.capsule.clone(),
+                    capsule_signature: share.capsule_signature.clone(),
+                    created_at_unix_ns: NOW,
+                },
+                None,
+            )
+            .await
+            .expect("share");
+
+        assert_eq!(
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            Err(EnvelopeError::RecipientNotMember)
+        );
+        assert_eq!(
+            service
+                .put_key_envelope(OTHER_USER, request(b"sealed"))
+                .await,
+            Err(EnvelopeError::NotShareOwner)
+        );
+        service
+            .store
+            .grant_share_access(crate::ShareMembershipRecord {
+                share_id: SHARE,
+                user_id: OTHER_USER,
+                granted_at_unix_ns: NOW,
+            })
+            .await
+            .expect("member");
+        service
+            .put_key_envelope(SENDER, request(b"sealed"))
+            .await
+            .expect("authorized delivery");
     }
 
     fn outage(operation: &str) -> Result<(), EnvelopeError> {
@@ -318,6 +400,63 @@ mod tests {
         }
     }
 
+    impl ShareRepository for FailingWrites {
+        async fn find_share(
+            &self,
+            share_id: ShareId,
+        ) -> Result<Option<crate::ShareRecord>, RepositoryError> {
+            self.0.find_share(share_id).await
+        }
+
+        async fn save_publication(
+            &self,
+            share: crate::ShareRecord,
+            snapshot: crate::ShareSnapshotRecord,
+            expected_revision: Option<u64>,
+        ) -> Result<(), RepositoryError> {
+            self.0
+                .save_publication(share, snapshot, expected_revision)
+                .await
+        }
+
+        async fn find_snapshot(
+            &self,
+            share_id: ShareId,
+            revision: u64,
+        ) -> Result<Option<crate::ShareSnapshotRecord>, RepositoryError> {
+            self.0.find_snapshot(share_id, revision).await
+        }
+
+        async fn grant_share_access(
+            &self,
+            membership: crate::ShareMembershipRecord,
+        ) -> Result<(), RepositoryError> {
+            self.0.grant_share_access(membership).await
+        }
+
+        async fn has_share_access(
+            &self,
+            share_id: ShareId,
+            user_id: UserId,
+        ) -> Result<bool, RepositoryError> {
+            self.0.has_share_access(share_id, user_id).await
+        }
+
+        async fn list_authorized_shares(
+            &self,
+            user_id: UserId,
+        ) -> Result<Vec<crate::ShareRecord>, RepositoryError> {
+            self.0.list_authorized_shares(user_id).await
+        }
+
+        async fn list_share_members(
+            &self,
+            share_id: ShareId,
+        ) -> Result<Vec<UserId>, RepositoryError> {
+            self.0.list_share_members(share_id).await
+        }
+    }
+
     /// The double must be transparent apart from the write it fails, or a
     /// test using it would be testing the double rather than the service.
     #[tokio::test]
@@ -354,6 +493,58 @@ mod tests {
                 .await
                 .map(|page| page.envelopes),
             Ok(Vec::new())
+        );
+
+        // Shares too: the owner check that decides whether a key may be
+        // addressed to another user's device reads through this double, so a
+        // delegation that lied would silently change who a share reaches.
+        let head = crate::ShareRecord {
+            share_id: SHARE,
+            owner: SENDER,
+            revision: 1,
+            snapshot_id: [4; 32],
+            capsule: b"sealed".to_vec(),
+            capsule_signature: vec![5; 64],
+            created_at_unix_ns: NOW,
+            updated_at_unix_ns: NOW,
+        };
+        let snapshot = crate::ShareSnapshotRecord {
+            share_id: SHARE,
+            revision: 1,
+            snapshot_id: head.snapshot_id,
+            capsule: head.capsule.clone(),
+            capsule_signature: head.capsule_signature.clone(),
+            created_at_unix_ns: NOW,
+        };
+
+        assert_eq!(store.find_share(SHARE).await, Ok(None));
+        assert_eq!(
+            store
+                .save_publication(head.clone(), snapshot.clone(), None)
+                .await,
+            Ok(())
+        );
+        assert_eq!(store.find_share(SHARE).await, Ok(Some(head.clone())));
+        assert_eq!(store.find_snapshot(SHARE, 1).await, Ok(Some(snapshot)));
+        assert_eq!(
+            store
+                .grant_share_access(crate::ShareMembershipRecord {
+                    share_id: SHARE,
+                    user_id: OTHER_USER,
+                    granted_at_unix_ns: NOW,
+                })
+                .await,
+            Ok(())
+        );
+        assert_eq!(store.has_share_access(SHARE, OTHER_USER).await, Ok(true));
+        assert_eq!(
+            store.list_authorized_shares(OTHER_USER).await,
+            Ok(vec![head])
+        );
+        assert_eq!(
+            store.list_share_members(SHARE).await,
+            Ok(vec![SENDER, OTHER_USER]),
+            "the owner is a member of their own share"
         );
     }
 

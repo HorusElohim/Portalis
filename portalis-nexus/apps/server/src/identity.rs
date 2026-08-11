@@ -2,7 +2,7 @@
 
 use portalis_nexus_server_core::{
     EnvelopeRepository, EnvelopeService, FriendRepository, FriendService, IdentityRepository,
-    IdentityService, UserDirectory,
+    IdentityService, ShareRepository, ShareService, UserDirectory,
 };
 
 use crate::environment::{OsRandom, SystemClock};
@@ -37,6 +37,15 @@ pub fn friends<S: FriendRepository + UserDirectory>(store: S) -> NexusFriends<S>
 pub type NexusEnvelopes<S> = EnvelopeService<S, SystemClock>;
 
 #[must_use]
-pub fn envelopes<S: EnvelopeRepository + IdentityRepository>(store: S) -> NexusEnvelopes<S> {
+pub fn envelopes<S: EnvelopeRepository + IdentityRepository + ShareRepository>(
+    store: S,
+) -> NexusEnvelopes<S> {
     EnvelopeService::new(store, SystemClock)
+}
+
+pub type NexusShares<S> = ShareService<S, SystemClock>;
+
+#[must_use]
+pub fn shares<S: ShareRepository + UserDirectory>(store: S) -> NexusShares<S> {
+    ShareService::new(store, SystemClock)
 }

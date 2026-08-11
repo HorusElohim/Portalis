@@ -1,12 +1,12 @@
 # Portalis Nexus Specification
 
-Status: M3 friends and presence complete; M2.5 device linking next, then M4
+Status: M5 swarm discovery complete; M6 Flutter integration is next.
 
 Protocol: `portalis.protocol.v1`
 
 Production target: Linux
 
-Last updated: 2026-08-08
+Last updated: 2026-08-11
 
 ## 1. Purpose
 
@@ -831,6 +831,8 @@ coming back, and a second device leaving does not report its user away.
 
 ### M4: Encrypted shares and snapshots
 
+Status: complete.
+
 - Share/member/snapshot repositories and per-device key envelopes.
 - Signed snapshot publication and authorized listing/events/fetches.
 - Encrypted torrent-capsule limit and transient client-to-client handoff.
@@ -857,13 +859,39 @@ be stranded; different bytes for a published revision are refused, since a
 revision is immutable once written. Nexus compares capsule bytes to recognise
 that retry and otherwise treats them as opaque.
 
+The completed path stores mutable share heads, append-only snapshots, and
+membership edges in memory or MongoDB. Snapshot insertion and head movement
+share one transaction, with the head revision in the write filter; a lost CAS
+aborts without leaving an orphan revision. Lists, fetches, live events,
+per-device key envelopes, and transient encrypted handoffs all check the same
+membership source of truth. Unauthorized and missing share IDs both answer
+`NOT_FOUND`, preventing private-state probing. Capsules and handoffs are
+bounded metadata and Nexus never parses or persists their plaintext.
+
+Gate met: a granted device receives and opens its own sealed share key, fetches
+the latest encrypted capsule, outsiders cannot discover it, and both the pure
+rules and durable transaction refuse stale revisions.
+
 ### M5: Swarm discovery
+
+Status: complete.
 
 - Announce, refresh, lookup, and expire peer leases.
 - Fast swarm table and candidate diversity.
 - Client merge of server, direct, tracker, and DHT candidates.
 
 Gate: two clients discover current endpoints and expired peers disappear.
+
+The server binds every announcement to the remote IP observed by the TCP
+socket and accepts only its listen port, family, transports, and lease request
+from the client. Leases refresh by device, are removed on disconnect, and are
+checked for expiration on every lookup. Results are bounded, prefer compatible
+transport and recent leases, and take one peer per IPv4 /24 or IPv6 /64 before
+filling remaining slots. The client merges direct, Nexus, tracker, and DHT
+candidates by endpoint with deterministic source preference.
+
+Gate met: two authenticated socket clients discover each other's current
+source-bound endpoints; disconnect and time-based expiry both remove leases.
 
 ### M6: Flutter integration
 

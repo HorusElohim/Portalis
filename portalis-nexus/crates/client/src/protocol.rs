@@ -2,14 +2,19 @@
 
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{
-    AuthenticateDevice, Authenticated, DeviceLinked, Envelope, Friend, FriendAction, FriendCommand,
+    AddressFamily, AnnouncePeer, AuthenticateDevice, Authenticated, DeviceLinked, Envelope,
+    FetchShareRequest, FetchShareResponse, Friend, FriendAction, FriendCommand, GrantShareAccess,
     KeyEnvelope, KeyEnvelopePut, LinkDevice, ListFriendsRequest, ListFriendsResponse,
-    ListKeyEnvelopesRequest, ListKeyEnvelopesResponse, Ping, Pong, ProtocolErrorCode,
-    PutKeyEnvelope, RegisterUser, ResolveHandleRequest, ResolveHandleResponse, ServerHello,
+    ListKeyEnvelopesRequest, ListKeyEnvelopesResponse, ListSharesRequest, ListSharesResponse,
+    LookupPeersRequest, LookupPeersResponse, PeerAnnounced, PeerWithdrawn, Ping, Pong,
+    ProtocolErrorCode, PublishShare, PutKeyEnvelope, RegisterUser, ResolveHandleRequest,
+    ResolveHandleResponse, ServerHello, ShareAccessGranted, ShareHandoff, SharePublished,
+    ShareSnapshot, WithdrawPeer,
 };
 use portalis_nexus_protocol::{
-    CURRENT_PROTOCOL_VERSION, SHARE_ID_BYTES, SessionBinding, authentication_payload,
-    link_device_payload, new_message_id, registration_payload, validate_server_hello,
+    CURRENT_PROTOCOL_VERSION, SHARE_ID_BYTES, SNAPSHOT_ID_BYTES, SessionBinding,
+    authentication_payload, link_device_payload, new_message_id, registration_payload,
+    validate_server_hello,
 };
 
 use crate::error::ClientError;
@@ -182,6 +187,113 @@ impl ClientProtocol {
         Self::envelope(
             Payload::ListKeyEnvelopesRequest(ListKeyEnvelopesRequest {
                 after_share_id: after_share_id.unwrap_or_default().to_vec(),
+            }),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn publish_share(&self, publication: PublishShare, timestamp_unix_ns: u64) -> Envelope {
+        Self::envelope(Payload::PublishShare(publication), timestamp_unix_ns)
+    }
+
+    #[must_use]
+    pub fn list_shares(&self, timestamp_unix_ns: u64) -> Envelope {
+        Self::envelope(
+            Payload::ListSharesRequest(ListSharesRequest {}),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn fetch_share(&self, share_id: &[u8], timestamp_unix_ns: u64) -> Envelope {
+        Self::envelope(
+            Payload::FetchShareRequest(FetchShareRequest {
+                share_id: share_id.to_vec(),
+            }),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn grant_share_access(
+        &self,
+        share_id: &[u8],
+        member_user_id: &[u8],
+        timestamp_unix_ns: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::GrantShareAccess(GrantShareAccess {
+                share_id: share_id.to_vec(),
+                member_user_id: member_user_id.to_vec(),
+            }),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn share_handoff(
+        &self,
+        share_id: &[u8],
+        recipient_device_id: &[u8],
+        ciphertext: &[u8],
+        timestamp_unix_ns: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::ShareHandoff(ShareHandoff {
+                share_id: share_id.to_vec(),
+                recipient_device_id: recipient_device_id.to_vec(),
+                ciphertext: ciphertext.to_vec(),
+            }),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn announce_peer(
+        &self,
+        info_hash: &[u8],
+        listen_port: u16,
+        address_family: AddressFamily,
+        transport_capabilities: u32,
+        requested_lease_seconds: u32,
+        timestamp_unix_ns: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::AnnouncePeer(AnnouncePeer {
+                info_hash: info_hash.to_vec(),
+                listen_port: u32::from(listen_port),
+                address_family: address_family as i32,
+                transport_capabilities,
+                requested_lease_seconds,
+            }),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn lookup_peers(
+        &self,
+        info_hash: &[u8],
+        address_family: AddressFamily,
+        transport_capabilities: u32,
+        timestamp_unix_ns: u64,
+    ) -> Envelope {
+        Self::envelope(
+            Payload::LookupPeersRequest(LookupPeersRequest {
+                info_hash: info_hash.to_vec(),
+                address_family: address_family as i32,
+                transport_capabilities,
+            }),
+            timestamp_unix_ns,
+        )
+    }
+
+    #[must_use]
+    pub fn withdraw_peer(&self, info_hash: &[u8], timestamp_unix_ns: u64) -> Envelope {
+        Self::envelope(
+            Payload::WithdrawPeer(WithdrawPeer {
+                info_hash: info_hash.to_vec(),
             }),
             timestamp_unix_ns,
         )
@@ -447,10 +559,152 @@ pub fn validate_friend_list(
     }
 }
 
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused, mismatched, or malformed.
+pub fn validate_share_published(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<ShareSnapshot, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::SharePublished(SharePublished { share }) => {
+            validate_share(share.as_ref().ok_or(ClientError::UnexpectedEnvelope {
+                expected: "a share snapshot",
+            })?)
+        }
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "SharePublished",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused, mismatched, or malformed.
+pub fn validate_share_list(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<Vec<ShareSnapshot>, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::ListSharesResponse(ListSharesResponse { shares }) => {
+            shares.iter().map(validate_share).collect()
+        }
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "ListSharesResponse",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused, mismatched, or malformed.
+pub fn validate_share_fetch(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<ShareSnapshot, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::FetchShareResponse(FetchShareResponse { share }) => {
+            validate_share(share.as_ref().ok_or(ClientError::UnexpectedEnvelope {
+                expected: "a share snapshot",
+            })?)
+        }
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "FetchShareResponse",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused or mismatched.
+pub fn validate_share_access_granted(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<ShareAccessGranted, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::ShareAccessGranted(granted) => Ok(granted.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "ShareAccessGranted",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused or not an acknowledgement.
+pub fn validate_share_handoff(request: &Envelope, response: &Envelope) -> Result<(), ClientError> {
+    match validate_reply(request, response)? {
+        Payload::ShareHandoff(ack) if ack.recipient_device_id.is_empty() => Ok(()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "ShareHandoff acknowledgement",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused or mismatched.
+pub fn validate_peer_announced(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<PeerAnnounced, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::PeerAnnounced(announced) => Ok(announced.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "PeerAnnounced",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused, mismatched, or malformed.
+pub fn validate_peer_lookup(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<LookupPeersResponse, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::LookupPeersResponse(found) => {
+            for peer in &found.peers {
+                let valid_ip = matches!(peer.ip_address.len(), 4 | 16);
+                if !valid_ip || peer.port == 0 || peer.port > u32::from(u16::MAX) {
+                    return Err(ClientError::InvalidField {
+                        field: "peer endpoint",
+                    });
+                }
+            }
+            Ok(found.clone())
+        }
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "LookupPeersResponse",
+        }),
+    }
+}
+
+/// # Errors
+/// Returns [`ClientError`] when the reply is refused or mismatched.
+pub fn validate_peer_withdrawn(
+    request: &Envelope,
+    response: &Envelope,
+) -> Result<PeerWithdrawn, ClientError> {
+    match validate_reply(request, response)? {
+        Payload::PeerWithdrawn(withdrawn) => Ok(withdrawn.clone()),
+        _ => Err(ClientError::UnexpectedEnvelope {
+            expected: "PeerWithdrawn",
+        }),
+    }
+}
+
+fn validate_share(share: &ShareSnapshot) -> Result<ShareSnapshot, ClientError> {
+    if share.share_id.len() != SHARE_ID_BYTES {
+        return Err(ClientError::InvalidField { field: "share_id" });
+    }
+    if share.snapshot_id.len() != SNAPSHOT_ID_BYTES {
+        return Err(ClientError::InvalidField {
+            field: "snapshot_id",
+        });
+    }
+    Ok(share.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use portalis_nexus_protocol::new_challenge;
     use portalis_nexus_protocol::v1::FriendEvent;
+    use portalis_nexus_protocol::v1::PeerEndpoint;
     use portalis_nexus_protocol::v1::ProtocolRange;
 
     use super::*;
@@ -1087,6 +1341,248 @@ mod tests {
                 code: ProtocolErrorCode::RateLimited,
                 message: "try again".to_owned(),
             })
+        );
+    }
+
+    fn share_snapshot() -> ShareSnapshot {
+        ShareSnapshot {
+            share_id: vec![1; SHARE_ID_BYTES],
+            owner_user_id: vec![2; 16],
+            revision: 1,
+            snapshot_id: vec![3; SNAPSHOT_ID_BYTES],
+            capsule: b"sealed".to_vec(),
+            capsule_signature: vec![4; 64],
+            created_at_unix_ns: 5,
+        }
+    }
+
+    #[test]
+    fn builds_and_reads_share_commands() {
+        let client = ClientProtocol::default();
+        assert!(matches!(
+            client
+                .publish_share(
+                    PublishShare {
+                        share_id: vec![1; 16],
+                        revision: 1,
+                        prior_snapshot_id: Vec::new(),
+                        snapshot_id: vec![2; 32],
+                        capsule: b"sealed".to_vec(),
+                        capsule_signature: vec![3; 64],
+                    },
+                    1,
+                )
+                .payload,
+            Some(Payload::PublishShare(_))
+        ));
+        assert!(matches!(
+            client.list_shares(1).payload,
+            Some(Payload::ListSharesRequest(_))
+        ));
+        assert!(matches!(
+            client.fetch_share(&[1; 16], 1).payload,
+            Some(Payload::FetchShareRequest(_))
+        ));
+        assert!(matches!(
+            client.grant_share_access(&[1; 16], &[2; 16], 1).payload,
+            Some(Payload::GrantShareAccess(_))
+        ));
+        assert!(matches!(
+            client
+                .share_handoff(&[1; 16], &[2; 32], b"sealed", 1)
+                .payload,
+            Some(Payload::ShareHandoff(_))
+        ));
+
+        let request = ping_envelope(1);
+        let share = share_snapshot();
+        assert_eq!(
+            validate_share_published(
+                &request,
+                &answered_with(
+                    &request,
+                    Payload::SharePublished(SharePublished {
+                        share: Some(share.clone())
+                    })
+                )
+            ),
+            Ok(share.clone())
+        );
+        assert_eq!(
+            validate_share_list(
+                &request,
+                &answered_with(
+                    &request,
+                    Payload::ListSharesResponse(ListSharesResponse {
+                        shares: vec![share.clone()]
+                    })
+                )
+            ),
+            Ok(vec![share.clone()])
+        );
+        assert_eq!(
+            validate_share_fetch(
+                &request,
+                &answered_with(
+                    &request,
+                    Payload::FetchShareResponse(FetchShareResponse {
+                        share: Some(share.clone())
+                    })
+                )
+            ),
+            Ok(share)
+        );
+        let grant = ShareAccessGranted {
+            share_id: vec![1; 16],
+            member_user_id: vec![2; 16],
+        };
+        assert_eq!(
+            validate_share_access_granted(
+                &request,
+                &answered_with(&request, Payload::ShareAccessGranted(grant.clone()))
+            ),
+            Ok(grant)
+        );
+        assert_eq!(
+            validate_share_handoff(
+                &request,
+                &answered_with(
+                    &request,
+                    Payload::ShareHandoff(ShareHandoff {
+                        share_id: vec![1; 16],
+                        recipient_device_id: Vec::new(),
+                        ciphertext: Vec::new()
+                    })
+                )
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn builds_reads_and_rejects_swarm_answers() {
+        let client = ClientProtocol::default();
+        assert!(matches!(
+            client
+                .announce_peer(&[1; 20], 6881, AddressFamily::Ipv4, 1, 90, 1)
+                .payload,
+            Some(Payload::AnnouncePeer(_))
+        ));
+        assert!(matches!(
+            client
+                .lookup_peers(&[1; 20], AddressFamily::Unspecified, 1, 1)
+                .payload,
+            Some(Payload::LookupPeersRequest(_))
+        ));
+        assert!(matches!(
+            client.withdraw_peer(&[1; 20], 1).payload,
+            Some(Payload::WithdrawPeer(_))
+        ));
+
+        let request = ping_envelope(1);
+        let announced = PeerAnnounced {
+            info_hash: vec![1; 20],
+            expires_at_unix_ns: 2,
+        };
+        assert_eq!(
+            validate_peer_announced(
+                &request,
+                &answered_with(&request, Payload::PeerAnnounced(announced.clone()))
+            ),
+            Ok(announced)
+        );
+        let found = LookupPeersResponse {
+            info_hash: vec![1; 20],
+            peers: vec![PeerEndpoint {
+                device_id: vec![2; 32],
+                ip_address: vec![127, 0, 0, 1],
+                port: 6881,
+                address_family: AddressFamily::Ipv4 as i32,
+                transport_capabilities: 1,
+                expires_at_unix_ns: 2,
+            }],
+        };
+        assert_eq!(
+            validate_peer_lookup(
+                &request,
+                &answered_with(&request, Payload::LookupPeersResponse(found.clone()))
+            ),
+            Ok(found)
+        );
+        for (ip_address, port) in [(vec![1; 3], 1), (vec![1; 4], 0), (vec![1; 16], 65_536)] {
+            let invalid = LookupPeersResponse {
+                info_hash: vec![1; 20],
+                peers: vec![PeerEndpoint {
+                    ip_address,
+                    port,
+                    ..PeerEndpoint::default()
+                }],
+            };
+            assert!(
+                validate_peer_lookup(
+                    &request,
+                    &answered_with(&request, Payload::LookupPeersResponse(invalid))
+                )
+                .is_err()
+            );
+        }
+        let withdrawn = PeerWithdrawn {
+            info_hash: vec![1; 20],
+        };
+        assert_eq!(
+            validate_peer_withdrawn(
+                &request,
+                &answered_with(&request, Payload::PeerWithdrawn(withdrawn.clone()))
+            ),
+            Ok(withdrawn)
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_or_mismatched_share_and_swarm_answers() {
+        let request = ping_envelope(1);
+        let pong = answered_with(&request, Payload::Pong(Pong { nonce: 1 }));
+        assert!(validate_share_published(&request, &pong).is_err());
+        assert!(validate_share_list(&request, &pong).is_err());
+        assert!(validate_share_fetch(&request, &pong).is_err());
+        assert!(validate_share_access_granted(&request, &pong).is_err());
+        assert!(validate_share_handoff(&request, &pong).is_err());
+        assert!(validate_peer_announced(&request, &pong).is_err());
+        assert!(validate_peer_lookup(&request, &pong).is_err());
+        assert!(validate_peer_withdrawn(&request, &pong).is_err());
+        assert!(
+            validate_share(&ShareSnapshot {
+                share_id: vec![1; 15],
+                ..share_snapshot()
+            })
+            .is_err()
+        );
+        assert!(
+            validate_share(&ShareSnapshot {
+                snapshot_id: vec![1; 31],
+                ..share_snapshot()
+            })
+            .is_err()
+        );
+        assert!(
+            validate_share_published(
+                &request,
+                &answered_with(
+                    &request,
+                    Payload::SharePublished(SharePublished { share: None })
+                )
+            )
+            .is_err()
+        );
+        assert!(
+            validate_share_fetch(
+                &request,
+                &answered_with(
+                    &request,
+                    Payload::FetchShareResponse(FetchShareResponse { share: None })
+                )
+            )
+            .is_err()
         );
     }
 }

@@ -11,9 +11,10 @@ use std::sync::{Mutex, MutexGuard};
 use crate::friendship::{FriendshipEdge, FriendshipRecord};
 use crate::ports::{
     Clock, DeviceId, DeviceRecord, EnvelopeRepository, FriendRepository, IdentityRepository,
-    KeyEnvelopePage, KeyEnvelopeRecord, RandomSource, RepositoryError, ShareId, UserDirectory,
-    UserId, UserRecord,
+    KeyEnvelopePage, KeyEnvelopeRecord, RandomSource, RepositoryError, ShareId,
+    ShareMembershipRecord, ShareRepository, ShareSnapshotRecord, UserDirectory, UserId, UserRecord,
 };
+use crate::share::ShareRecord;
 
 /// A clock that stands still until a test advances it.
 #[derive(Debug)]
@@ -98,6 +99,9 @@ struct Stored {
     devices: HashMap<DeviceId, DeviceRecord>,
     friendships: HashMap<FriendshipEdge, FriendshipRecord>,
     envelopes: HashMap<(ShareId, DeviceId), KeyEnvelopeRecord>,
+    shares: HashMap<ShareId, ShareRecord>,
+    snapshots: HashMap<(ShareId, u64), ShareSnapshotRecord>,
+    share_memberships: HashMap<(ShareId, UserId), ShareMembershipRecord>,
 }
 
 impl Stored {
@@ -372,6 +376,128 @@ impl EnvelopeRepository for InMemoryIdentities {
     }
 }
 
+impl ShareRepository for InMemoryIdentities {
+    fn find_share(
+        &self,
+        share_id: ShareId,
+    ) -> impl std::future::Future<Output = Result<Option<ShareRecord>, RepositoryError>> + Send
+    {
+        let outage = self.outage();
+        let found = self.lock().shares.get(&share_id).cloned();
+        async move { outage.map_or(Ok(found), Err) }
+    }
+
+    fn save_publication(
+        &self,
+        share: ShareRecord,
+        snapshot: ShareSnapshotRecord,
+        expected_revision: Option<u64>,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let result = self.outage().map_or_else(
+            || {
+                let mut stored = self.lock();
+                let actual = stored.shares.get(&share.share_id).map(|head| head.revision);
+                if actual != expected_revision {
+                    return Err(RepositoryError::VersionConflict);
+                }
+                if stored
+                    .snapshots
+                    .contains_key(&(snapshot.share_id, snapshot.revision))
+                {
+                    return Err(RepositoryError::VersionConflict);
+                }
+                stored
+                    .snapshots
+                    .insert((snapshot.share_id, snapshot.revision), snapshot);
+                stored.shares.insert(share.share_id, share);
+                Ok(())
+            },
+            Err,
+        );
+        async move { result }
+    }
+
+    fn find_snapshot(
+        &self,
+        share_id: ShareId,
+        revision: u64,
+    ) -> impl std::future::Future<Output = Result<Option<ShareSnapshotRecord>, RepositoryError>> + Send
+    {
+        let outage = self.outage();
+        let found = self.lock().snapshots.get(&(share_id, revision)).cloned();
+        async move { outage.map_or(Ok(found), Err) }
+    }
+
+    fn grant_share_access(
+        &self,
+        membership: ShareMembershipRecord,
+    ) -> impl std::future::Future<Output = Result<(), RepositoryError>> + Send {
+        let outage = self.outage();
+        if outage.is_none() {
+            self.lock()
+                .share_memberships
+                .insert((membership.share_id, membership.user_id), membership);
+        }
+        async move { outage.map_or(Ok(()), Err) }
+    }
+
+    fn has_share_access(
+        &self,
+        share_id: ShareId,
+        user_id: UserId,
+    ) -> impl std::future::Future<Output = Result<bool, RepositoryError>> + Send {
+        let outage = self.outage();
+        let stored = self.lock();
+        let authorized = stored
+            .shares
+            .get(&share_id)
+            .is_some_and(|share| share.owner == user_id)
+            || stored.share_memberships.contains_key(&(share_id, user_id));
+        async move { outage.map_or(Ok(authorized), Err) }
+    }
+
+    fn list_authorized_shares(
+        &self,
+        user_id: UserId,
+    ) -> impl std::future::Future<Output = Result<Vec<ShareRecord>, RepositoryError>> + Send {
+        let outage = self.outage();
+        let stored = self.lock();
+        let mut found: Vec<_> = stored
+            .shares
+            .values()
+            .filter(|share| {
+                share.owner == user_id
+                    || stored
+                        .share_memberships
+                        .contains_key(&(share.share_id, user_id))
+            })
+            .cloned()
+            .collect();
+        found.sort_unstable_by_key(|share| share.share_id);
+        async move { outage.map_or(Ok(found), Err) }
+    }
+
+    fn list_share_members(
+        &self,
+        share_id: ShareId,
+    ) -> impl std::future::Future<Output = Result<Vec<UserId>, RepositoryError>> + Send {
+        let outage = self.outage();
+        let stored = self.lock();
+        let mut members: Vec<_> = stored
+            .share_memberships
+            .values()
+            .filter(|membership| membership.share_id == share_id)
+            .map(|membership| membership.user_id)
+            .collect();
+        if let Some(owner) = stored.shares.get(&share_id).map(|share| share.owner) {
+            members.push(owner);
+        }
+        members.sort_unstable();
+        members.dedup();
+        async move { outage.map_or(Ok(members), Err) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -594,5 +720,61 @@ mod tests {
                 .map(|page| page.envelopes),
             Ok(vec![envelope])
         );
+    }
+
+    /// The in-memory store has to refuse the same writes the durable one
+    /// does, or a rule proven against it would not hold in production.
+    #[tokio::test]
+    async fn a_publication_is_refused_unless_the_head_is_where_it_was_read() {
+        let store = InMemoryIdentities::default();
+        let share = ShareRecord {
+            share_id: [1; 16],
+            owner: [2; 16],
+            revision: 1,
+            snapshot_id: [3; 32],
+            capsule: b"sealed".to_vec(),
+            capsule_signature: vec![4; 64],
+            created_at_unix_ns: 1,
+            updated_at_unix_ns: 1,
+        };
+        let snapshot = ShareSnapshotRecord {
+            share_id: share.share_id,
+            revision: 1,
+            snapshot_id: share.snapshot_id,
+            capsule: share.capsule.clone(),
+            capsule_signature: share.capsule_signature.clone(),
+            created_at_unix_ns: 1,
+        };
+
+        // Expecting a revision that is not stored is a lost race, not a write.
+        assert_eq!(
+            store
+                .save_publication(share.clone(), snapshot.clone(), Some(7))
+                .await,
+            Err(RepositoryError::VersionConflict)
+        );
+        assert_eq!(store.find_share(share.share_id).await, Ok(None));
+
+        assert_eq!(
+            store
+                .save_publication(share.clone(), snapshot.clone(), None)
+                .await,
+            Ok(())
+        );
+
+        // A revision that already exists is immutable, so re-writing it is
+        // refused even when the head is exactly where the writer expected.
+        let same_revision_again = ShareRecord {
+            revision: 1,
+            capsule: b"different".to_vec(),
+            ..share.clone()
+        };
+        assert_eq!(
+            store
+                .save_publication(same_revision_again, snapshot, Some(1))
+                .await,
+            Err(RepositoryError::VersionConflict)
+        );
+        assert_eq!(store.find_share(share.share_id).await, Ok(Some(share)));
     }
 }

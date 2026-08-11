@@ -16,6 +16,8 @@ pub(crate) mod friends;
 pub(crate) mod identity;
 pub(crate) mod presence;
 pub(crate) mod shares;
+pub(crate) mod snapshots;
+pub(crate) mod swarm;
 
 /// Answers one decoded request on behalf of its connection.
 pub async fn dispatch(
@@ -78,6 +80,30 @@ pub async fn dispatch(
         Some(Payload::ListKeyEnvelopesRequest(list)) => {
             shares::list(session, state.envelopes(), request, list, now_unix_ns).await
         }
+        Some(Payload::PublishShare(command)) => {
+            snapshots::publish(session, state, request, command, now_unix_ns).await
+        }
+        Some(Payload::ListSharesRequest(_)) => {
+            snapshots::list(session, state, request, now_unix_ns).await
+        }
+        Some(Payload::FetchShareRequest(fetch)) => {
+            snapshots::fetch(session, state, request, fetch, now_unix_ns).await
+        }
+        Some(Payload::GrantShareAccess(grant)) => {
+            snapshots::grant(session, state, request, grant, now_unix_ns).await
+        }
+        Some(Payload::ShareHandoff(handoff)) => {
+            snapshots::handoff(session, state, request, handoff, now_unix_ns).await
+        }
+        Some(Payload::AnnouncePeer(announce)) => {
+            swarm::announce(session, state, request, announce, now_unix_ns)
+        }
+        Some(Payload::LookupPeersRequest(lookup)) => {
+            swarm::lookup(session, state, request, lookup, now_unix_ns)
+        }
+        Some(Payload::WithdrawPeer(withdraw)) => {
+            swarm::withdraw(session, state, request, withdraw, now_unix_ns)
+        }
         // Ping and anything this version does not accept yet.
         _ => response_for(request, now_unix_ns),
     }
@@ -106,6 +132,7 @@ async fn arrived(session: &Session, state: &AppState, now_unix_ns: u64) {
 pub async fn departed(session: &Session, state: &AppState, now_unix_ns: u64) {
     let connection = session.connection_id();
     state.connections().forget(connection);
+    state.swarm().remove_connection(connection);
     let Some(identity) = session.identity() else {
         return;
     };

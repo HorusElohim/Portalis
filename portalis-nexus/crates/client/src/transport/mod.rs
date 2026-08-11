@@ -4,8 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use portalis_nexus_protocol::v1::{
-    Authenticated, DeviceLinked, Envelope, Friend, FriendAction, KeyEnvelopePut,
-    ResolveHandleResponse, ServerHello,
+    AddressFamily, Authenticated, DeviceLinked, Envelope, Friend, FriendAction, KeyEnvelopePut,
+    LookupPeersResponse, PeerAnnounced, PeerWithdrawn, PublishShare, ResolveHandleResponse,
+    ServerHello, ShareAccessGranted, ShareSnapshot,
 };
 use portalis_nexus_protocol::{CURRENT_PROTOCOL_VERSION, SessionBinding, encode_frame};
 use tokio::net::TcpStream;
@@ -18,8 +19,10 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use crate::config::ClientConfig;
 use crate::protocol::{
     KeyEnvelopePage, validate_authenticated, validate_device_linked, validate_friend_event,
-    validate_friend_list, validate_key_envelope_put, validate_key_envelopes, validate_pong,
-    validate_resolved,
+    validate_friend_list, validate_key_envelope_put, validate_key_envelopes,
+    validate_peer_announced, validate_peer_lookup, validate_peer_withdrawn, validate_pong,
+    validate_resolved, validate_share_access_granted, validate_share_fetch, validate_share_handoff,
+    validate_share_list, validate_share_published,
 };
 use crate::signer::DeviceSigner;
 use crate::transport::connection::{Shared, start_connection, supervise};
@@ -278,6 +281,129 @@ impl NexusClient {
             .list_key_envelopes(after_share_id, now_unix_ns());
         let response = self.request(&request).await?;
         Ok(validate_key_envelopes(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when publication is refused or cannot be delivered.
+    pub async fn publish_share(
+        &self,
+        share_id: &[u8],
+        revision: u64,
+        prior_snapshot_id: Option<&[u8]>,
+        snapshot_id: &[u8],
+        capsule: &[u8],
+        capsule_signature: &[u8],
+    ) -> Result<ShareSnapshot, TransportError> {
+        let request = self.shared.protocol.publish_share(
+            PublishShare {
+                share_id: share_id.to_vec(),
+                revision,
+                prior_snapshot_id: prior_snapshot_id.unwrap_or_default().to_vec(),
+                snapshot_id: snapshot_id.to_vec(),
+                capsule: capsule.to_vec(),
+                capsule_signature: capsule_signature.to_vec(),
+            },
+            now_unix_ns(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_share_published(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when the list cannot be fetched or validated.
+    pub async fn list_shares(&self) -> Result<Vec<ShareSnapshot>, TransportError> {
+        let request = self.shared.protocol.list_shares(now_unix_ns());
+        let response = self.request(&request).await?;
+        Ok(validate_share_list(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when the share is private, absent, or unavailable.
+    pub async fn fetch_share(&self, share_id: &[u8]) -> Result<ShareSnapshot, TransportError> {
+        let request = self.shared.protocol.fetch_share(share_id, now_unix_ns());
+        let response = self.request(&request).await?;
+        Ok(validate_share_fetch(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when the grant is unauthorized or unavailable.
+    pub async fn grant_share_access(
+        &self,
+        share_id: &[u8],
+        member_user_id: &[u8],
+    ) -> Result<ShareAccessGranted, TransportError> {
+        let request =
+            self.shared
+                .protocol
+                .grant_share_access(share_id, member_user_id, now_unix_ns());
+        let response = self.request(&request).await?;
+        Ok(validate_share_access_granted(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when the handoff is unauthorized or unavailable.
+    pub async fn share_handoff(
+        &self,
+        share_id: &[u8],
+        recipient_device_id: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<(), TransportError> {
+        let request = self.shared.protocol.share_handoff(
+            share_id,
+            recipient_device_id,
+            ciphertext,
+            now_unix_ns(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_share_handoff(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when the lease is invalid or cannot be announced.
+    pub async fn announce_peer(
+        &self,
+        info_hash: &[u8],
+        listen_port: u16,
+        address_family: AddressFamily,
+        transport_capabilities: u32,
+        requested_lease_seconds: u32,
+    ) -> Result<PeerAnnounced, TransportError> {
+        let request = self.shared.protocol.announce_peer(
+            info_hash,
+            listen_port,
+            address_family,
+            transport_capabilities,
+            requested_lease_seconds,
+            now_unix_ns(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_peer_announced(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when discovery cannot be queried or validated.
+    pub async fn lookup_peers(
+        &self,
+        info_hash: &[u8],
+        address_family: AddressFamily,
+        transport_capabilities: u32,
+    ) -> Result<LookupPeersResponse, TransportError> {
+        let request = self.shared.protocol.lookup_peers(
+            info_hash,
+            address_family,
+            transport_capabilities,
+            now_unix_ns(),
+        );
+        let response = self.request(&request).await?;
+        Ok(validate_peer_lookup(&request, &response)?)
+    }
+
+    /// # Errors
+    /// Returns [`TransportError`] when the lease cannot be withdrawn.
+    pub async fn withdraw_peer(&self, info_hash: &[u8]) -> Result<PeerWithdrawn, TransportError> {
+        let request = self.shared.protocol.withdraw_peer(info_hash, now_unix_ns());
+        let response = self.request(&request).await?;
+        Ok(validate_peer_withdrawn(&request, &response)?)
     }
 
     /// The authority signatures are bound to, taken from the endpoint dialled.

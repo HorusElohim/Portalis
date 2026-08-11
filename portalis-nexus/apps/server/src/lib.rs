@@ -39,7 +39,9 @@ pub use connections::Connections;
 pub use environment::{OsRandom, SystemClock, now_unix_ns};
 pub use handlers::{departed, dispatch};
 pub use health::SERVICE_NAME;
-pub use identity::{DefaultStore, NexusFriends, NexusIdentities, friends, identities};
+pub use identity::{
+    DefaultStore, NexusFriends, NexusIdentities, NexusShares, friends, identities, shares,
+};
 pub use messages::{
     SocketReply, authenticated_reply, binary_frame, hello_envelope, hello_payload, presence_event,
     protocol_error, reply_to, reply_with, response_for, server_hello,
