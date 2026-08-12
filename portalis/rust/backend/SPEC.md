@@ -1,1496 +1,1112 @@
-# Portalis Nexus Specification
+# Portalis v3 — Design and Specification
 
-Status: M5 swarm discovery and the portable M6 manifest/capsule foundation are
-complete. The former backend and Nexus now form one Cargo workspace. M6 is
-being recast around one Nexus application lifecycle, direct-or-relayed peer
-connections, native `ShareId` collections, and one Flutter façade. Share
-revocation is complete; remaining M5.5 account controls do not block this
-rewrite.
+Portalis is a peer-to-peer application for sharing collections of photos and
+videos with people you know. A Flutter interface sits over a Rust core that
+owns identity, collections, connectivity and media transfer. A small service
+helps devices find each other and holds what must survive while a device is
+offline — and is trusted with none of it.
 
-Protocol: `portalis.protocol.v1`
+This document is the design: what exists, what shape it has, and why each
+shape was chosen over the alternative. History lives in `CHANGELOG.md`. Where
+this document and the code disagree, one of them is a bug.
 
-Production target: Linux
+Product version **v3** · wire protocol **`portalis.protocol.v1`** · clients on
+macOS, iOS, Android and Linux · service on Linux.
 
-Last updated: 2026-08-11
+---
 
-## 1. Purpose
+# Part I — Product and decisions
 
-Portalis Nexus is the single Rust application core behind Portalis. It owns
-the Flutter boundary, application lifecycle, identity, local collection state,
-portable networking, Torrent engine coordination, Linux server, database
-adapters, and end-to-end tests.
+## 1. What Portalis is
 
-The server makes identity, friends, presence, collection discovery, torrent
-metadata, and peer discovery reliable. Photos, videos, and BitTorrent pieces
-continue to move directly between peers.
+A person keeps collections of media and shares them with friends. Media moves
+directly between devices over BitTorrent. What a collection contains, who may
+read it, and how it changed are authored by the device that owns it, signed,
+and encrypted.
 
-## 2. Goals
+| Property | Means |
+|---|---|
+| **Peer-to-peer** | Two devices on one network need no service at all |
+| **Verifiable** | No server is trusted; every durable fact is signed and checked |
+| **Private** | The service holds no key that opens anything; media never reaches it |
+| **Responsive** | Local truth renders immediately; nothing visible waits on a round trip |
 
-- Define all socket messages with Protocol Buffers.
-- Build one application core for macOS, iOS, Android, Linux, and Flutter Web's
-  supported viewer surface.
-- Build a multithreaded asynchronous Rust server for Linux.
-- Reuse existing Ed25519 device identities and add separate encryption keys.
-- Support unique handles, friends, presence, and shared collections.
-- Distribute versioned torrent metadata and current peer candidates.
-- Store durable state in indexed MongoDB collections.
-- Keep active connections, presence, and peer leases in bounded fast tables.
-- Establish authenticated direct peer connections when possible and encrypted
-  relay paths when direct connectivity is unavailable.
-- Replace the current direct-address protocol through a one-way data migration,
-  without maintaining parallel runtime models.
-- Reach 100% line and branch coverage for eligible handwritten core code.
+## 2. The whole vocabulary
 
-## 3. Non-goals
+Everything in Portalis is one of these. If a design needs a noun that is not
+here, the design is probably wrong.
 
-- The control server does not store or relay media payloads.
-- The control server does not replace BitTorrent piece exchange.
-- Version 1 does not require horizontal server scaling.
-- Version 1 does not require a browser client or administration UI.
-- Discovery alone does not guarantee reachability through every NAT. Guaranteed
-  transfer requires a separate relay or reachable-seed strategy.
+| Noun | Is | Lives |
+|---|---|---|
+| **Device** | one installation, holding two keypairs | on the device |
+| **Device log** | the signed, append-only list of a person's devices | everywhere, verified |
+| **Contact** | someone you have added, and their device log | locally |
+| **Collection** | a named set of media you share | locally, published |
+| **Revision** | one signed, chained state of a collection | locally, published |
+| **Manifest** | the encrypted list of a revision's entries | inside a revision |
+| **Entry** | one batch of media, and its private `.torrent` | inside a manifest |
 
-## 4. Invariants
+Four things a user would recognise — contact, collection, revision, entry —
+plus the cryptographic backing for two of them. There is no separate "share",
+"head", "snapshot", "capsule" or "handoff"; each of those was a property of
+one of the above wearing a noun's clothes.
 
-1. Media payloads never pass through the control server.
-2. Every external message is size-bounded and validated.
-3. Durable commands are authenticated, authorized, idempotent, and versioned.
-4. Device signing and encryption private keys never leave their devices.
-5. Slow clients cannot create unbounded queues or tasks.
-6. MongoDB documents never contain unbounded friend, member, or event arrays.
-7. Deleted protobuf field numbers and enum values are permanently reserved.
-8. The root `backend` package is the only Flutter boundary; workspace crates
-   expose Rust APIs and never Flutter bindings.
-9. Nexus replaces legacy collection networking through a one-way migration;
-   there is no parallel compatibility binding or second runtime source of truth.
-10. Backend integration changes are recorded in the root `CHANGELOG.md`.
+## 3. Design decisions
 
-## 5. Repository Layout
+Each row shaped the system. A decision is listed only if reversing it changes
+more than one file.
+
+| # | Decision | Rejected | Because |
+|---|---|---|---|
+| D1 | The service stores signed objects and routes; it decides almost nothing | Server-authoritative membership and revisions | A "P2P app" whose social state needs a trusted server is a client-server app |
+| D2 | A person is a signed append-only **device log**, not an account row | Server-held device list | The dangerous attack is a service inventing a device so an owner seals a key to it. A log makes that impossible, not merely audited |
+| D3 | A collection is a **chain of signed revisions** | Server-side compare-and-set as truth | Rollback and forks become detectable by any reader; the server's CAS is an optimisation, not correctness |
+| D4 | Handles are a convenience with **fingerprint verification** | Trusting handle→key lookup | Lookup is exactly where the asker cannot verify. Comparing a fingerprint once is the only honest answer |
+| D5 | Storage is a trait with **two engines**: embedded and MongoDB | One hard-wired database | A self-hoster wants one file; an operator already running Mongo wants Mongo. The service holds signed objects, so neither is load-bearing for correctness |
+| D6 | Authenticated QUIC, direct-or-relay, from a maintained library | Custom TLS/TCP, WebSocket | NAT traversal, migration and relays are solved, and getting them wrong is expensive |
+| D7 | One **event bus** inside the core; one **state stream** to Flutter | Direct calls between components; polling | Components stay decoupled and the projection has one input |
+| D8 | Flutter derives and persists **no** state | Controllers holding computed history | Every derived value in Dart is a second source of truth waiting to disagree |
+| D9 | Bridge payload split into **structure / progress / detail** | One snapshot type | Piece detail for every file at progress cadence is ~100× the necessary traffic |
+| D10 | Canonical formats are hand-written, length-prefixed, domain-tagged | `bincode`, `postcard`, protobuf for canonical bytes | The format *is* the contract; a library that changes encoding changes every hash |
+| D11 | A collection is many torrents, not one | One torrent replaced on every change | Re-hashing an entire collection to add one photo is unacceptable. This is the only reason a manifest exists |
+| D12 | Private torrents carry BEP-27 `private`; no DHT, PEX or LSD | Public swarm, obscure info hashes | Confidentiality rests on info-hash secrecy; announcing spends it permanently |
+| D13 | Media payloads are **not** encrypted at rest in v3 | Per-share payload encryption | Deliberate and weaker; stated openly (§9.6) with a version byte reserving the upgrade |
+| D14 | Cryptography from RustCrypto and dalek | Hand-rolled primitives | Already true; listed so it stays true |
+| D15 | Crates exist only at link boundaries | A crate per concern | Ten crates with one consumer each buy nothing and cost ten manifests |
+
+---
+
+# Part II — Architecture
+
+## 4. System view
+
+```mermaid
+flowchart TB
+    UI["Flutter UI<br/><i>renders a projection</i>"]
+    BR{{"Bridge · §16<br/>state stream down, commands up"}}
+    subgraph CORE["Nexus core"]
+        SUP["supervisor"]
+        EV(("event bus"))
+        COL["collections"]
+        VER["verification"]
+        ST[("local store")]
+        SUP --- EV
+        COL --- EV
+        VER --- EV
+        COL --> ST
+    end
+    CONN["connection engine<br/><i>QUIC direct / relay</i>"]
+    TOR["torrent engine<br/><i>private torrents</i>"]
+    SVC["Nexus service<br/><i>store · route · rendezvous</i>"]
+    PEER["peer device"]
+    MEDIA["media peers"]
+
+    UI <--> BR
+    BR <--> EV
+    EV --- CONN
+    EV --- TOR
+    CONN <-->|signed objects| PEER
+    CONN <-->|signed objects| SVC
+    TOR <-->|pieces| MEDIA
+```
+
+Two devices on one network need no service: they connect directly, exchange
+signed revisions and sealed keys, and transfer media. The service exists for
+reaching a device across networks and delivering to one that is offline.
+
+## 5. Trust
+
+This section governs the document. Where a later section appears to grant the
+service authority, this section wins.
+
+| The service can | Mitigation | Residual cost |
+|---|---|---|
+| Withhold or delay | Indistinguishable from offline, which is handled | Delivery latency |
+| Observe metadata | None claimed (§6) | The operator sees the social graph |
+| Lie about presence | Presence is a hint; nothing depends on it | A wasted connection attempt |
+| Lie about handle→key | Fingerprint comparison (D4) | Contact shows *unverified* until compared |
+
+| The service cannot | Because |
+|---|---|
+| Forge a revision or log entry | Signed; author checked against the device log |
+| Read a manifest or media | Manifests are encrypted; media never reaches it |
+| Roll back undetectably | Hash chain, plus the highest revision seen is persisted |
+| Insert a device | The device log is append-only and signed (D2) |
+
+Verification is not a setting. A client rejects what it cannot verify and
+treats a fork or rollback as an alert, never as something to merge.
+
+## 6. Non-goals
+
+- The service does not store or relay media payloads.
+- Portalis does not hide *who talks to whom* from the operator. Metadata
+  privacy at that level needs a different transport and is not claimed.
+- v3 needs no horizontal scaling, browser client, or admin interface.
+- Discovery does not guarantee reachability, which is why relay exists.
+
+---
+
+# Part III — Data
+
+## 7. Domain model
+
+```mermaid
+classDiagram
+    class Device {
+        +DeviceId id
+        +Ed25519PublicKey signing
+        +X25519PublicKey encryption
+        +Option~u64~ revoked_at
+    }
+    class DeviceLog {
+        +Ed25519PublicKey root_key
+        +Vec~LogEntry~ entries
+        +replay() DeviceSet
+        +verify() Result
+    }
+    class Contact {
+        +Ed25519PublicKey root_key
+        +Option~Handle~ handle
+        +Fingerprint fingerprint
+        +bool verified
+        +Friendship friendship
+    }
+    class Collection {
+        +CollectionId id
+        +String name
+        +Role role
+        +ContentKey key
+        +u64 revision
+    }
+    class Revision {
+        +CollectionId collection
+        +u64 number
+        +Hash previous
+        +Hash manifest_hash
+        +Vec~Member~ members
+        +Signature signature
+        +verify(DeviceLog) Result
+    }
+    class Manifest {
+        +Vec~Entry~ entries
+        +encode() Bytes
+        +hash() Hash
+    }
+    class Entry {
+        +InfoHash info_hash
+        +String label
+        +Ed25519PublicKey author
+        +Signature signature
+        +TorrentBlob payload
+    }
+
+    DeviceLog "1" *-- "many" Device
+    Contact "1" --> "1" DeviceLog
+    Collection "1" --> "many" Revision
+    Revision "1" --> "1" Manifest : commits to
+    Manifest "1" *-- "many" Entry
+```
+
+### 7.1 Device keys
+
+Two independent keypairs, different curves, neither derived from the other.
+**Ed25519** signs everything the device authors and is the QUIC transport
+identity. **X25519** receives sealed content keys and nothing else. `DeviceId`
+is BLAKE3 over the Ed25519 public key. Both are generated on first run and
+held in platform secure storage.
+
+### 7.2 Device log
 
 ```text
-Portalis/
-└── portalis/                         # Flutter application and Rust engines
-    └── rust/
-        ├── backend/                  # Unified Nexus application workspace
-        │   ├── src/                  # Lifecycle, Flutter API, local state,
-        │   │                             #   collections, Torrent adapter
-        │   ├── crates/
-        │   │   ├── protocol/         # Wire contract and validation
-        │   │   ├── client/           # Portable Nexus networking
-        │   │   └── server-core/      # Server application rules
-        │   ├── apps/server/             # Deployable Nexus service
-        │   ├── proto/                  # Authoritative protobuf schemas
-        │   ├── demo/                   # Runnable examples
-        │   ├── demo-m6/                # Two-process M6 walkthrough
-        │   └── docker/                 # Server deployment
-        └── vendor/                   # Locally maintained dependencies
+entry := "portalis.devicelog.v1\0"
+         u8[32]  root_key                first device's Ed25519 key
+         u64     sequence                1 at the root, then +1
+         u8[32]  previous_hash           zero at the root
+         u8      action                  1 = enrol, 2 = revoke
+         u8[32]  subject_signing_key
+         u8[32]  subject_encryption_key  zero for a revocation
+         u64     at_unix_ns
+         u8[32]  author_key              an enrolled, unrevoked device
+         u8[64]  signature               over every preceding field
 ```
 
-The root package consumes its internal portable client through the workspace:
+The root entry is self-signed. Every later entry is signed by a device the log
+already enrols and has not revoked. Replay yields the current device set;
+nobody extends it without a key already inside it.
 
-```toml
-portalis-nexus-client.workspace = true
-```
+**This is what makes sealing safe.** Before sealing a content key to a
+contact, an owner replays their log and seals only to authorized devices. A
+service that invents a device, replays a stale log, or drops a revocation
+cannot cause a key to reach a device the person never enrolled.
 
-## 6. Crate Boundaries
+Revoking ends authority to author and to receive. It does not reach what a
+device already holds, so revoking means **rotating the content key** of every
+collection it could read and publishing the next revision sealed only to the
+devices that remain.
 
-### `protocol`
+### 7.3 Collection and revisions
 
-- Compiles authoritative `.proto` files with Prost.
-- Re-exports generated Rust messages.
-- Validates identifiers, lengths, enums, and protocol limits.
-- Builds deterministic domain-separated signing payloads.
-- Contains no sockets, database drivers, Flutter bindings, or OS adapters.
-
-### `client`
-
-- The client crate is the portable **Nexus engine**. It owns authenticated
-  sessions, device identity, request correlation, reconnect, bounded queues,
-  routing, and authenticated connection handoff.
-- Protobuf is the Nexus control protocol. When an application needs arbitrary
-  traffic, Nexus gives it an authenticated binary connection; it does not
-  classify, negotiate, encode, or decode the application's payload type.
-- The caller owns serialization and may use raw bytes, Prost, Serde JSON, or
-  another existing library without adding that format to Nexus.
-- The existing canonical manifest, capsule, key-envelope, and handoff codecs
-  are one higher-level protocol using the Nexus engine. They do not define the
-  engine and do not make Torrent a Nexus dependency.
-- Has no MongoDB, Axum, Flutter, server-core, or Linux-only dependency.
-
-### One Nexus application core, two focused engines
-
-Nexus is the Portalis backend, not a service attached beside it. One runtime
-owns device identity, persisted application state, connection state,
-collection workflows, and the Flutter façade. Inside that runtime two engines
-have narrow jobs:
-
-- **Connection engine:** establishes authenticated application connections to
-  a server or another device, choosing a direct path on the same network when
-  possible and an encrypted relay path otherwise.
-- **Torrent engine:** creates and validates private torrents, transfers and
-  verifies file pieces, seeds content, and accepts peer candidates supplied by
-  Nexus policy.
-
-Manifest, friend, presence, and share workflows belong to the Nexus
-application core. Torrent does not carry application state, and the Nexus
-server never receives media pieces. There is one device identity, one
-collection model, and one lifecycle status exposed to Flutter.
+A collection is a chain. Revision *n* names the hash of revision *n − 1*.
 
 ```text
-Flutter UI
-    │
-    ▼
-Nexus application core ─────────► local + secure storage
-    │                    │
-    │                    └────────────► Torrent engine ──► media peers
-    ▼
-connection engine
-    ├─ direct peer QUIC
-    └─ encrypted relay QUIC ─────────► Nexus service / remote peer
+revision := "portalis.revision.v1\0"
+            u8[16]  collection_id
+            u64     number                1 upward, no gaps
+            u8[32]  previous_hash         zero at revision 1
+            u8[32]  manifest_hash
+            u8[32]  owner_root_key
+            u64     at_unix_ns
+            u32     member_count
+            member*                       ascending by root key
+            u8[32]  author_key            an owner device
+            u8[64]  signature
+
+member   := u8[32]  root_key
+            u8[32]  device_log_hash       log state the key was sealed against
 ```
 
-### Authenticated application connections
+Verification order: signature → author is an unrevoked owner device →
+`number` is exactly one past the held revision and `previous_hash` matches →
+`manifest_hash` matches the manifest fetched.
 
-Nexus uses a maintained direct-or-relayed QUIC implementation rather than
-inventing transport, framing, encryption, NAT traversal, or relay protocols.
-The endpoint reuses the device's Ed25519 secret, authenticates the remote
-public key, tries known LAN/WAN addresses directly, hole-punches when needed,
-and retains an encrypted relay path when direct connectivity fails.
+`device_log_hash` records what the owner sealed against, so a contact who has
+since linked a device sees at once that a re-seal is needed rather than
+wondering why the new device opens nothing.
 
-The Nexus API exposes the resulting QUIC connection and streams with an ALPN.
-It does not wrap bytes in codec enums or register application schemas. A
-consumer writes whatever representation it owns—raw bytes, protobuf, JSON, or
-another format—using its existing serialization library. QUIC already supplies
-encryption, stream framing, ordering, flow control, and connection migration.
+**Rollback and forks.** A client persists the highest verified revision. A
+lower one is rejected. Two valid revisions with the same number are a fork:
+the client keeps the first seen, refuses the second, and surfaces it — a fork
+means a compromised owner device or a service splitting members' views, and is
+never resolved silently. The service also applies compare-and-set, as an
+optimisation only.
 
-The Nexus server is a well-known application peer for durable identity,
-friendship, presence, and share state. Friend devices are peers using the same
-connection mechanism. On a LAN their application traffic stays direct; across
-networks it attempts a direct path and falls back to the configured relay. The
-relay sees endpoint identities and traffic volume but not application
-plaintext.
+### 7.4 Manifest
 
-### Manifest sharing over Nexus
+The manifest is the list of entries. It exists for one reason: a collection
+grows, and re-hashing every file to add one photo is unacceptable (D11). It is
+always encrypted.
 
-Manifest sharing is the first application protocol on Nexus connections. Its
-module owns canonical manifests, snapshots, capsules, key
-envelopes, torrent handoffs, share revisions, and replay-safe publication. The
-application core persists each collection directly by `ShareId` and
-coordinates its outputs with the Torrent engine.
+```text
+plaintext := "portalis.manifest.v1\0"
+             u32     entry_count
+             entry*                       ascending by info_hash
 
-Another application protocol may use a Nexus connection without importing
-collection or BitTorrent concepts. Nexus provides identity and connectivity;
-the application protocol owns its bytes.
+entry     := u8      entry_version = 1
+             u8[20]  info_hash            BitTorrent v1
+             u32     label_len
+             u8[]    label                UTF-8, NFC-normalized
+             u8      has_thumbnail        0 or 1
+             u8[32]  thumbnail_hash       only when has_thumbnail = 1
+             u8[32]  author_key           Ed25519
+             u64     added_at_unix_ns
+             u8[64]  signature            over every preceding entry field
 
-### `server-core`
+encrypted := u8      version = 1
+             u8[12]  nonce
+             u8[]    ciphertext           ChaCha20-Poly1305, tag included
+```
 
-  - Defines registration, authentication, and device-linking rules.
-- Defines handle allocation and normalization.
-- Defines friendship, membership, collection-head, and lease state machines.
-- Exposes repository, clock, random-source, and event-sink traits.
-- Is fully testable without sockets or MongoDB.
+Little-endian integers; every variable-length field carries its length first,
+so no pair of fields can be read as a different pair. `manifest_hash` is
+BLAKE3 over the plaintext.
 
-### `server`
+The nonce derives from collection, revision and manifest hash — unique per
+revision under one key, and identical for a retry, so a publisher whose
+acknowledgement was lost re-encrypts to identical bytes. Associated data binds
+collection, revision and manifest hash, so a manifest lifted elsewhere fails
+to open. `version` is the only field a reader acts on before authenticating
+the rest.
 
-- Routes decoded envelopes to a handler module per subsystem, so the socket
-  and the session never learn what a command means.
-- Runs the Tokio multithread runtime.
-- Terminates TLS and WebSocket connections.
-- Implements MongoDB repositories.
-- Owns connection, presence, and swarm registries.
-- Exposes health, readiness, and metrics endpoints.
-- Initializes structured tracing and graceful shutdown.
+An entry's author is checked against the collection's members at the revision
+that introduced it. An entry signed by a non-member is rejected.
 
-## 7. Transport
+### 7.5 Entry payload
 
-The target transport is authenticated QUIC with direct connectivity and
-encrypted relay fallback supplied by a maintained library. One persisted
-Ed25519 device secret drives both Nexus identity and transport identity; a
-peer connection is accepted only after the remote public key and ALPN are
-known.
+An entry's `.torrent` bytes are fetched when the receiver decides to download
+that entry, not pushed with the manifest — they are up to 4 MiB each and most
+are never wanted immediately.
 
-Nexus defines ALPN names for the application protocols it owns. It does not
-define another frame or codec layer over QUIC streams. Protobuf remains the
-current representation for Nexus commands, while any caller-provided protocol
-owns its own bytes.
+```text
+payload := u8      version = 1
+           u8[12]  nonce
+           u8[]    ciphertext             ChaCha20-Poly1305, tag included
+                                          plaintext is the raw .torrent
+```
 
-The existing WebSocket actor is removed as its commands move to QUIC. It is an
-implementation source during the rewrite, not a supported fallback transport.
-The app never runs both transports for one collection.
+Encrypted under the content key; associated data
+`collection_id || info_hash`. The receiver rejects a descriptor over the
+limit, one whose info dictionary is not private, or one whose computed info
+hash differs from the entry.
 
-## 8. Protobuf Contract
+It carries `.torrent` bytes rather than a magnet because a resolver does not
+know a torrent is private until it has metadata, and may disclose the info
+hash to the DHT first.
 
-### Evolution rules
+### 7.6 Content key and membership
 
-- Package name: `portalis.protocol.v1`.
-- Every enum starts with `*_UNSPECIFIED = 0`.
-- Nexus is pre-release: the protocol and generated consumers evolve together
-  in one atomic repository change. No compatibility binding is maintained.
-- Existing field numbers and enum values are not reused accidentally; removed
-  fields are reserved when preserving historical decoding has value.
-- `buf lint` runs in CI. Breaking checks become a release gate only after the
-  first externally supported protocol version.
-- Golden encoded messages verify deterministic encoding where persistence,
-  signatures, or cross-platform exchange require it.
+One random 32-byte **content key** per collection, sealed per recipient device
+with X25519 + ChaCha20-Poly1305. Membership is declared in the signed
+revision; there is no separate server-held list to disagree with it. Adding or
+removing a member is a new revision. Removing means rotating the content key
+and republishing sealed only to those who remain.
 
-### Envelope shape
+### 7.7 Media confidentiality
 
-```proto
-syntax = "proto3";
+Encrypting the manifest keeps labels, structure and thumbnails from the
+service. It does not encrypt media: BitTorrent pieces move as stored.
 
-package portalis.protocol.v1;
+**v3 rests confidentiality on info-hash secrecy.** Clients set BEP-27
+`private` and use no DHT, PEX or local discovery for those torrents. Anyone
+who learns an info hash can fetch pieces, and a former member keeps that
+knowledge. Payload encryption is the upgrade path (D13).
 
-message Envelope {
-  bytes message_id = 1;       // UUIDv7, exactly 16 bytes
-  bytes correlation_id = 2;   // Request message_id for responses
-  uint64 timestamp_unix_ns = 3;
+## 8. Naming
 
-  oneof payload {
-    ServerHello server_hello = 10;
-    RegisterUser register_user = 11;
-    AuthenticateDevice authenticate_device = 12;
-    Authenticated authenticated = 13;
-    Ping ping = 14;
-    Pong pong = 15;
-    Ack ack = 16;
-    ProtocolError protocol_error = 17;
-    LinkDevice link_device = 18;
-    DeviceLinked device_linked = 19;
+Keys are identity; names are for humans. A handle is a claim registered with
+one service: `<username>#<discriminator>`, 3–24 letters, numbers or
+underscore, plus five Crockford Base32 characters drawn at random.
 
-    // M5.5, account control.
-    ListDevicesRequest list_devices_request = 20;
-    ListDevicesResponse list_devices_response = 21;
-    RevokeDevice revoke_device = 22;
-    DeviceRevoked device_revoked = 23;
-    ChangeHandle change_handle = 24;
-    HandleChanged handle_changed = 25;
-    DeleteAccount delete_account = 26;
-    AccountDeleted account_deleted = 27;
+A handle resolves to a root key, and **the service can lie about that
+mapping** — no signature prevents it, because the asker does not yet know the
+key. Portalis therefore treats lookup as an introduction. Every contact shows
+a **fingerprint** of the two root keys, and the interface asks the two people
+to compare it once through a channel they already trust. Until then the
+contact is shown as unverified. A handle change moves the claim; the root key
+and fingerprint never change.
 
-    ResolveHandleRequest resolve_handle_request = 30;
-    ResolveHandleResponse resolve_handle_response = 31;
-    FriendCommand friend_command = 32;
-    FriendEvent friend_event = 33;
-    ListFriendsRequest list_friends_request = 34;
-    ListFriendsResponse list_friends_response = 35;
-    PresenceEvent presence_event = 36;
-    BlockUser block_user = 37;          // M5.5
-    UnblockUser unblock_user = 38;      // M5.5
+## 9. Wire protocol
 
-    PutKeyEnvelope put_key_envelope = 40;
-    KeyEnvelopePut key_envelope_put = 41;
-    ListKeyEnvelopesRequest list_key_envelopes_request = 42;
-    ListKeyEnvelopesResponse list_key_envelopes_response = 43;
-    RevokeShareAccess revoke_share_access = 44;      // M5.5
-    ShareAccessRevoked share_access_revoked = 45;    // M5.5
+Package `portalis.protocol.v1`. Enums start `*_UNSPECIFIED = 0`; changes are
+additive; numbers never reused; `buf lint` and `buf breaking` gate CI.
 
-    PublishShare publish_share = 50;
-    SharePublished share_published = 51;
-    ListSharesRequest list_shares_request = 52;
-    ListSharesResponse list_shares_response = 53;
-    FetchShareRequest fetch_share_request = 54;
-    FetchShareResponse fetch_share_response = 55;
-    GrantShareAccess grant_share_access = 56;
-    ShareAccessGranted share_access_granted = 57;
-    ShareEvent share_event = 58;
-    ShareHandoff share_handoff = 59;
+| Group | Carries | Service role |
+|---|---|---|
+| Directory | handle claim and lookup, device log publish and fetch | stores, serves; client verifies |
+| Content | revisions, manifests, entry payloads, sealed keys | stores, forwards; cannot read |
+| Rendezvous | presence, swarm leases | hints only, unverifiable |
 
-    AnnouncePeer announce_peer = 60;
-    PeerAnnounced peer_announced = 61;
-    LookupPeersRequest lookup_peers_request = 62;
-    LookupPeersResponse lookup_peers_response = 63;
-    WithdrawPeer withdraw_peer = 64;
-  }
+Peer connections carry the same objects with no service in the path. **An
+object is valid or invalid on its own terms; where it came from changes
+nothing.** That is what lets a LAN work with no service, and keeps
+verification in one place.
+
+**Time.** Nanoseconds since the Unix epoch in `u64`, named `*_unix_ns`, except
+inside UUIDv7 whose 48-bit field is milliseconds. Timestamps in signed objects
+are the author's claim; ordering comes from sequence numbers and hash chains,
+never clocks.
+
+**Identifiers.** `CollectionId`/`MessageId` 16-byte UUIDv7 · `DeviceId` and
+root keys 32 bytes · hashes 32 bytes BLAKE3 · `InfoHash` 20 bytes. Binary
+identifiers travel as `bytes`, never hex strings.
+
+### Limits and quotas
+
+| Limit | Value | | Rate limit | Value |
+|---|---|---|---|---|
+| Frame | 8 MiB | | *Pre-auth, per address* | |
+| Torrent descriptor | 4 MiB | | Concurrent connections | 5 |
+| Encrypted manifest | 256 KiB | | Messages/sec | 20 |
+| Sealed key | 4 KiB | | Handle registrations/hour | 5 |
+| Handle | 32 bytes | | *Post-auth, per user* | |
+| Collection name | 256 bytes | | Commands/sec per connection | 100 (burst 200) |
+| Device-log entries | 512 | | Revisions/min per collection | 30 |
+| Mailbox items per device | 4 096 | | Contact commands/hour | 60 |
+| Entries per manifest | 4 096 | | Rendezvous ops/min | 600 |
+
+Quotas: 16 devices · 2 000 contacts · 1 000 owned collections · 512 members ·
+64 MiB mailbox per device. Every limit has boundary-minus-one, boundary and
+boundary-plus-one tests.
+
+---
+
+# Part IV — Code organization
+
+## 10. Rust workspace
+
+```mermaid
+flowchart BT
+    protocol["<b>protocol</b><br/>wire types · canonical formats<br/>signing · validation · limits"]
+    client["<b>client</b><br/>Nexus engine: sessions,<br/>verification, collection workflows"]
+    core["<b>server-core</b><br/>service rules over traits"]
+    storage["<b>storage</b><br/>engines: embedded · mongo"]
+    torrent["<b>torrent</b><br/>private torrents, pieces"]
+    backend["<b>backend</b> (root)<br/>app core · Flutter façade"]
+    server["<b>apps/server</b><br/>QUIC listener · composition"]
+
+    client --> protocol
+    core --> protocol
+    torrent --> protocol
+    storage --> core
+    backend --> client
+    backend --> torrent
+    server --> core
+    server --> storage
+```
+
+| Crate | Owns | Must never contain |
+|---|---|---|
+| `protocol` | generated messages, canonical formats, signing payloads, limits, validation | sockets, stores, Flutter, OS adapters |
+| `client` | QUIC sessions, log and revision verification, collection workflows, mailbox client | stores, Flutter, service rules |
+| `server-core` | handle claims, friendship signature pairs, routing and mailbox rules, **repository traits** | sockets, a concrete store, any runtime |
+| `storage` | the repository traits' engines: embedded and MongoDB | protocol handling, sockets, domain rules |
+| `torrent` | private torrent creation and validation, piece movement, seeding, candidate intake | collections, contacts, manifests, protobuf |
+| `apps/server` | QUIC listening, handler routing, engine selection, health and metrics | torrent, Flutter, sealing or opening |
+| `backend` (root) | application core, local store, lifecycle, Flutter façade | service rules, the service's store |
+
+Canonical formats live in `protocol` because the service verifies signatures
+on write and both sides must agree byte for byte. The service never gains the
+ability to decrypt: sealing and opening stay in `client`.
+
+### 10.1 Storage engines
+
+```mermaid
+classDiagram
+    class Repositories {
+        <<trait>>
+        +device_log(root) Result~Vec~LogEntry~~
+        +append_log(entry) Result
+        +claim_handle(claim) Result
+        +resolve_handle(handle) Result
+        +put_revision(rev) Result
+        +revisions_since(collection, n) Result
+        +put_blob(hash, bytes) Result
+        +enqueue(device, item) Result
+        +drain(device, cursor) Result
+    }
+    class Embedded {
+        single file, transactional
+        default for self-hosting
+    }
+    class Mongo {
+        replica set optional
+        for an operator already running it
+    }
+    Repositories <|.. Embedded
+    Repositories <|.. Mongo
+```
+
+Both engines are first-class and both are tested against the same suite. The
+service holds signed objects, so neither engine is load-bearing for
+correctness — an engine that loses or reorders data causes unavailability, not
+a forged history (D5). Engine choice is one configuration value.
+
+### 10.2 Application core modules
+
+```text
+backend/src/
+├── lib.rs             composition root, FRB exports
+├── core/
+│   ├── supervisor.rs  task ownership, startup order, shutdown
+│   ├── events.rs      the event bus (§11)
+│   ├── identity.rs    device keys, secure storage, device log
+│   ├── verify.rs      log and revision verification, fork detection
+│   └── outbox.rs      queued commands, retry on connectivity
+├── collections/
+│   ├── model.rs       the Collection aggregate
+│   ├── publish.rs     manifest → encrypt → sign revision → seal → send
+│   ├── receive.rs     verify → open → fetch payload → add torrent
+│   └── members.rs     grant, remove, re-key
+├── projection/
+│   ├── state.rs       PortalisState and tier types (§17)
+│   ├── build.rs       core state → projection
+│   └── emit.rs        coalescing, throttling, subscriptions
+├── store/             local tables (§13)
+├── net/               connection engine adapter
+├── media/             torrent engine adapter
+└── support/           §12
+```
+
+**`projection/` reads and never writes.** A projection that mutates is a
+second source of truth.
+
+## 11. The event bus
+
+Components do not call each other. They emit events and subscribe to them,
+which is what keeps the connection engine ignorant of collections and the
+projection ignorant of everything except events (D7).
+
+```mermaid
+flowchart LR
+    CONN[connection] --> BUS(("event bus"))
+    TOR[torrent] --> BUS
+    COL[collections] --> BUS
+    VER[verification] --> BUS
+    BUS --> PROJ[projection]
+    BUS --> OUT[outbox]
+    BUS --> LOG[log]
+    BUS --> MET[metrics]
+```
+
+```rust
+pub enum Event {
+    // connection
+    Connectivity(Connectivity),
+    PeerConnected  { contact: Handle, security: Security },
+    PeerDisconnected { contact: Handle },
+
+    // content
+    RevisionPublished { collection: Handle, number: u64 },
+    RevisionReceived  { collection: Handle, number: u64 },
+    EntryAvailable    { collection: Handle, entry: Handle },
+    MemberChanged     { collection: Handle, contact: Handle, member: bool },
+
+    // media
+    TransferProgress { collection: Handle, done: u64, total: u64,
+                       down: u32, up: u32, peers: u16 },
+    TransferSettled  { collection: Handle, ok: bool },
+
+    // security — never rendered as an ordinary error (§18)
+    VerificationFailed { subject: Subject, reason: VerifyFailure },
+    ForkDetected       { collection: Handle, kept: Hash, refused: Hash },
+    DeviceRevoked      { device: Handle },
+
+    // commands
+    CommandSettled { id: u64, result: Result<(), CommandError> },
 }
 ```
 
-Field allocation is grouped by subsystem, and a group keeps room to grow: 28
-and 29 belong to identity, 39 to friends, 46 to 49 to shares and their key
-envelopes, 65 upwards to swarm discovery.
+Rules that keep the bus from becoming a second architecture:
 
-### Time
+- **Events are facts, not requests.** Past tense, and no subscriber may assume
+  another subscriber exists.
+- **Bounded and lossless for durable facts.** The bus is a bounded broadcast
+  channel; content and security events are never dropped. `TransferProgress`
+  is explicitly droppable and coalesced — it is a sample, not a fact.
+- **One writer per fact.** Exactly one component emits any given variant.
+- **No event triggers an event synchronously.** A subscriber that needs to act
+  does so on its own task, so a cycle cannot form inside one dispatch.
 
-Every timestamp on this wire, in the domain, and in storage is **nanoseconds
-since the Unix epoch** in a `u64`, named `*_unix_ns`. One unit everywhere means
-no conversion seams to get wrong; `u64` nanoseconds run out in 2554 and the
-`i64` MongoDB stores them in runs out in 2262.
+## 12. Supporting components
 
-The single exception is inside `UUIDv7`, whose 48-bit timestamp field is
-defined as milliseconds. `user_id_from` converts rather than truncating,
-because 48 bits of nanoseconds wrap every three days and would destroy the
-time ordering v7 exists for. `NANOS_PER_MILLI` marks every such boundary.
+The small parts, specified so they stay small.
 
-Precision is whatever the host clock offers — microseconds on macOS — so the
-unit is a promise about scale, not about resolution.
+### Logging
 
-### Identifiers
+One façade over `tracing`, with structured fields and no string formatting at
+call sites. Targets follow the module tree (`core::verify`, `collections::
+publish`), so a developer can raise one area without drowning in the rest.
 
-- `UserId`: UUIDv7, 16 bytes.
-- `ShareId`: UUIDv7, 16 bytes.
-- `SnapshotId`: BLAKE3 content root, 32 bytes.
-- `MessageId`: UUIDv7, 16 bytes.
-- `DeviceId`: BLAKE3-derived Ed25519 public-key identifier, 32 bytes.
-- `InfoHashV1`: 20 bytes.
-- `ContentHash`: BLAKE3, 32 bytes.
+| Level | Used for |
+|---|---|
+| `error` | the operation failed and the user will notice |
+| `warn` | degraded but continuing — a retry, a dropped hint |
+| `info` | lifecycle: startup, connectivity change, revision published |
+| `debug` | decisions inside a flow, off in release |
+| `trace` | per-message, developer-only |
 
-Binary identifiers use protobuf `bytes`, not hexadecimal strings.
+**Redaction is structural, not editorial.** Keys, nonces, ciphertext, file
+paths and handles are wrapped in types whose `Debug` prints a digest or an
+elision, so a value cannot be logged in full by accident. Verification
+failures log the object kind and the offending key, never content.
 
-### Semantics
+Clients write a bounded rolling file in the platform log directory; the
+service writes JSON to stdout for the collector.
 
-- A command's `message_id` is its idempotency key.
-- A response sets `correlation_id` to the command's `message_id`.
-- Durable writes return `Ack` only after database write concern succeeds.
-- Domain failures return typed `ProtocolError` messages.
-- Malformed, abusive, or unauthenticated traffic may close the connection.
-- Durable state is refreshed after reconnect rather than replaying every
-  transient socket event.
+### Configuration
 
-### Initial limits
+Three sources, later winning: compiled defaults → config file → environment.
+Every value is read once at startup into one immutable struct; nothing reads
+the environment later. The service logs its whole effective configuration at
+startup, with secrets elided — including the storage engine and the authority
+name, because a mismatch there is otherwise diagnosed by guesswork.
 
-- Maximum binary frame: 8 MiB.
-- Maximum torrent descriptor: 4 MiB.
-- Maximum encrypted live handoff: 4 MiB + 1 KiB, including its authenticated
-  wrapper and bounded collection name.
-- Maximum encrypted manifest capsule: 256 KiB; both this byte limit and the
-  manifest entry-count quota apply.
-- Maximum handle: 32 UTF-8 bytes after normalization.
-- Maximum collection name: 256 UTF-8 bytes.
-- Maximum peer candidates returned: 64.
-- Maximum pending client requests: 128.
-- Maximum queued outbound messages per connection: 256.
+### Paths
 
-Every limit has boundary-minus-one, boundary, and boundary-plus-one tests.
+One module owns every location. No other module joins a path.
 
-### Rate limits
+| What | Where |
+|---|---|
+| Local store | platform data directory, one file |
+| Media | user-chosen, default platform documents |
+| Logs | platform log directory, rolling, bounded |
+| Secrets | platform keychain or keystore, never a file |
 
-Numbers, not intentions: a limit without one cannot be implemented or tested.
-Exceeding a limit answers `RATE_LIMITED` with `retry_after_ms`; sustained
-abuse closes the connection.
+### Errors
 
-Before authentication, keyed by source address:
+Three layers, and they do not leak into each other. Domain errors are enums
+with no I/O detail. Adapter errors wrap the underlying cause. Bridge errors
+are the small closed set of §17's `CommandError`. A storage failure never
+reaches Flutter as a driver message; it arrives as `Unavailable` and lands in
+the log with detail.
 
-- 5 concurrent connections.
-- 20 messages per second.
-- 5 registrations per hour.
+### Migrations
 
-After authentication, keyed by user unless stated:
+Both stores carry a schema version. Migrations are explicit, forward-only,
+idempotent, and fixture-tested against a real file from the previous release.
+A store from the future refuses to open rather than guessing.
 
-- 100 commands per second per connection, bursting to 200.
-- 30 publications per minute per share.
-- 60 friend commands per hour.
-- 120 key-envelope pushes per minute per device.
-- 600 peer announcements and lookups per minute per device.
+### Task supervision
 
-### Per-user quotas
+The supervisor owns every task handle. Nothing spawns detached. Each task has
+a cancellation token; shutdown cancels, then awaits with a bounded timeout,
+then reports what failed to stop. A panicking task is logged, its component
+marked degraded, and the process kept alive — a torrent thread dying must not
+take the interface with it.
 
-Bounded frames and queues stop one connection exhausting the server; these
-stop one account exhausting the database, which is otherwise unbounded by
-design.
+## 13. Storage schemas
 
-- 16 devices per user.
-- 2 000 friendships per user.
-- 1 000 shares owned per user.
-- 512 members per share.
-- 4 096 manifest entries per snapshot.
+### Client (local, authoritative for its own collections)
 
-A quota reached answers `INVALID_MESSAGE` naming the limit, because the caller
-must remove something rather than retry.
+| Table | Key | Holds |
+|---|---|---|
+| `identity` | — | key handles, root key |
+| `device_log` | `(root_key, sequence)` | verified entries, ours and contacts' |
+| `contacts` | `root_key` | handle, fingerprint, verified, friendship |
+| `collections` | `collection_id` | name, role, content key, local paths |
+| `revisions` | `(collection_id, number)` | verified revisions; highest is current |
+| `manifests` | `manifest_hash` | decoded manifest |
+| `entries` | `info_hash` | descriptor bytes, local status |
+| `outbox` | `sequence` | commands awaiting connectivity |
+| `samples` | `(collection_id, t)` | transfer history ring, fixed-width rows |
 
-## 9. Identity and Authentication
+`samples` is in Rust deliberately: it is sampled from backend numbers, and
+keeping it in Flutter made it a second source of truth re-encoded on every
+tick (D8).
 
-The client reuses Portalis's existing Ed25519 identity for signatures. Each
-device also owns an independent X25519 encryption keypair. Both private keys
-stay local; the server stores only the authorized public halves.
+### Service (either engine)
 
-### Registration
+| Table | Key | Holds |
+|---|---|---|
+| `device_log` | `(root_key, sequence)` | signed entries |
+| `handles` | `(normalized, discriminator)` | claim → root key |
+| `friendships` | `(low, high)` | both signatures, state |
+| `revisions` | `(collection_id, number)` | signed revisions |
+| `blobs` | `hash` | encrypted manifests and entry payloads |
+| `sealed_keys` | `(collection_id, device_id)` | sealed content key |
+| `mailbox` | `(device_id, sequence)` | opaque items awaiting delivery |
 
-1. Server sends `ServerHello` with protocol range, connection ID, timestamp,
-   and a fresh 32-byte challenge.
-2. Client sends `RegisterUser` with desired username, Ed25519 signing public
-   key, X25519 encryption public key, and a domain-separated signature covering
-   the full challenge context.
-3. Server verifies signature, challenge age, and one-time use.
-4. Server allocates stable `UserId` and unique user handle.
-5. Server stores the first authorized device and returns `Authenticated`.
+Append-only where the data is. The current revision is the highest number,
+never a separately mutable row that could disagree with the chain.
 
-### Authentication
+---
 
-1. Server sends a fresh challenge.
-2. Client signs protocol version, server authority, connection ID, challenge,
-   and server timestamp.
-3. Server verifies signature, device status, expiry, and replay cache.
-4. Connection becomes associated with its user and device.
+# Part V — Connectivity
 
-Challenges expire after 60 seconds and can be consumed once.
+## 14. Connections
 
-### Handles
+Authenticated QUIC, direct-or-relayed, from a maintained library (D6). The
+endpoint reuses the device's Ed25519 secret, authenticates the remote public
+key, tries known addresses directly, hole-punches where it can, and keeps a
+relay path for when direct fails.
 
-User-facing handles have the form:
+Nexus names its protocols with ALPN and adds no framing over QUIC streams —
+QUIC already supplies encryption, framing, ordering, flow control and
+migration.
 
-```text
-<username>#<discriminator>
+## 15. Security level
+
+**Every connection reports what it actually is, the moment the handshake
+completes.** This is not derived later or inferred from timing; it is an
+output of the handshake and travels with every event about that peer.
+
+```rust
+pub struct Security {
+    pub path: Path,          // Direct | Relayed
+    pub peer: PeerTrust,     // Known | Unverified | Unknown
+}
+
+pub enum Path { Direct, Relayed }
+
+pub enum PeerTrust {
+    /// Remote key is a contact whose fingerprint has been compared (§8).
+    Known,
+    /// Remote key is a known contact, fingerprint not yet compared.
+    Unverified,
+    /// Remote key is authenticated but belongs to nobody we know.
+    Unknown,
+}
 ```
 
-Proposed constraints:
+| Path | Peer | Shown as | Behaviour |
+|---|---|---|---|
+| Direct | Known | On your network · verified | full |
+| Direct | Unverified | On your network · unverified contact | full, badge |
+| Relayed | Known | Via relay · verified | full |
+| Relayed | Unverified | Via relay · unverified contact | full, badge |
+| any | Unknown | Rejected | connection closed |
 
-- Username: 3-24 letters, numbers, or underscore.
-- Display casing preserved; normalized value stored for lookup.
-- Discriminator: five cryptographically random Crockford Base32 characters.
-- Unique MongoDB index on `(normalized_username, discriminator)`.
-- `UserId` remains immutable when a handle changes.
+`Unknown` is closed rather than displayed: an authenticated stranger is still
+a stranger, and accepting one would let anybody who learns a device address
+open a stream. The relay never sees plaintext, so `Relayed` is a performance
+and metadata statement, not a weaker security one — the interface says so
+rather than implying danger.
 
-Allocation retries random discriminators against the unique index. It never
-scans for the next available value.
+---
 
-### Device linking and encryption keys
+# Part VI — The backend↔frontend contract
 
-The schema supports multiple devices per user from day one. A device record
-therefore contains an Ed25519 signing public key and an X25519 encryption
-public key. They are different keys with different purposes; neither key is
-derived from the other.
+## 16. Bridge shape
 
-An already authenticated, authorized device links a new device by sending its
-two public keys and a domain-separated approval signature. The signed payload
-binds the user, approving device, candidate signing key, candidate encryption
-key, and operation version. Nexus verifies that signature, rejects a duplicate
-candidate signing key, and stores the new device atomically. The new device can
-then authenticate normally with its Ed25519 key.
+```rust
+pub fn open(config: Config) -> Result<Nexus, OpenError>;
 
-Nexus never receives a share secret in plaintext. A client creates a random
-per-share symmetric key, encrypts each snapshot capsule with it, and stores one
-X25519-encrypted key envelope per authorized device. Linking a second device
-lets an existing device add its envelope. Account recovery remains a separate
-product decision and never weakens this approval rule.
-
-Revoking a device stops Nexus issuing it new envelopes and answering its
-requests. It does not reach the share keys that device already holds, so
-revocation means rotating the key of every share it could read and publishing
-the next revision sealed only to the devices that remain. Nexus enforces
-authorization; only re-keying changes what a revoked device can still open.
-
-### Device identity on Portalis clients
-
-A device holds two independent keypairs: the Ed25519 signing key the Portalis
-application already persists, and an X25519 key that only ever receives sealed
-share keys. Neither is derived from the other. A client generates and stores
-both together in whatever secure storage its platform offers, and a client
-that has an Ed25519 identity but no X25519 key generates one before it first
-registers or links.
-
-Losing the X25519 private key loses access to every capsule sealed to it. The
-device presents a new key and an owner re-seals; there is no recovery path
-that avoids someone who already holds the share key, by design.
-
-Nexus derives `DeviceId` as BLAKE3 over the Ed25519 public key. The Portalis
-application has until now used that raw public key as its own device
-identifier. The two must not be confused: both are 32 bytes and neither is
-self-describing. The application adopts the derived identifier, and manifest
-entries carry the public key itself (§11), so both are recoverable from one
-stored field and neither has to be looked up.
-
-That changes what a manifest entry signs, which makes it a manifest version
-rather than a rename. Entries written by earlier builds are verified under the
-rule they were signed with, and are rewritten in the current encoding when
-their collection is next published.
-
-## 10. Friends and Presence
-
-Friendship uses one canonical edge document with the two binary user IDs sorted
-into `user_low` and `user_high`.
-
-```text
-NONE -> PENDING -> ACCEPTED
-  ^        |          |
-  |        v          v
-  +----- REJECTED   REMOVED
-
-any state ----------> BLOCKED
+impl Nexus {
+    pub fn watch(&self) -> Stream<PortalisState>;
+    pub fn watch_detail(&self, collection: Option<Handle>) -> Stream<Detail>;
+    pub async fn command(&self, command: Command) -> Result<Accepted, CommandError>;
+    pub async fn close(self);
+}
 ```
 
-Commands use compare-and-set filters so concurrent accept, reject, and remove
-operations are deterministic and idempotent.
+Five calls, and no more without a reason recorded here.
 
-### Blocking
+- `watch` yields a **complete snapshot first**, so a restart never depends on
+  earlier events.
+- `watch_detail` carries the expensive tier, subscribed only while a
+  collection's view is open; `None` unsubscribes.
+- `command` returns acceptance or a validation error immediately. Progress and
+  outcome arrive through `watch`, on the object affected — which is what lets
+  the interface show them after a restart mid-operation.
 
-A refusal that can be sent again is not a refusal, and handle resolution makes
-every account reachable by anyone who knows its handle. Either side may
-therefore block the other from any state.
+## 17. State and commands
 
-While an edge is blocked, friend commands from both sides are refused, and
-presence is delivered in neither direction. Existing share memberships between
-the two are left alone: they belong to the shares' owners to revoke, and
-silently dropping someone's access to media is a different decision from
-declining to hear from them.
+```rust
+/// Opaque, process-local. Cheap to send, meaningless to persist.
+pub struct Handle(u32);
 
-The edge records who blocked, and only that user may clear it, returning the
-edge to `NONE`. Blocking is the one transition the other side cannot answer.
+pub struct PortalisState {
+    pub device: DeviceState,
+    pub connectivity: Connectivity,
+    pub contacts: Vec<ContactState>,
+    pub collections: Vec<CollectionState>,
+    pub alerts: Vec<Alert>,
+}
 
-Presence is derived from authenticated connections:
+pub enum Connectivity { LocalOnly, Connecting, Online(Security), Degraded { since: u64 } }
 
-- User online when at least one authorized device is connected.
-- Ping every 20 seconds.
-- Connection dead after 60 seconds without valid traffic.
-- Presence visible only to authorized friends.
-- Multiple devices aggregate into one user state.
-- Heartbeats are not persisted to MongoDB.
+pub struct ContactState {
+    pub id: Handle,
+    pub display_name: String,
+    pub handle: Option<String>,
+    pub fingerprint: String,
+    pub verified: bool,
+    pub friendship: Friendship,
+    pub reachable: Option<Security>,   // None when not connected
+}
 
-## 11. Shares, Snapshots, and Torrent Handoffs
+pub struct CollectionState {
+    pub id: Handle,
+    pub name: String,
+    pub role: Role,                    // Owner | Member
+    pub revision: u64,
+    pub status: Status,
+    pub members: Vec<Handle>,
+    pub entries: u32,
+    pub total_bytes: u64,
+    pub transfer: Option<Transfer>,    // progress tier
+    pub pending: Option<Pending>,      // an in-flight command
+}
 
-A **share** is the stable social object. It has a locally generated `ShareId`,
-an immutable owner, visibility/access policy, and a monotonically increasing
-revision. A **snapshot** is an immutable, content-addressed media manifest:
-adding, removing, renaming, or replacing media produces a different
-`SnapshotId`.
+pub enum Status {
+    Available, Preparing, Downloading, Updating,
+    WaitingForOwner, AccessRemoved,
+    NeedsNewerVersion, CannotVerify(VerifyFailure), ConflictingHistory,
+}
 
-### Canonical manifest and `SnapshotId`
+pub struct Transfer {
+    pub progress: f32, pub down: u32, pub up: u32,
+    pub peers: u16, pub eta_secs: Option<u32>,
+}
 
-The manifest lists the media a share contains. Its canonical encoding is the
-one definition both the content root and the capsule are built from, so any
-client that can compute one can compute the other, and two clients that
-disagree about a byte disagree about the share.
+/// Detail tier — only while a collection's view is open.
+pub struct Detail {
+    pub id: Handle,
+    pub entries: Vec<EntryState>,
+    pub pieces: Vec<u8>,     // packed bitmap, typed view on the Dart side
+    pub samples: Vec<u8>,    // packed (t, down, up, progress) rows
+}
 
-```text
-manifest := "portalis.manifest.v1\0"
-            u32     entry_count
-            entry*                        ascending by info_hash
+pub enum Command {
+    CreateCollection { name: String, files: Vec<PathBuf> },
+    AddMedia { collection: Handle, label: String, files: Vec<PathBuf> },
+    RenameCollection { collection: Handle, name: String },
+    DeleteCollection { collection: Handle, delete_files: bool },
+    DownloadEntry { collection: Handle, entry: Handle },
+    RetryTransfer { collection: Handle },
 
-entry    := u8      entry_version = 1
-            u8[20]  info_hash             BitTorrent v1, from the torrent engine
-            u32     name_len
-            u8[]    name                  name_len bytes, UTF-8, NFC-normalized
-            u8      has_thumbnail         0 or 1
-            u8[32]  thumbnail_hash        present only when has_thumbnail is 1
-            u8[32]  author_public_key     Ed25519
-            u64     added_at_unix_ns
-            u8[64]  signature             over every preceding field of the entry
+    ShareWith { collection: Handle, contact: Handle },
+    RemoveMember { collection: Handle, contact: Handle },
+    ResolveFork { collection: Handle, keep: Hash },
+
+    AddContact { handle: String },
+    RespondToRequest { contact: Handle, accept: bool },
+    MarkVerified { contact: Handle },
+    BlockContact { contact: Handle },
+
+    LinkDevice { approval: DeviceApproval },
+    RevokeDevice { device: Handle },
+    SetActive { active: bool },
+}
+
+pub enum CommandError {
+    Invalid(String),
+    NotPermitted,
+    QuotaReached(&'static str),
+    Unavailable,       // needs connectivity and cannot be queued
+}
 ```
 
-Every integer is little-endian, and every variable-length field carries its
-length before its bytes, so no pair of fields can be reinterpreted as a
-different pair — the rule the connection payloads in `signing.rs` already
-follow.
+A command needing connectivity that *can* be deferred is accepted and queued
+in the outbox, appearing as `Pending` on its object. `Unavailable` is reserved
+for the few that cannot.
 
-`SnapshotId` is BLAKE3 over exactly those bytes. The Portalis backend builds
-them once from the torrent engine's authoritative info hashes; it never
-performs a second file scan, never asks Nexus to reinterpret a torrent, and
-never treats protobuf serialisation as the canonical encoding.
+## 18. Delivery tiers and what the user sees
 
-An entry carries its author's Ed25519 public key rather than an identifier
-derived from it. The key is what the signature verifies against, and every
-identifier this system uses is derivable from it, which is what lets one
-manifest satisfy both the local collection model and Nexus (§9).
+| Tier | Contents | Changes | Delivery |
+|---|---|---|---|
+| Structure | ids, names, members, verification, status | on user action | on change |
+| Progress | bytes, rates, peers, ETA | continuously | coalesced ≤4 Hz |
+| Detail | piece maps, per-entry state, graph samples | continuously | only while visible |
 
-### Capsule format
+Four mechanisms make this hold: **change detection in Rust** so an unchanged
+tick sends nothing and idle costs zero; **coalescing** so progress within a
+window collapses to the latest; **handles, not strings**, with hex only in the
+structure tier where a human reads it; and **packed bulk** for piece maps and
+samples, decoded with typed views rather than object graphs.
 
-Nexus stores the capsule and never opens it, so its format is a contract
-between clients that the server cannot enforce. It is fixed here for that
-reason:
+| Internal condition | Shown as |
+|---|---|
+| Service unreachable, local state intact | Offline |
+| Connected, direct path | On your network |
+| Connected, relayed path | Via relay |
+| Contact fingerprint not yet compared | Unverified contact |
+| Revision verified, no content key yet | Waiting for the owner |
+| Descriptor received, torrent starting | Preparing |
+| Pieces moving | Downloading *n*% |
+| Complete | Available |
+| Omitted from a later revision | Access removed |
+| Key rotated, republishing | Updating |
+| Unknown manifest version | Needs a newer Portalis |
+| Two revisions with one number | Conflicting history — needs attention |
+| Signature invalid or author unauthorized | Cannot verify |
+| This device revoked | Signed out |
 
-```text
-capsule  := u8      capsule_version = 1
-            u8[12]  nonce
-            u8[]    ciphertext            ChaCha20-Poly1305, tag included
-```
+The last three are security outcomes and are never rendered as ordinary
+errors. A user who cannot distinguish "the network is flaky" from "someone is
+lying to you" has not been told the truth.
 
-The plaintext is exactly the canonical manifest above, and the key is the
-share's random 32-byte secret. The nonce is
-`BLAKE3("portalis.capsule.v1/nonce" || share_id || revision_le || snapshot_id)[..12]`.
-Including the snapshot prevents two owner devices that race with different
-candidate manifests for one revision from reusing a ChaCha20-Poly1305 nonce.
-It remains identical for an exact retry, so a publisher whose acknowledgement
-was lost re-encrypts to the same bytes and Nexus recognises the retry rather
-than refusing it. Associated data is
-`share_id || revision_le || snapshot_id`, so a capsule lifted from one share
-or revision fails to open under another.
-
-`capsule_version` is the only field a reader may act on before authenticating
-the rest. A version it does not know is a capsule it must not guess at.
-
-### Media confidentiality
-
-Encrypting the capsule keeps manifest entry names and info hashes away from
-Nexus. The separately encrypted live handoff keeps the `.torrent` descriptor,
-file names, and directory structure away from it. Neither mechanism encrypts
-the media: BitTorrent pieces move between peers exactly as stored.
-
-Version 1 therefore rests the confidentiality of a private share on the
-secrecy of its info hashes. A torrent created for the Nexus path is private
-from birth: its info dictionary contains the `private` flag, and clients use
-no DHT, PEX, tracker, or local peer discovery for it. Nexus is its only
-discovery path (§12).
-
-An existing public torrent cannot be made private without changing its info
-hash, because the `private` flag is inside the hashed info dictionary. The M6
-slice therefore publishes newly created private torrents only. Existing
-collections keep their current hashes and legacy discovery behavior until a
-later migration explicitly replaces their torrents; they are never relabelled
-as private while retaining a public-torrent hash.
-
-This is a deliberate and weaker position than encrypting payloads, and it is
-stated rather than implied: anyone who learns an info hash can fetch the
-pieces, and a former member keeps that knowledge. Payload encryption is the
-upgrade path; the capsule carries a version byte so adding a content key is an
-additive change rather than a new format.
-
-### Publication
-
-The first authenticated publication creates a share and makes its publisher the
-permanent owner. A subsequent update publishes exactly
-`current_revision + 1`, names the prior snapshot, and points to the new
-snapshot. An identical signed retry is idempotently successful; conflicting
-bytes for one revision fail. A peer may seed and fetch a snapshot but cannot
-mutate the owner's share.
-
-Nexus stores the bounded capsule and its signature, never plaintext torrent
-descriptors, file names, directory structure, or media. It does not include a
-BitTorrent library and never parses or validates what a capsule contains — it
-holds bytes it cannot read, and returns them to permitted devices so a newly
-linked device can synchronise while the original is offline.
-
-The signature is made by the publishing device's Ed25519 key over the
-domain-separated tuple `share_id`, revision, optional prior snapshot,
-`snapshot_id`, and `BLAKE3(capsule)`. Nexus verifies it against the
-authenticated device before storing the publication. A returned snapshot
-names the publisher device and carries its signing public key, so a recipient
-can derive the device ID and verify the same signature before opening the
-capsule.
-
-Opening a capsule also verifies every manifest entry against the
-`author_public_key` it carries. Canonical structure without valid authorship
-is not an accepted manifest. Names are NFC-normalized before signing; a decoder
-rejects a name that is not already NFC so decoding never silently changes
-signed bytes.
-
-### Membership
-
-Membership is stored as separate edge documents. Server authorization is
-checked before a private share summary, capsule, or live handoff is returned.
-The live rendezvous path may also forward an authorized encrypted descriptor
-from one online client to another; it is bounded, transient, and is not written
-to MongoDB. M6 uses `.torrent` bytes and never a bare magnet on the private
-path.
-
-An owner grants and revokes membership. Revoking removes the edge, so Nexus
-stops returning summaries, capsules, envelopes, and handoffs to that user. It
-does not reach what they already hold. Removing someone therefore means
-rotating the share key and publishing the next revision sealed only to the
-members who remain — the same rule device revocation follows (§9). Nexus
-enforces authorization and cannot enforce forgetting; a specification that
-implied otherwise would be lying about what removal buys.
-
-### Collections become shares
-
-A Portalis collection keeps its local identifier when it is published.
-Publishing mints a fresh `ShareId` (UUIDv7) and a fresh random 32-byte share
-key, and stores both beside the collection. M6.0 does this only for new
-collections whose torrents were private from birth; §20 defines the later
-choice for existing public info hashes.
-
-The existing invite secret never becomes the share key. It is a join
-credential that everyone holding an invite link has already seen, and a share
-key must be known only to the devices an owner has sealed it to.
-
-### M6 online friend-to-friend handoff
-
-The first M6 product slice is deliberately narrower than the complete share
-model. It proves this one journey:
-
-> A and B are accepted friends and each has one online device. A creates a new
-> private collection, shares it with B through Nexus, and B downloads its files
-> directly from A.
-
-The flow is:
-
-1. A creates each collection entry as a BitTorrent v1 torrent with
-   `private = true`, adds it locally from `.torrent` bytes, and retains those
-   exact bytes beside the local entry for handoff.
-2. A mints and persists the collection's `ShareId` and random share key, builds
-   the canonical manifest, seals it, signs the publication, and publishes
-   revision one.
-3. A selects B from its accepted friends and grants B access. The successful
-   response includes B's bounded list of non-revoked recipient devices, each
-   with `DeviceId` and X25519 public key. The per-user device quota bounds this
-   disclosure. It is available only to the share owner for a user who has
-   access to that share.
-4. A seals the share key to each returned device and stores the resulting key
-   envelope before sending torrent metadata.
-5. For each manifest entry, A sends an encrypted live handoff to B's device.
-   Its protocol wrapper carries `share_id`, `recipient_device_id`, `info_hash`,
-   and the ciphertext. Nexus forwards it only to that exact authenticated
-   device. An offline recipient produces a typed unavailable response; success
-   means the payload was queued to that live connection, not that its media
-   download completed.
-6. B fetches the authorized snapshot and its key envelope, opens the capsule,
-   decrypts the handoff, validates the torrent descriptor and info hash,
-   creates one local collection bound to the `ShareId`, and adds the torrent
-   from bytes with Nexus peer candidates as initial peers. If the live event
-   arrives before the envelope refresh completes, B retains that bounded event
-   locally and processes it after the key is available.
-7. A refreshes its Nexus swarm lease while seeding. B discovers A through
-   Nexus only and BitTorrent transfers the media directly between them.
-
-One handoff carries one entry and has this client-to-client format:
+## 19. Flutter application
 
 ```text
-handoff   := u8      handoff_version = 1
-             u8[12]  random_nonce
-             u8[]    ciphertext             ChaCha20-Poly1305, tag included
-
-plaintext := u32     collection_name_len
-             u8[]    collection_name         UTF-8, NFC-normalized
-             u8[20]  info_hash
-             u32     torrent_len
-             u8[]    torrent_bytes
+lib/
+├── app/        bootstrap · shell (adaptive chrome) · lifecycle
+├── design/     design system · theme · shared widgets
+├── bridge/     generated/ (imported nowhere else) · portalis.dart
+└── features/   collections · people · identity · media · settings
+                each with only the layers it needs: data · logic · ui
 ```
 
-The share key encrypts the plaintext. Associated data is
-`share_id || recipient_device_id || info_hash`. The sender draws a fresh nonce
-for every attempt. The receiver rejects a descriptor over the protocol limit,
-a descriptor whose info dictionary is not private, or a descriptor whose
-computed v1 info hash differs from the handoff and manifest. Receiving the
-same `share_id + info_hash` again is idempotent.
-
-The handoff uses `.torrent` bytes rather than asking librqbit to resolve a bare
-magnet. A magnet resolver does not know that a torrent is private until after
-it obtains metadata and may disclose the info hash to DHT first. Adding the
-validated descriptor as bytes gives the engine the private flag before it
-starts discovery.
-
-The collection name is included because the canonical manifest describes its
-entries, not the collection object. A keeps its existing local collection ID;
-B generates its own local ID. Both persist the same `ShareId`, which is the
-deduplication key for the Nexus path. The legacy invite secret remains a
-legacy-path credential and is not required by this flow.
-
-This slice intentionally defers offline handoff storage, share invitations and
-acceptance, collaborative member publication, linked-device key repair,
-cryptographic erasure after revocation, migration of existing public torrents,
-and relayed media transport. A and B must be online at the same time, and the
-transfer remains subject to ordinary BitTorrent reachability.
-
-## 12. Swarm Discovery
-
-An authenticated seeder announces a short-lived peer lease containing:
-
-- Info hash.
-- BitTorrent listen port.
-- Address-family and transport capabilities.
-- Requested lease duration.
-
-The server combines the validated advertised BitTorrent port with the source IP
-observed directly by the socket layer. Behind a reverse proxy, forwarding
-headers are accepted only from explicitly configured trusted proxy networks.
-It never trusts an arbitrary client-supplied public IP.
-
-Initial policy:
-
-- Lease duration: 90 seconds.
-- Refresh interval while seeding: 30 seconds.
-- Disconnect removes leases immediately when possible.
-- Expiration remains the correctness mechanism.
-
-Lookup returns bounded randomized candidates, preferring compatible transport,
-recent leases, and diverse network prefixes. The client merges and de-duplicates
-server, direct, tracker, and DHT candidates before handing them to librqbit.
-
-A private share is the exception: its torrents carry the BitTorrent `private`
-flag, so DHT, PEX, trackers, and local discovery are not used for them and
-Nexus is the only source of candidates (§11). A receiver adds a private
-torrent from validated descriptor bytes, never through a bare magnet resolver.
-Its confidentiality rests on the secrecy of its info hashes, and announcing
-one to a public network spends that secrecy permanently.
-
-The Portalis server is deterministic discovery, not guaranteed reachability.
-Symmetric NAT and restrictive firewalls still require a relay, reachable seed,
-or a compatible hole-punching transport.
-
-## 13. Concurrency and Fast Tables
-
-The server uses Tokio's multithread runtime. Worker count defaults to available
-parallelism and remains configurable for container limits.
-
-Each socket owns:
-
-- One bounded read/decode loop.
-- One bounded `mpsc` queue and writer loop.
-- One cancellation token.
-- One request-concurrency semaphore.
-- Authentication and rate-limit state.
-
-No lock guard is held across `.await`. Blocking work uses a bounded blocking
-pool. Unbounded task creation and unbounded `spawn_blocking` are prohibited.
-
-Version 1 uses sharded concurrent maps for:
-
-- `DeviceId -> ConnectionHandle`.
-- `UserId -> active device count`.
-- `InfoHash -> peer lease set`.
-- Short-lived `MessageId -> idempotency result` cache.
-
-Lease and challenge expiration uses deadline scheduling, not full-table scans.
-Generation tokens ensure stale timeout events cannot delete renewed entries.
-
-These maps are ephemeral accelerators. MongoDB remains authoritative for users,
-devices, friendships, memberships, and collection heads. Interfaces must permit
-a later distributed connection registry and event bus without changing the
-protobuf contract.
-
-## 14. MongoDB Model
-
-Production and integration tests use a replica set so transactions and change
-streams are available.
-
-### Durable collections
-
-`users`
-
-- `_id`, username, normalized username, discriminator, status, timestamps,
-  schema version.
-- Unique `(normalized_username, discriminator)` index.
-
-`devices`
-
-- Device ID, user ID, Ed25519 signing public key, X25519 encryption public key,
-  creation/last-authentication/revocation times.
-- Unique device ID and `(user_id, revoked_at)` indexes.
-
-`friendships`
-
-- Canonical user pair, requester, state, version, timestamps.
-- Unique `(user_low, user_high)` index.
-- State/listing indexes from each side of the edge.
-
-`shares`
-
-- Share ID, immutable owner, visibility policy, current revision/snapshot,
-  timestamps, schema version.
-
-`share_memberships`
-
-- Share ID, user ID, granted timestamp.
-- Unique `(share_id, user_id)` and user-listing indexes.
-- No role: the owner is on the share record and everyone else may read, which
-  is every distinction the rules currently draw. A role column with one value
-  is a source of truth waiting to disagree with the one beside it.
-- No revocation state: revoking removes the edge. A share's history lives in
-  `share_snapshots`, and keeping tombstones here would only record who was
-  once allowed to read media they may still hold (§11).
-
-`share_snapshots`
-
-- Share ID, revision, prior/current snapshot IDs, encrypted capsule hash/content,
-  publisher, signature, timestamp.
-- Unique `(share_id, revision)` index.
-
-`share_key_envelopes`
-
-- Share ID, recipient device ID, encrypted share-key envelope, envelope
-  algorithm/version, creation/revocation timestamps.
-- Unique `(share_id, recipient_device_id)` index.
-
-`command_receipts`
-
-- Actor device, message ID, durable result, expiration.
-- Unique `(actor_device_id, message_id)` and TTL indexes.
-
-### Modeling rules
-
-- Friendships and memberships are edge documents, never growing arrays.
-- Snapshot history is append-only; the current share revision is updated with a transaction or
-  safe compare-and-set.
-- Mutable documents carry optimistic-concurrency versions.
-- Security-sensitive multi-document transitions use transactions.
-- Production uses majority write concern for identity and sharing changes.
-- Migrations are explicit, resumable, idempotent, and fixture-tested.
-- Presence and peer heartbeats do not create MongoDB writes.
-
-## 15. Security
-
-- TLS mandatory outside local tests; prefer TLS 1.3.
-- Authenticate before domain commands and authorize every resource operation.
-- Domain-separate all signed payloads.
-- Reject replayed and expired challenges.
-- Bound frames, queues, concurrent requests, and database operation times.
-- Apply the per-address limits of §8 before authentication and the per-user
-  ones after, and enforce the per-user quotas that bound durable growth.
-- Redact credentials, challenges, collection secrets, and descriptor content
-  from logs.
-- Run the Linux container as non-root with a read-only root filesystem.
-- Run dependency, license, container, and secret scans in CI.
-
-## 16. Observability
-
-The server initializes structured `tracing` at process start and carries safe
-connection, message, and correlation identifiers through each operation.
-
-Endpoints:
-
-- `/health/live`: process is alive.
-- `/health/ready`: MongoDB and startup state are ready.
-- `/metrics`: Prometheus-compatible metrics under deployment policy.
-
-Metrics include connections, authentication outcomes, commands, protocol
-errors, queue saturation, MongoDB latency, active users, leases, lookup latency,
-reconnects, and connection lifetime. OpenTelemetry export is configurable.
-
-## 17. Linux Deployment
-
-Linux is authoritative for production and CI.
-
-- Multi-stage Docker build with pinned toolchain and dependencies.
-- `linux/amd64` and `linux/arm64` images.
-- Numeric non-root user and read-only root filesystem.
-- Graceful `SIGTERM` handling and bounded socket drain.
-- MongoDB replica set for production and integration tests.
-- Backup, restore drill, certificate rotation, and monitoring before launch.
-- Keep macOS server compilation working where practical for local development.
-
-Version 1 deploys as one server process. Horizontal scaling is introduced only
-after measured need and requires shared connection routing/presence/event-bus
-adapters, not protocol changes.
-
-## 18. Testing and Coverage
-
-Coverage is a gate, not the complete definition of correctness.
-
-### Coverage policy
-
-- 100% line and branch coverage for eligible handwritten `protocol`,
-  `server-core`, and deterministic client state-machine code.
-- Generated protobuf code is excluded.
-- Bootstrap/platform adapters and genuinely unreachable defensive branches need
-  explicit documented exclusions.
-- Coverage cannot decrease in pull requests.
-- `cargo llvm-cov` produces CI reports.
-
-### Test layers
-
-1. Schema: Buf lint/breaking and released golden binary fixtures.
-2. Domain: identities, handles, friendships, authorization, versions, leases.
-3. Property: state-machine invariants and stale-expiration races.
-4. Client: correlation, timeout, cancellation, reconnect, bounded queues.
-5. Transport: handshake, limits, malformed frames, slow peers, shutdown.
-6. MongoDB: replica-set transactions, indexes, TTL, races, migrations.
-7. End-to-end: MongoDB, server, and two real Rust clients.
-8. Fuzzing: envelope decoding, validators, and signing payloads.
-9. Mutation: pure protocol/domain/application code.
-10. Load/soak: connection ramp, presence fan-out, hot swarms, reconnect loops.
-
-Unit tests inject clocks, randomness, repositories, and event sinks. They do not
-sleep or access the network. Real-time behavior is isolated to bounded
-integration tests.
-
-## 19. Implementation Milestones
-
-### M0: Workspace and quality gates
-
-- Cargo workspace and crate skeletons.
-- Protobuf/Buf generation.
-- Format, lint, audit, test, coverage, and Linux build CI.
-- Empty server with health endpoints and Docker image.
-
-Gate: CI rejects a deliberate protobuf breaking change.
-
-### M1: Connection lifecycle
-
-- Envelope, hello, ping/pong, ack, and error messages.
-- WSS server and portable client supervisor.
-- Backpressure, timeout, reconnect, tracing, and shutdown.
-
-Gate: multiple clients reconnect after forced server restart without leaks.
-
-Status: complete.
-
-The `/v1/socket` endpoint enforces the protobuf subprotocol and 8 MiB frame
-limit, sends a validated `ServerHello`, and replies to binary `Ping` envelopes
-with correlated `Pong`s. Both peers split each socket into a read loop and a
-single writer task joined by one `MAX_OUTBOUND_QUEUE` channel, so a peer that
-stops reading loses its connection instead of growing memory.
-
-The client is a supervised handle that owns no socket. `PendingRequests`
-correlates responses by `correlation_id` within `MAX_PENDING_REQUESTS`, so
-commands are concurrent and independent; a timeout, a dropped connection, and a
-delivered response each remove their waiter exactly once. Envelopes that answer
-no request become events. One supervisor task rebuilds the connection under
-`ReconnectPolicy`, so callers never reconnect by hand.
-
-`Shutdown` signals every live server socket and waits for them to close within
-`GRACEFUL_DRAIN_TIMEOUT`, because upgraded WebSocket connections outlive the
-HTTP serve loop that Axum's graceful shutdown tracks. Each socket carries a
-`connection_id` tracing span.
-
-Every wait is bounded: the handshake, each request, connection teardown, and
-server draining. Integration suites exercise these against real sockets,
-including peers that never answer, refuse the subprotocol, advertise an
-unsupported version, push unsolicited envelopes, or close mid-request.
-
-### M2: Identity
-
-- Registration and challenge authentication.
-- User/device MongoDB repositories and indexes.
-- Unique handle allocation and device revocation model.
-
-Gate: valid existing Portalis identities authenticate; replay, wrong-key,
-expired, and revoked-device tests fail safely.
-
-Current slice: the identity contract and its cryptography. `identity.proto`
-adds `RegisterUser`, `AuthenticateDevice`, and `Authenticated` at the reserved
-envelope numbers. Signed payloads are domain-separated by operation and built
-from length-prefixed fields, so a signature covers exactly one operation, on
-one connection, against one server, for one challenge; concatenation ambiguity
-cannot reinterpret a username. `derive_device_id` turns an existing Portalis
-Ed25519 public key into a stable `DeviceId` with BLAKE3, so a device keeps its
-keypair and needs no new secret. `Handle` carries display casing beside the
-normalized form used for uniqueness, and discriminators render from injected
-entropy over Crockford Base32.
-
-Note: the Flutter app currently treats the raw Ed25519 public key as its own
-device identifier, so Nexus labels the same key differently. The derivation is
-deterministic, making the mapping trivial, but the two identifiers should be
-reconciled before M6 integration.
-
-The registration and authentication rules now sit in `IdentityService` over
-repository, clock, and random-source traits, so they are provable without a
-database. `IssuedChallenge` spends a challenge once and expires it after
-`CHALLENGE_LIFETIME_MS`; a wrong guess still spends the attempt, so a
-connection cannot keep probing. Registration verifies the signature before it
-writes anything, refuses a device that is already enrolled, and allocates a
-handle by retrying random discriminators against the unique index rather than
-scanning for a free one. Authentication rejects unknown and revoked devices and
-records the time of each success.
-
-A user and its first device are written through one `insert_registration` port
-call rather than two, because a user whose device is missing holds a handle it
-can never authenticate with. Expressing the pair as one operation is what lets
-the MongoDB adapter wrap it in a transaction, and lets handle allocation retry
-the whole write on a collision without stranding a device.
-
-Registration and authentication now run end to end over a real socket. Each
-connection owns a `Session` holding the one challenge it was greeted with;
-spending it binds the connection to an identity. The client signs through a
-`DeviceSigner` the caller implements, so key material never enters the client
-crate. Both peers name the server the same way: the client derives the
-authority from the endpoint it dialled and the server carries its configured
-one, so a signature only verifies against the deployment it was meant for.
-
-Failures come back as typed `ProtocolError` codes the caller can act on:
-unauthenticated for a bad signature, unknown device, or spent challenge;
-unauthorized for a revoked device; invalid message for a rejected username.
-Storage failures report a generic internal error, keeping database detail in
-the logs rather than on the wire.
-
-Status: complete.
-
-Storage is now durable. `MongoStore` implements the same three ports the
-in-memory adapter does, with unique indexes on `(normalized_username,
-discriminator)`, on device ID, and on the friendship edge; a transaction around
-`insert_registration`, so a handle collision leaves no device behind; and a
-version filter on every friendship write, so a stale writer loses rather than
-overwrites. `NexusStore` chooses the backend at startup from
-`PORTALIS_NEXUS_MONGODB_URI`, and every layer above the ports is unchanged —
-which is what the port design was for. The server process refuses to start
-without that variable or when MongoDB cannot prepare its indexes. In-memory
-storage remains an explicit test and development adapter, never a production
-fallback.
-
-Duplicate-key failures are read as lost races rather than outages: a unique
-index rejecting a write is the store working. Everything else is an outage,
-including a server that goes away mid-write.
-
-`tests/mongo.rs` runs against a real replica set in Docker, covering the
-registration transaction and its rollback, index idempotence, compare-and-set,
-a device enrolled twice, a stopped server, a standalone server that cannot open
-a transaction, and malformed connection strings. Two tests carry the gate that
-only durable storage can meet: an identity registered by one process
-authenticates from a second one holding nothing but the database, and a revoked
-device stays revoked across the same restart. Docker's absence skips these;
-Docker present but failing is a failure, never a silent pass.
-
-Per section 18, `mongo/mod.rs` is excluded from the coverage gate as a platform
-adapter: what remains after those tests is driver-internal error propagation
-that cannot be triggered deterministically. Its decisions live in
-`mongo/documents.rs` and `store.rs`, which stay measured at 100%.
-
-### M2.5: Device linking and encrypted share access
-
-Status: complete.
-
-- Register separate X25519 encryption public keys beside Ed25519 signing keys.
-- Link a device only through an existing authorized device's signed approval.
-- Persist per-device encrypted share-key envelopes without ever receiving a
-  share secret in plaintext.
-
-Gate: a second approved device authenticates, receives only its encrypted
-envelope, decrypts the same share capsule locally, and a revoked device cannot
-receive a replacement envelope.
-
-Nexus never holds a share key. `seal` and `open` are an X25519 exchange to the
-recipient device's encryption key with ChaCha20-Poly1305 over it, and the
-share and recipient device are authenticated alongside the ciphertext, so an
-envelope cannot be transplanted onto another share or another device. A
-low-order ephemeral key is refused on both sides: sealing names it, opening
-reports only that the envelope did not open.
-
-`EnvelopeService` decides one thing — whether the sender may address the
-recipient it named. The recipient is re-read from storage rather than trusted
-from whatever the sender last knew, so a device revoked after the sender last
-checked still refuses a replacement envelope, and a device belonging to
-another user is refused outright. An oversized ciphertext or a malformed
-ephemeral key is rejected before anything is stored.
-
-Fetching is scoped by the connection rather than the request: `list` takes the
-device from the authenticated session, so there is nothing to authorize beyond
-having authenticated, and no way to ask for someone else's envelopes.
-Listing is a keyset page ordered by share ID, carrying the cursor the next
-request resumes from, so a device with more shares than one page learns where
-to continue rather than silently stopping.
-
-Storage keeps one row per share and recipient device under a unique index, so
-a rotated key replaces its predecessor rather than piling up beside it. The
-durable adapter upserts under that index and retries a lost insert race once,
-because reporting an outage there would drop a rotated key while telling the
-caller it was stored.
-
-Gate met: a linked device decrypts a share key Nexus never saw, an envelope
-reaches only the device it names, a revoked device is refused a replacement,
-and an envelope addressed to another user's device is refused — over real
-sockets, with the same storage behaviour proven against a real MongoDB
-replica set.
-
-### M3: Friends and presence
-
-Status: complete.
-
-- Resolve handles and manage friend-state transitions.
-- Track multi-device presence and send friend-only events.
-
-Gate: two clients become friends and observe deterministic online/offline state.
-
-Current slice: the friendship contract and its state machine. `friends.proto`
-and `presence.proto` add handle resolution, friend commands and events, friend
-listing, and presence at the reserved envelope numbers.
-
-`FriendshipEdge` sorts its two user IDs, so naming the edge does not depend on
-who asked first and one unique index keeps a single row per friendship.
-`apply` decides what an action does without touching storage: only the side
-that did not ask may accept or reject, either side may remove an accepted
-friendship, the asker may cancel one still pending, and a refusal or removal
-can be asked again. A request sent back while one is pending is taken as
-accepting it. Repeating any command reports `Unchanged` rather than failing or
-bumping the version, and every move carries the version its write must match,
-which is what makes concurrent commands deterministic.
-
-`FriendService` applies those rules over storage and time. A command reads the
-edge, applies the action, and writes under the version it read; losing that
-race means another side wrote first, so it re-reads and re-applies up to
-`COMMAND_ATTEMPTS` times before reporting contention. Handle resolution
-normalizes both halves of `<username>#<discriminator>` before the indexed
-lookup, and listing carries the peer behind each edge along with who asked.
-
-`UserDirectory` is split out of `IdentityRepository`: friends and presence read
-users but never enrol or revoke devices, so they do not depend on that surface.
-
-`PresenceRegistry` derives who is online from live connections rather than
-storing it: a user is online while at least one device is connected, and only
-the transitions are reported, so callers fan out one event per real change
-rather than one per device. Coming back clears the last-seen time.
-
-Resolving handles, acting on friendships, and listing them are served over the
-socket, refused for a connection that has not authenticated, and answered with
-typed codes: invalid message for a rejected action, rate limited when a
-contended edge exhausts its retries, and a generic internal error that keeps
-storage detail off the wire. Two clients become friends end to end.
-
-Presence is fanned out to accepted friends only. Every event is addressed to a
-specific friend's live connections rather than broadcast, so a stranger and a
-pending friendship both see nothing. A connection that authenticates is told
-where its friends already stand, because otherwise a client would see nothing
-until someone's state changed. Reading friends is best-effort: a store outage
-shares nothing rather than failing the command that triggered it, and clients
-refresh on reconnect.
-
-Gate met: two clients become friends, observe each other going offline and
-coming back, and a second device leaving does not report its user away.
-
-### M4: Encrypted shares and snapshots
-
-Status: complete.
-
-- Share/member/snapshot repositories and per-device key envelopes.
-- Signed snapshot publication and authorized listing/events/fetches.
-- Encrypted torrent-capsule limit and transient client-to-client handoff.
-
-Gate: an authorized linked device decrypts the latest capsule; an unauthorized
-device cannot discover private state; share revisions never regress.
-
-Current slice: the publication rules, over no storage and no clock. `publish`
-decides what a publication does to a share without performing it, which is
-what lets the write carry the revision it read and lose safely to a concurrent
-publisher.
-
-A share that does not exist starts at revision one and has nothing to follow,
-and creating it fixes its owner permanently: a peer may seed and fetch a share
-without being able to move it. An update publishes exactly one revision past
-what is stored and names the snapshot the share is actually on, so a
-publication built against a revision another device already replaced is
-refused rather than silently overwriting it. Revisions never regress and never
-skip.
-
-Republishing the stored revision succeeds only when every byte matches,
-because a publisher whose answer was lost retries the same bytes and must not
-be stranded; different bytes for a published revision are refused, since a
-revision is immutable once written. Nexus compares capsule bytes to recognise
-that retry and otherwise treats them as opaque.
-
-The completed path stores mutable share heads, append-only snapshots, and
-membership edges in memory or MongoDB. Snapshot insertion and head movement
-share one transaction, with the head revision in the write filter; a lost CAS
-aborts without leaving an orphan revision. Lists, fetches, live events,
-per-device key envelopes, and transient encrypted handoffs all check the same
-membership source of truth. Unauthorized and missing share IDs both answer
-`NOT_FOUND`, preventing private-state probing. Capsules and handoffs are
-bounded metadata and Nexus never parses or persists their plaintext.
-
-Gate met: a granted device receives and opens its own sealed share key, fetches
-the latest encrypted capsule, outsiders cannot discover it, and both the pure
-rules and durable transaction refuse stale revisions.
-
-### M5: Swarm discovery
-
-Status: complete.
-
-- Announce, refresh, lookup, and expire peer leases.
-- Fast swarm table and candidate diversity.
-- Client merge of server, direct, tracker, and DHT candidates.
-
-Gate: two clients discover current endpoints and expired peers disappear.
-
-The server binds every announcement to the remote IP observed by the TCP
-socket and accepts only its listen port, family, transports, and lease request
-from the client. Leases refresh by device, are removed on disconnect, and are
-checked for expiration on every lookup. Results are bounded, prefer compatible
-transport and recent leases, and take one peer per IPv4 /24 or IPv6 /64 before
-filling remaining slots. The client merges direct, Nexus, tracker, and DHT
-candidates by endpoint with deterministic source preference.
-
-Gate met: two authenticated socket clients discover each other's current
-source-bound endpoints; disconnect and time-based expiry both remove leases.
-
-### M5.5: Account and membership control
-
-Status: partial. `RevokeShareAccess` is complete. The other commands remain
-required before a production account UI, but do not block the bounded M6
-online-sharing slice below.
-
-Every command here is one a user-facing client must offer and cannot build
-today: the protocol can add a member but not remove one, mark a device revoked
-but never say so, and refuse a friend request that can be sent again a second
-later. A production account UI would otherwise ship buttons that have no
-messages behind them; the M6.0 development slice exposes none of those
-unfinished controls.
-
-- `RevokeShareAccess`: an owner removes a member (§11).
-- `ListDevices` and `RevokeDevice`: a user sees their devices and signs one
-  out. A device may revoke itself; only an authorized device may revoke
-  another. Revoking closes that device's live connections.
-- `BlockUser` and `UnblockUser` (§10).
-- `ChangeHandle`: a new username under the existing `UserId`, allocated by the
-  same rules as registration.
-- `DeleteAccount`: removes users, devices, friendships, memberships, and key
-  envelopes; leaves published snapshots owned by nobody and unreachable.
-
-Gate: each command's effect survives a restart, a revoked device's live
-connections close, a blocked user cannot re-request, and a deleted account
-frees its handle.
-
-### M6: Flutter integration
-
-M6 is delivered in two slices. The first proves the product path without also
-solving offline delivery, account administration, or migration.
-
-#### M6.0: one online friend receives one new private collection
-
-Protocol and portable-client work, in order:
-
-1. Change capsule nonce derivation to include `snapshot_id` and add fixed
-   cross-platform test vectors.
-2. Verify manifest-entry signatures and NFC on construction and capsule open.
-3. Define the publication signing payload. Add publisher device identity to a
-   returned snapshot and make Nexus verify the signature before storage.
-4. Extend `ShareAccessGranted` with the granted user's bounded non-revoked
-   recipient-device IDs and X25519 public keys. Add the entry info hash to the
-   outer `ShareHandoff` message so the receiver can construct its authenticated
-   context before decryption.
-5. Implement the versioned encrypted torrent-handoff codec from §11 in
-   `portalis-nexus-client`.
-6. Route a handoff to the exact requested device and return a typed unavailable
-   result when that device has no live connection.
-7. Align the documented torrent-descriptor and encrypted-handoff limits with
-   the protocol constants, keeping one complete handoff below the 8 MiB frame
-   limit.
-
-Unified Nexus application work, in order:
-
-1. **Done:** place the Flutter backend, portable Nexus crates, server, demos,
-   and protocol in one Cargo workspace rooted at `rust/backend`.
-2. Make the persisted Ed25519 device key the one application and connection
-   identity. Keep the independent X25519 key only for sealed share-key
-   envelopes.
-3. Replace the WebSocket actor with one maintained direct-or-relayed QUIC
-   endpoint. Server and peer connections use the same endpoint API and differ
-   only by remote identity, address information, and ALPN.
-4. Replace legacy collection identifiers and network fields with native
-   `ShareId`, share key, acknowledged revision, snapshot, and private torrent
-   descriptor fields. Migrate stored data once; do not keep a runtime binding.
-5. Keep canonical-entry construction, capsules, handoffs, publication
-   ordering, and retry/idempotency rules in the Manifest application protocol.
-6. Add the Torrent path that creates torrents with `private = true` from birth
-   and accepts only Nexus-authorized peer candidates for those torrents.
-7. Publish revision one, grant the selected friend, seal the key to each
-   recipient device, and deliver the descriptor over an authenticated Nexus
-   stream.
-8. On B, verify and persist the Manifest state, validate/add the descriptor to
-   Torrent, and create or find the local collection directly by `ShareId`.
-9. Expose one lifecycle stream to Flutter covering local readiness,
-   connecting, online-direct, online-relayed, degraded, and stopped state.
-
-Automated gate:
-
-- Two real backend instances and one real Nexus server execute the complete
-  flow from new files on A to verified downloaded bytes on B.
-- The received `.torrent` is private, its computed info hash matches the
-  manifest, and the test observes no DHT or tracker discovery for it.
-- Repeating publication, grant, envelope push, handoff, and receive is
-  idempotent.
-- A handoff to an offline or wrong device fails without creating a collection
-  on B or reporting success on A.
-- A collection has only one network identity and one lifecycle path.
-
-#### M6.1: portability and account completeness
-
-- Complete the remaining M5.5 device and account controls.
-- Move both private keys behind the platform secure-storage adapter.
-- Add linked-device key repair and the broader FRB façade.
-- Pass macOS, iOS, Android, and Linux builds; a capsule and handoff written on
-  one platform open on another.
-- Decide which deferred §11 capabilities enter the next product slice based on
-  observed use, rather than implementing them speculatively.
-
-M6.0 is a development-gated integration slice, not a production security
-release. M6.1 secure storage is required before enabling Nexus for an external
-beta.
-
-When a remote endpoint is unreachable the application continues against local
-state and reports degraded connectivity. Durable publications remain queued
-and retry when connectivity returns. Private collections never fall back to
-public DHT, trackers, or bare magnets.
-
-### M7: Lifecycle and app cutover
-
-- Make one root runtime own startup and shutdown of storage, connection, and
-  Torrent resources.
-- Replace separate socket/torrent booleans with one derived lifecycle stream.
-- Rewrite persisted collections once and remove `collab_sync`, address-bearing
-  invites, rendezvous keys, and their configuration.
-- Rewire Flutter workflows to Nexus-native collection operations.
-
-Gate: the app starts and stops both engines without leaked tasks, resumes a
-queued publication, reports direct versus relayed connectivity truthfully, and
-contains no callable legacy collection-network path.
-
-### M8: Production hardening
-
-- Complete security, mobile-network-change, load, backup, and restore reviews.
-- Pass direct-LAN, relay-only, network-switch, process-restart, and four-platform
-  application builds.
-- Pin the first externally supported protocol and begin compatibility gates.
-
-## 20. Migration Sequence
-
-1. **Done:** merge the app backend and Nexus crates into one Cargo workspace.
-2. Introduce one root runtime and one lifecycle state without changing the
-   Flutter schema yet.
-3. Replace the WebSocket transport below the existing Rust client API with the
-   direct-or-relayed connection endpoint; delete the WebSocket actor when its
-   tests pass through the new endpoint.
-4. Move Manifest publication and descriptor delivery onto Nexus application
-   streams.
-5. Change the collection persistence schema directly to `ShareId` and private
-   torrent state. Perform one explicit storage rewrite at startup.
-6. Preserve authorship honestly during the rewrite: an entry is re-signed only
-   by its author; otherwise the owner creates an explicit re-attestation.
-7. Rebuild legacy-public torrents as private torrents when migrating them,
-   because changing the private flag necessarily changes their info hash.
-8. Rewire the Flutter workflows and lifecycle stream, then remove
-   `collab_sync`, legacy invitations, rendezvous discovery, and unused state in
-   the same release.
-9. Validate direct LAN and relay-only A→B flows before enabling the release.
-
-## 21. Initial Acceptance Objectives
-
-- P95 authenticated command latency below 150 ms in-region.
-- P95 in-memory peer lookup below 10 ms.
-- Presence transition delivered within 5 seconds on healthy connections.
-- No unbounded queue, task set, or collection under hostile input.
-- Graceful shutdown within 30 seconds.
-- Durable social and collection state survives restart.
-- Peer leases self-heal within one refresh period after restart.
-
-Discovery success and transfer-start success are measured separately because a
-correct peer address may still be unreachable through NAT.
-
-## 22. Minimal Administration UI
-
-The first server exposes health and metrics only. A later UI may display server
-and protocol versions, connection/presence counts, MongoDB and migration health,
-peer-lease metrics, and rate-limit/authentication summaries.
-
-Administration uses separate authorization and never exposes private keys,
-challenges, collection secrets, or plaintext private descriptors.
-
-## 23. Decisions Required Before Production
-
-1. Account recovery and lost-device policy.
-2. Hosting region, DNS, certificates, backups, and retention.
-3. Relay hosting topology, capacity, and retention-free operations policy.
-4. Collection-head history and command-receipt retention.
-5. Measured trigger and technology for horizontal scaling.
-6. Final load targets based on expected users, friends, collections, and peers.
-7. Whether media payloads are encrypted before seeding, which §11 defers by
-   resting v1 on info-hash secrecy. The answer decides whether a former member
-   can still fetch pieces they hold an info hash for.
-8. Retention of a deleted account's published snapshots, which §19's M5.5
-   leaves owned by nobody rather than removing them from every member's
-   history.
-
-## 24. Initial Technology Set
-
-Exact versions are pinned during scaffolding.
-
-- Tokio multithread runtime.
-- Axum HTTP health and administration surface.
-- Iroh's authenticated QUIC endpoint for direct paths, hole punching, and
-  encrypted relay fallback, pinned to a Rust 1.85-compatible release during
-  the rewrite.
-- Prost protobuf generation.
-- Buf schema linting; breaking-change checks begin with the first supported
-  release.
-- Existing Ed25519 Dalek and BLAKE3 identity primitives.
-- Official MongoDB Rust driver.
-- DashMap or benchmarked equivalent for sharded tables.
-- Tokio delay queue or equivalent for deadline expiration.
-- UUIDv7 identifiers.
-- `tracing`, Prometheus, and OpenTelemetry-compatible instrumentation.
-- Property tests, testcontainers, fuzzing, mutation tests, and `cargo llvm-cov`.
-
-Dependencies are selected only when they preserve portability, bounded resource
-use, protocol stability, and testability.
-
-## 25. References
+```mermaid
+classDiagram
+    class PortalisClient {
+        +Stream~PortalisState~ states
+        +Future~void~ send(Command)
+        +void watchDetail(int?)
+    }
+    class AppState {
+        +PortalisState current
+        +notifyListeners()
+    }
+    class CollectionsController {
+        +List~CollectionState~ collections
+        +share(int id, int contact)
+    }
+    PortalisClient --> AppState : one subscription
+    AppState --> CollectionsController : selects
+    CollectionsController --> CollectionScreen
+    CollectionScreen *-- CollectionCard
+```
+
+**One subscription for the whole app.** A controller that opens its own,
+polls, or caches a computed value is a bug (D8).
+
+- Every screen is built in `AppScreen`: one gutter, one title scale, width
+  from `WindowSize`. A screen laying itself out by hand is a bug.
+- Shell and navigation are app chrome, not a feature.
+- No feature imports another feature's internals.
+- Nothing outside `bridge/` imports `bridge/generated/`.
+
+Startup paints as early as it can. Work not required for the first frame —
+media playback initialisation, graph history nobody has opened — happens after
+it, concurrently, never ahead of the first projection.
+
+---
+
+# Part VII — Flows
+
+## 20.1 Create and share
+
+```mermaid
+sequenceDiagram
+    participant UI as Flutter (A)
+    participant A as Core (A)
+    participant S as Service
+    participant B as Core (B)
+
+    UI->>A: CreateCollection{name, files}
+    A-->>UI: Accepted
+    A->>A: private torrents (BEP-27) → entries
+    A->>A: manifest → encrypt → revision 1 → sign
+    A-->>UI: Preparing → Available
+
+    UI->>A: ShareWith{collection, contact}
+    A->>S: fetch B's device log
+    S-->>A: signed entries
+    A->>A: verify log → seal content key per device
+    A->>A: revision 2 (members += B) → sign
+    A->>S: revision + manifest + sealed keys
+
+    alt B online
+        A->>B: direct or relayed
+    else B offline
+        A->>S: → B's mailbox
+        B->>S: drain on next connect
+        S-->>B: items
+    end
+
+    B->>B: verify revision → open manifest
+    B->>B: fetch entry payload → validate → add torrent
+    B->>A: BitTorrent transfer (direct)
+```
+
+## 20.2 Rollback refused
+
+```mermaid
+sequenceDiagram
+    participant S as Service
+    participant B as Core (B)
+    participant UI as Flutter (B)
+
+    S-->>B: revision 4
+    B->>B: highest verified = 5 → reject
+    B->>B: emit ForkDetected
+    B-->>UI: Alert + status ConflictingHistory
+    Note over UI: a security outcome,<br/>never a network error
+```
+
+## 20.3 Remove a member
+
+```mermaid
+sequenceDiagram
+    participant UI as Flutter (owner)
+    participant A as Core (owner)
+    participant S as Service
+
+    UI->>A: RemoveMember{collection, contact}
+    A-->>UI: Accepted, status Updating
+    A->>A: rotate content key
+    A->>A: re-seal to remaining devices
+    A->>A: revision n+1 (members minus one) → sign
+    A->>S: revision + manifest + sealed keys
+    A-->>UI: status Available
+    Note over A,S: what they already downloaded<br/>stays theirs — §7.7
+```
+
+---
+
+# Part VIII — Quality and delivery
+
+## 21. Performance budget
+
+| Budget | Target | Mechanism |
+|---|---|---|
+| First frame | < 1 s, mid-range device | nothing awaited before paint but the store |
+| First collections shown | < 250 ms after first frame | local store read only; no network, no history decode |
+| Command acknowledged | < 100 ms, any network | `command` validates and queues; never awaits I/O |
+| Bridge traffic | < 8 KiB/s per transfer, **0 when idle** | tiers + change detection (§18) |
+| Frame rate during transfer | 60 fps | detail tier off unless visible; packed buffers |
+| Cold start to seeding | < 3 s | torrent session warms after the first projection |
+
+Regressions this exists to prevent, all previously observed: history decoded
+on the UI isolate before the first list; piece detail for every file at
+progress cadence; full-tree re-encode on every poll.
+
+## 22. Testing
+
+| Layer | Covers |
+|---|---|
+| Format vectors | device log, manifest, revision, entry payload — byte-exact, cross-platform |
+| Domain | log replay, chain verification, publication ordering, membership |
+| Property | state machines, chain invariants, expiry races |
+| **Adversarial** | forged signatures, rollback, fork, injected device, withheld delivery, stale log |
+| Event bus | no dropped durable event, coalesced progress, no cycles |
+| Transport | handshake, security reporting, limits, malformed frames, migration |
+| Storage | both engines against one suite; transactions, crash recovery, migrations |
+| End-to-end | two cores + one service; and two cores with **no service** |
+| Bridge | tier contents, coalescing, zero traffic when idle |
+| Fuzz | every decoder and signing payload |
+
+Coverage: 100% line and function for eligible handwritten protocol, domain,
+verification and core code; regions at 99; lines gated on the **merged
+profile**, which names any uncovered line rather than reporting a percentage.
+
+**The adversarial layer is not optional.** A verifiable design never tested
+against a lying service is an unverified claim. Each attack must be detected
+*and* produce the distinct outcome §18 promises.
+
+## 23. Service and deployment
+
+One binary. Storage engine chosen by configuration. The service verifies
+signatures on write — not because clients may skip verification, but because
+storing garbage wastes space.
+
+Tokio multi-thread. Each connection owns a bounded read loop, a bounded
+outbound queue with one writer, a cancellation token, a concurrency semaphore
+and its rate-limit state. Ephemeral state lives in sharded maps with deadline
+expiry and generation tokens.
+
+Multi-stage Docker, pinned toolchain, `amd64` and `arm64`, numeric non-root,
+read-only root filesystem apart from data. Graceful `SIGTERM` with a bounded
+drain — orchestrators send `SIGTERM`, never `SIGINT`. With the embedded engine
+backup and restore are a file copy.
+
+Horizontal scaling arrives only after measured need; because the service holds
+signed objects rather than authoritative state, sharding by user is a routing
+change, not a consensus problem.
+
+## 24. Roadmap
+
+Delivered: protocol contract and cryptography; device linking and sealed keys;
+contacts and presence; encrypted collections, revisions, membership and
+revocation; swarm discovery; canonical manifest; authenticated QUIC endpoint;
+one Cargo workspace.
+
+| Stage | Contents | Gate |
+|---|---|---|
+| **V1 — verifiable core** | device log, signed revision chain, verification, fork detection, event bus, adversarial suite | every §22 attack detected with its §18 outcome |
+| **V2 — the service shrinks** | authority → storage and routing; the two engines behind one trait; mailbox delivery | two devices complete a share with **no service running** |
+| **V3 — bridge and app** | state stream with §18 tiers, commands replace polling, derived state out of Flutter, §19 structure | §21 budget measured and met |
+| **V4 — completeness** | fingerprint UI, device management, blocking, handle change, deletion, secure storage, one-way migration | no callable legacy path remains |
+| **V5 — hardening** | security, network-change, load, backup/restore, four-platform builds | first externally supported protocol pinned |
+
+## 25. Open decisions
+
+1. **Lost-device recovery.** With no account and no server authority, a person
+   whose only device is lost has no path back. Either a printable recovery key
+   that enrols a device into the log, or accept the loss and say so plainly.
+2. **Fork resolution.** A fork can be legitimate — an owner who lost a device
+   and republished. Currently surfaced, never automatic; may need an explicit
+   "I am the owner, this one wins".
+3. Media payload encryption (D13).
+4. Handle squatting policy on a public service.
+5. Retention of revisions and blobs nobody follows.
+
+## 26. Technology
+
+Tokio · QUIC with direct and relay paths · Prost and Buf · Ed25519 and X25519
+· BLAKE3 · ChaCha20-Poly1305 and HKDF from RustCrypto · embedded transactional
+store and MongoDB · sharded maps · deadline queues · UUIDv7 · `tracing`,
+Prometheus, OpenTelemetry · librqbit · flutter_rust_bridge · property tests,
+fuzzing, mutation tests, `cargo llvm-cov`.
+
+Libraries are preferred over hand-rolling anything a maintained one gets right
+(D14). The exception is a canonical encoding, where the format is the contract
+and a library's format is not ours to change (D10).
+
+## 27. References
 
 - [Protocol Buffers language guide](https://protobuf.dev/programming-guides/proto3/)
+- [Buf breaking-change detection](https://buf.build/docs/breaking/)
 - [Iroh documentation](https://docs.rs/iroh/)
-- [Tokio runtime documentation](https://docs.rs/tokio/latest/tokio/runtime/)
-- [Axum documentation](https://docs.rs/axum/latest/axum/)
-- [MongoDB Rust driver](https://www.mongodb.com/docs/drivers/rust/current/)
-- [MongoDB transactions](https://www.mongodb.com/docs/manual/core/transactions/)
+- [BEP 27: private torrents](https://www.bittorrent.org/beps/bep_0027.html)
+- [flutter_rust_bridge](https://cjycode.com/flutter_rust_bridge/)

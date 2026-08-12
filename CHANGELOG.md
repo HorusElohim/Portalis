@@ -25,6 +25,20 @@
   transactional snapshot history and compare-and-swap heads so revisions
   cannot regress. The portable client exposes the complete flow.
 
+- Rewrote the specification as Portalis v3. It described a control plane and
+  narrated how that plane was built; a quarter of it was milestone history
+  already recorded here. It now describes one product across four surfaces —
+  the Flutter interface, the bridge between it and the Rust core, the peer and
+  service protocol, and the service itself — and says what the system is
+  rather than how it arrived. Two boundaries that were never specified now
+  are: the application state contract, where the core owns the truth and the
+  interface renders a projection it derives nothing from, with payload tiered
+  by how often it changes and whether it is on screen; and the structure of
+  the Flutter application itself. Responsiveness became measurable product
+  requirements rather than an aspiration. The product version is v3 and the
+  wire protocol remains `portalis.protocol.v1`, which the document now states
+  outright because conflating them was itself a source of confusion.
+
 - Started Nexus M6 with the client-side foundation the Portalis app needs to
   publish a share: the canonical manifest, the `SnapshotId` taken over it, and
   the capsule that carries it. Both live in the portable client crate, so
