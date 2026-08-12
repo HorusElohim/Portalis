@@ -20,6 +20,9 @@ mod signing;
 mod validate;
 
 pub use format::aead::{AeadError, CONTENT_KEY_BYTES, ContentKey};
+pub use format::devicelog::{
+    Action, Device, DeviceLog, DeviceLogError, LOG_HASH_BYTES, LogEntry, LogHash, NO_PREVIOUS,
+};
 pub use format::entry::{
     ENTRY_PAYLOAD_VERSION, EntryContext, EntryError, open as open_entry, seal as seal_entry,
 };
