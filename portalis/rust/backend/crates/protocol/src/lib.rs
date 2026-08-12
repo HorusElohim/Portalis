@@ -55,7 +55,8 @@ pub use limits::{
 };
 pub use payload::payload_name;
 pub use sealing::{
-    EnvelopeContext, SealError, SealedEnvelope, is_contributory_x25519_public_key, open, seal,
+    EnvelopeContext, SealError, SealedEnvelope, is_contributory_x25519_public_key,
+    open as open_envelope, seal as seal_envelope,
 };
 pub use signing::{
     AUTHENTICATION_CONTEXT, LINK_DEVICE_CONTEXT, REGISTRATION_CONTEXT, SessionBinding,

@@ -232,7 +232,8 @@ async fn shares(
     let recipient_device_id: [u8; 32] = recipient.device_id.as_slice().try_into()?;
     let recipient_encryption_key: [u8; 32] =
         recipient.encryption_public_key.as_slice().try_into()?;
-    let sealed = portalis_nexus_protocol::seal(&recipient_encryption_key, &context, &share_key)?;
+    let sealed =
+        portalis_nexus_protocol::seal_envelope(&recipient_encryption_key, &context, &share_key)?;
     ada.put_key_envelope(
         &share_id,
         &recipient_device_id,
@@ -257,7 +258,7 @@ async fn shares(
         .envelopes
         .first()
         .ok_or("Grace should have exactly one envelope")?;
-    let recovered: [u8; CONTENT_KEY_BYTES] = portalis_nexus_protocol::open(
+    let recovered: [u8; CONTENT_KEY_BYTES] = portalis_nexus_protocol::open_envelope(
         &grace_device.encryption_secret(),
         &context,
         &portalis_nexus_protocol::SealedEnvelope {

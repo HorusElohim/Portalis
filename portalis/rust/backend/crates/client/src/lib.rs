@@ -13,12 +13,14 @@
 //! - [`config`]: tuning for one supervised connection.
 //! - [`endpoint`]: authenticated direct-or-relayed QUIC connections.
 //! - [`transport`]: the socket actor those rules drive.
+//! - [`keys`]: sealing a content key to the devices a verified log allows.
 //! - [`verify`]: whether a revision belongs after the one already held.
 
 mod candidates;
 mod config;
 mod endpoint;
 mod error;
+mod keys;
 mod pending;
 mod protocol;
 mod reconnect;
@@ -33,6 +35,10 @@ pub use error::ClientError;
 pub use iroh::RelayMode;
 pub use iroh::endpoint::{Connection, Incoming};
 pub use iroh::{NodeAddr as EndpointAddr, NodeId as EndpointId};
+pub use keys::{
+    KeyError, Recipient, SealedFor, Sealing, generate_content_key, open_content_key,
+    rotate_content_key, seal_content_key,
+};
 pub use pending::PendingRequests;
 pub use protocol::{
     ClientProtocol, KeyEnvelopePage, validate_authenticated, validate_device_linked,

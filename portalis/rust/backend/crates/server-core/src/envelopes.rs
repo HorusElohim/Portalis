@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::ports::{
     Clock, DeviceId, DeviceRecord, EncryptionKey, EnvelopeRepository, IdentityRepository,
-    KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId, ShareRepository, UserId,
+    KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId, ShareRepository,
 };
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -20,16 +20,13 @@ pub enum EnvelopeError {
     InvalidEphemeralKeyLength { actual: usize },
     #[error("ciphertext exceeds the {MAX_KEY_ENVELOPE_CIPHERTEXT_BYTES}-byte envelope limit")]
     CiphertextTooLarge { actual: usize },
-    #[error("that device is not authorized")]
+    /// The address does not name a device this service has ever enrolled.
+    /// Not an authorization rule — whether that device may hold this
+    /// collection's key is the owner's decision, made against a device log the
+    /// service does not have. This only keeps the envelope mailbox from being
+    /// a write-anything target for arbitrary 32-byte addresses.
+    #[error("that device is not enrolled")]
     UnknownRecipient,
-    #[error("that device does not belong to you")]
-    NotYourDevice,
-    #[error("only the share owner may distribute its key")]
-    NotShareOwner,
-    #[error("that device's user is not a member of the share")]
-    RecipientNotMember,
-    #[error("that device was revoked")]
-    RecipientRevoked,
     #[error(transparent)]
     Repository(#[from] RepositoryError),
 }
@@ -60,18 +57,23 @@ where
 
     /// Stores a sealed share key for one of `sender`'s own devices.
     ///
-    /// The recipient is re-read from storage rather than trusted from
-    /// whatever the sender last knew, so a device revoked after the sender
-    /// last checked still refuses a replacement envelope.
+    /// Who may receive a collection's key is not decided here. Under D2 and
+    /// D3 the owner seals only to devices a verified device log authorizes,
+    /// and the service holds neither that log nor the key — so a rule here
+    /// could only re-check something it cannot see, and would refuse
+    /// legitimate deliveries whenever its view lagged the owner's.
+    ///
+    /// What remains is bounds, and that the address names a device that
+    /// exists. An envelope is opaque and 4 KiB; without that check any
+    /// authenticated user could write to any 32-byte address.
     ///
     /// # Errors
     ///
     /// Returns [`EnvelopeError`] when the ephemeral key has the wrong length,
-    /// the recipient device is unknown, belongs to a different user, has
-    /// been revoked, or storage fails.
+    /// the ciphertext exceeds its bound, the recipient device is not enrolled,
+    /// or storage fails.
     pub async fn put_key_envelope(
         &self,
-        sender: UserId,
         request: PutKeyEnvelopeRequest<'_>,
     ) -> Result<(), EnvelopeError> {
         let ephemeral_public_key =
@@ -86,31 +88,13 @@ where
             });
         }
 
-        let recipient = self
+        if self
             .store
             .find_device(request.recipient_device_id)
             .await?
-            .ok_or(EnvelopeError::UnknownRecipient)?;
-        if recipient.is_revoked() {
-            return Err(EnvelopeError::RecipientRevoked);
-        }
-
-        // Before M4 creates the share record, preserve M2.5's linked-device
-        // delivery. Once the share exists, its owner may distribute the key
-        // to any authorized member device, and nobody else may rotate it.
-        if let Some(share) = self.store.find_share(request.share_id).await? {
-            if share.owner != sender {
-                return Err(EnvelopeError::NotShareOwner);
-            }
-            if !self
-                .store
-                .has_share_access(request.share_id, recipient.user_id)
-                .await?
-            {
-                return Err(EnvelopeError::RecipientNotMember);
-            }
-        } else if recipient.user_id != sender {
-            return Err(EnvelopeError::NotYourDevice);
+            .is_none()
+        {
+            return Err(EnvelopeError::UnknownRecipient);
         }
 
         self.store
@@ -146,6 +130,7 @@ where
 mod tests {
     use super::*;
     use crate::memory::{FixedClock, InMemoryIdentities};
+    use crate::ports::UserId;
     use crate::ports::{DeviceRecord, IdentityRepository, UserDirectory, UserRecord};
 
     const NOW: u64 = 1_700_000_000_000_000_000;
@@ -196,7 +181,7 @@ mod tests {
             .expect("enrolled");
 
         service
-            .put_key_envelope(SENDER, request(b"sealed"))
+            .put_key_envelope(request(b"sealed"))
             .await
             .expect("stored");
 
@@ -250,16 +235,11 @@ mod tests {
             .await
             .expect("share");
 
-        assert_eq!(
-            service.put_key_envelope(SENDER, request(b"sealed")).await,
-            Err(EnvelopeError::RecipientNotMember)
-        );
-        assert_eq!(
-            service
-                .put_key_envelope(OTHER_USER, request(b"sealed"))
-                .await,
-            Err(EnvelopeError::NotShareOwner)
-        );
+        // Neither membership nor ownership is checked here any more: both are
+        // decided by the owner against a device log, and re-checking a stale
+        // copy would only refuse deliveries that are in fact correct.
+        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
+        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
         service
             .store
             .grant_share_access(crate::ShareMembershipRecord {
@@ -270,7 +250,7 @@ mod tests {
             .await
             .expect("member");
         service
-            .put_key_envelope(SENDER, request(b"sealed"))
+            .put_key_envelope(request(b"sealed"))
             .await
             .expect("authorized delivery");
     }
@@ -301,7 +281,7 @@ mod tests {
         service.store.set_unavailable(true);
 
         assert_eq!(
-            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            service.put_key_envelope(request(b"sealed")).await,
             outage("the store is switched off")
         );
         assert_eq!(
@@ -588,7 +568,7 @@ mod tests {
         let service = EnvelopeService::new(store, FixedClock::new(NOW));
 
         assert_eq!(
-            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            service.put_key_envelope(request(b"sealed")).await,
             outage("put"),
             "the write failed after its checks passed"
         );
@@ -603,27 +583,33 @@ mod tests {
             .expect("enrolled");
 
         assert_eq!(
-            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            service.put_key_envelope(request(b"sealed")).await,
             Err(EnvelopeError::UnknownRecipient)
         );
     }
 
+    /// Pushing to another user's device is no longer the service's refusal.
+    /// A key envelope is sealed to a device's X25519 key, so one addressed to
+    /// a device the sender should not have is unopenable noise; and refusing
+    /// it here would break the legitimate case, which is exactly delivering to
+    /// someone else's device.
     #[tokio::test]
-    async fn pushing_to_someone_elses_device_is_refused() {
+    async fn an_envelope_may_be_addressed_to_another_users_device() {
         let service = service();
         service
             .store
             .enrol_device(device(RECIPIENT_DEVICE, OTHER_USER))
             .expect("enrolled");
 
-        assert_eq!(
-            service.put_key_envelope(SENDER, request(b"sealed")).await,
-            Err(EnvelopeError::NotYourDevice)
-        );
+        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
     }
 
+    /// A revoked device is refused by the owner, who replays a device log
+    /// before sealing and never produces an envelope for it. The service
+    /// cannot make that judgement — its view of a revocation may lag the
+    /// owner's either way — so it stores what it is given.
     #[tokio::test]
-    async fn a_revoked_recipient_cannot_receive_a_replacement_envelope() {
+    async fn a_revoked_recipient_is_the_owners_judgement_not_the_services() {
         let service = service();
         service
             .store
@@ -635,10 +621,7 @@ mod tests {
             .await
             .expect("revoked");
 
-        assert_eq!(
-            service.put_key_envelope(SENDER, request(b"sealed")).await,
-            Err(EnvelopeError::RecipientRevoked)
-        );
+        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
     }
 
     #[tokio::test]
@@ -651,15 +634,12 @@ mod tests {
 
         assert_eq!(
             service
-                .put_key_envelope(
-                    SENDER,
-                    PutKeyEnvelopeRequest {
-                        share_id: SHARE,
-                        recipient_device_id: RECIPIENT_DEVICE,
-                        ephemeral_public_key: &[0; 10],
-                        ciphertext: b"sealed",
-                    },
-                )
+                .put_key_envelope(PutKeyEnvelopeRequest {
+                    share_id: SHARE,
+                    recipient_device_id: RECIPIENT_DEVICE,
+                    ephemeral_public_key: &[0; 10],
+                    ciphertext: b"sealed",
+                },)
                 .await,
             Err(EnvelopeError::InvalidEphemeralKeyLength { actual: 10 })
         );
@@ -674,11 +654,11 @@ mod tests {
             .expect("enrolled");
 
         service
-            .put_key_envelope(SENDER, request(b"first"))
+            .put_key_envelope(request(b"first"))
             .await
             .expect("stored");
         service
-            .put_key_envelope(SENDER, request(b"second"))
+            .put_key_envelope(request(b"second"))
             .await
             .expect("stored");
 
@@ -718,7 +698,7 @@ mod tests {
         let ciphertext = vec![0; MAX_KEY_ENVELOPE_CIPHERTEXT_BYTES + 1];
 
         assert_eq!(
-            service.put_key_envelope(SENDER, request(&ciphertext)).await,
+            service.put_key_envelope(request(&ciphertext)).await,
             Err(EnvelopeError::CiphertextTooLarge {
                 actual: ciphertext.len(),
             })

@@ -4,7 +4,8 @@ use portalis_nexus_client::{ClientError, DeviceSigner, NexusClient, TransportErr
 use portalis_nexus_protocol::v1::ProtocolErrorCode;
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::{
-    EnvelopeContext, SIGNATURE_BYTES, SealedEnvelope, derive_device_id, open, seal,
+    EnvelopeContext, SIGNATURE_BYTES, SealedEnvelope, derive_device_id, open_envelope,
+    seal_envelope,
 };
 
 mod common;
@@ -94,7 +95,7 @@ async fn only_an_authorized_user_discovers_the_latest_encrypted_snapshot() {
         share_id: SHARE,
         recipient_device_id: member_device_id,
     };
-    let sealed = seal(
+    let sealed = seal_envelope(
         &member_device.encryption_public_key(),
         &context,
         b"share secret",
@@ -200,7 +201,7 @@ async fn expect_member_to_open_its_share_key(
         .next()
         .expect("one envelope");
 
-    let key = open(
+    let key = open_envelope(
         &member_device.encryption_secret_key(),
         context,
         &SealedEnvelope {

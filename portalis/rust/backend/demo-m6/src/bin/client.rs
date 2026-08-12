@@ -150,8 +150,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         share_id,
         recipient_device_id,
     };
-    let sealed_key =
-        portalis_nexus_protocol::seal(&recipient_public_key, &envelope_context, &share_key)?;
+    let sealed_key = portalis_nexus_protocol::seal_envelope(
+        &recipient_public_key,
+        &envelope_context,
+        &share_key,
+    )?;
     alice
         .put_key_envelope(
             &share_id,
@@ -172,7 +175,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .find(|envelope| envelope.share_id == share_id)
         .ok_or("Bob did not receive the share-key envelope")?;
-    let recovered_key: [u8; CONTENT_KEY_BYTES] = portalis_nexus_protocol::open(
+    let recovered_key: [u8; CONTENT_KEY_BYTES] = portalis_nexus_protocol::open_envelope(
         &bob_device.encryption_secret(),
         &envelope_context,
         &SealedEnvelope {
