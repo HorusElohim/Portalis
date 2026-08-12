@@ -22,4 +22,14 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features "$@"
 ./scripts/coverage.sh
+
+# The demo set is the executable changelog, and it doubles as the acceptance
+# suite: each binary asserts what its step delivered against production
+# components, so a format or a rule that regresses fails here too. Only the
+# numbered set runs — those are headless and self-checking by construction.
+for source in demo/src/bin/[0-9]*.rs; do
+  name="$(basename "$source" .rs)"
+  echo "[demo] $name"
+  cargo run --quiet -p portalis-nexus-demo --bin "$name"
+done
 cargo build --locked --release -p portalis-nexus-server

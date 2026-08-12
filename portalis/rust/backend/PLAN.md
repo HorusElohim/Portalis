@@ -38,7 +38,15 @@ demo/src/bin/
 ...
 ```
 
-Run one with `cargo run -p demo --bin 02-device-log`. Run them all in CI.
+Run one with `cargo run -p portalis-nexus-demo --bin 02-device-log`. CI runs
+the whole numbered set.
+
+Every demo is headless and runs against production components — the real
+client, the real service, the real formats. No test doubles, no fixtures
+standing in for a subsystem, nothing that exists only for the demo to pass. A
+demo that needs a stub is describing a step that is not finished. This is what
+makes the set an acceptance suite for everything except the UI, and it is why
+a demo failing is a release blocker rather than a broken example.
 
 They accumulate rather than being replaced, which makes them an executable
 changelog and a regression net: if step 7 breaks step 2's demo, that is a real
