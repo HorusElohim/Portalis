@@ -91,6 +91,9 @@ impl RandomSource for ScriptedRandom {
 pub struct InMemoryIdentities {
     stored: Mutex<Stored>,
     unavailable: std::sync::atomic::AtomicBool,
+    /// A narrower outage than [`Self::set_unavailable`], for reaching the
+    /// paths that only run once an earlier read has already succeeded.
+    devices_unavailable: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -166,6 +169,16 @@ impl InMemoryIdentities {
     /// store is down. Off by default.
     pub fn set_unavailable(&self, unavailable: bool) {
         self.unavailable
+            .store(unavailable, std::sync::atomic::Ordering::Release);
+    }
+
+    /// Fails only the device listing, leaving every other read working.
+    ///
+    /// A caller that reads twice — authorize, then list the member's devices
+    /// — cannot reach its second failure path while the whole store is down,
+    /// because the first read fails first.
+    pub fn set_devices_unavailable(&self, unavailable: bool) {
+        self.devices_unavailable
             .store(unavailable, std::sync::atomic::Ordering::Release);
     }
 
@@ -257,7 +270,13 @@ impl IdentityRepository for InMemoryIdentities {
         &self,
         user: UserId,
     ) -> impl std::future::Future<Output = Result<Vec<DeviceRecord>, RepositoryError>> + Send {
-        let outage = self.outage();
+        let outage = self.outage().or_else(|| {
+            self.devices_unavailable
+                .load(std::sync::atomic::Ordering::Acquire)
+                .then(|| {
+                    RepositoryError::Unavailable("the device listing is switched off".to_owned())
+                })
+        });
         let mut found: Vec<_> = self
             .lock()
             .devices

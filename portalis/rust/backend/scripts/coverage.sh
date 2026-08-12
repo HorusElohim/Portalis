@@ -55,16 +55,31 @@ ignore='apps/server/src/(main|socket)\.rs|apps/server/src/mongo/mod\.rs|crates/c
 lcov="$(mktemp -t nexus-coverage)"
 trap 'rm -f "$lcov"' EXIT
 
+# `--all-features` turns on the application's `local-integration` feature,
+# whose one test drives two real app processes over local ports. That test is
+# worth running deliberately and is a poor gate: it depends on ports, timing
+# and process startup, and it measures none of the code under the policy. Skip
+# it by name rather than dropping `--all-features`, so every other
+# feature-gated path stays measured.
+# One invocation measures and gates. A second `cargo llvm-cov report` reading
+# the same profile prints an empty table, so the numbers come from the run
+# that gated them or not at all — a coverage table that disagrees with the
+# gate is worse than no table.
+#
+# `clean` first, so a run answers only for the tests it just executed. Without
+# it a file can keep the coverage of a test that has since been removed.
+cargo llvm-cov clean --workspace
 cargo llvm-cov \
   --workspace \
   --all-features \
   --ignore-filename-regex "$ignore" \
-  --lcov --output-path "$lcov" \
+  --summary-only \
   --fail-under-functions 100 \
-  --fail-under-regions 99
+  --fail-under-regions 99 \
+  -- --skip two_instances_sync
 
-# Report the same table the percentages come from, from the run just measured.
-cargo llvm-cov report --ignore-filename-regex "$ignore"
+# The per-line truth the percentages above cannot show, from the same profile.
+cargo llvm-cov report --ignore-filename-regex "$ignore" --lcov --output-path "$lcov"
 
 if grep -q '^DA:[0-9]*,0$' "$lcov"; then
   echo >&2

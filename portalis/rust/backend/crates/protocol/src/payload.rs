@@ -56,13 +56,171 @@ pub const fn payload_name(payload: Option<&Payload>) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::Ping;
+    use crate::v1;
 
+    /// Every variant, because the point of this mapping is that a payload
+    /// added later cannot slip through unnamed into a trace.
     #[test]
-    fn names_payloads_without_exposing_their_fields() {
-        let payload = Payload::Ping(Ping { nonce: 42 });
+    #[expect(clippy::too_many_lines, reason = "one line per payload, by design")]
+    fn names_every_payload_without_exposing_their_fields() {
+        let cases: &[(Payload, &str)] = &[
+            (
+                Payload::ServerHello(v1::ServerHello::default()),
+                "server_hello",
+            ),
+            (
+                Payload::RegisterUser(v1::RegisterUser::default()),
+                "register_user",
+            ),
+            (
+                Payload::AuthenticateDevice(v1::AuthenticateDevice::default()),
+                "authenticate_device",
+            ),
+            (
+                Payload::Authenticated(v1::Authenticated::default()),
+                "authenticated",
+            ),
+            (Payload::Ping(v1::Ping::default()), "ping"),
+            (Payload::Pong(v1::Pong::default()), "pong"),
+            (Payload::Ack(v1::Ack::default()), "ack"),
+            (
+                Payload::ProtocolError(v1::ProtocolError::default()),
+                "protocol_error",
+            ),
+            (
+                Payload::LinkDevice(v1::LinkDevice::default()),
+                "link_device",
+            ),
+            (
+                Payload::DeviceLinked(v1::DeviceLinked::default()),
+                "device_linked",
+            ),
+            (
+                Payload::ResolveHandleRequest(v1::ResolveHandleRequest::default()),
+                "resolve_handle",
+            ),
+            (
+                Payload::ResolveHandleResponse(v1::ResolveHandleResponse::default()),
+                "handle_resolved",
+            ),
+            (
+                Payload::FriendCommand(v1::FriendCommand::default()),
+                "friend_command",
+            ),
+            (
+                Payload::FriendEvent(v1::FriendEvent::default()),
+                "friend_event",
+            ),
+            (
+                Payload::ListFriendsRequest(v1::ListFriendsRequest::default()),
+                "list_friends",
+            ),
+            (
+                Payload::ListFriendsResponse(v1::ListFriendsResponse::default()),
+                "friends_listed",
+            ),
+            (
+                Payload::PresenceEvent(v1::PresenceEvent::default()),
+                "presence_event",
+            ),
+            (
+                Payload::PutKeyEnvelope(v1::PutKeyEnvelope::default()),
+                "put_key_envelope",
+            ),
+            (
+                Payload::KeyEnvelopePut(v1::KeyEnvelopePut::default()),
+                "key_envelope_put",
+            ),
+            (
+                Payload::ListKeyEnvelopesRequest(v1::ListKeyEnvelopesRequest::default()),
+                "list_key_envelopes",
+            ),
+            (
+                Payload::ListKeyEnvelopesResponse(v1::ListKeyEnvelopesResponse::default()),
+                "key_envelopes_listed",
+            ),
+            (
+                Payload::RevokeShareAccess(v1::RevokeShareAccess::default()),
+                "revoke_share_access",
+            ),
+            (
+                Payload::ShareAccessRevoked(v1::ShareAccessRevoked::default()),
+                "share_access_revoked",
+            ),
+            (
+                Payload::PublishShare(v1::PublishShare::default()),
+                "publish_share",
+            ),
+            (
+                Payload::SharePublished(v1::SharePublished::default()),
+                "share_published",
+            ),
+            (
+                Payload::ListSharesRequest(v1::ListSharesRequest::default()),
+                "list_shares",
+            ),
+            (
+                Payload::ListSharesResponse(v1::ListSharesResponse::default()),
+                "shares_listed",
+            ),
+            (
+                Payload::FetchShareRequest(v1::FetchShareRequest::default()),
+                "fetch_share",
+            ),
+            (
+                Payload::FetchShareResponse(v1::FetchShareResponse::default()),
+                "share_fetched",
+            ),
+            (
+                Payload::GrantShareAccess(v1::GrantShareAccess::default()),
+                "grant_share_access",
+            ),
+            (
+                Payload::ShareAccessGranted(v1::ShareAccessGranted::default()),
+                "share_access_granted",
+            ),
+            (
+                Payload::ShareEvent(v1::ShareEvent::default()),
+                "share_event",
+            ),
+            (
+                Payload::ShareHandoff(v1::ShareHandoff::default()),
+                "share_handoff",
+            ),
+            (
+                Payload::AnnouncePeer(v1::AnnouncePeer::default()),
+                "announce_peer",
+            ),
+            (
+                Payload::PeerAnnounced(v1::PeerAnnounced::default()),
+                "peer_announced",
+            ),
+            (
+                Payload::LookupPeersRequest(v1::LookupPeersRequest::default()),
+                "lookup_peers",
+            ),
+            (
+                Payload::LookupPeersResponse(v1::LookupPeersResponse::default()),
+                "peers_found",
+            ),
+            (
+                Payload::WithdrawPeer(v1::WithdrawPeer::default()),
+                "withdraw_peer",
+            ),
+            (
+                Payload::PeerWithdrawn(v1::PeerWithdrawn::default()),
+                "peer_withdrawn",
+            ),
+        ];
 
-        assert_eq!(payload_name(Some(&payload)), "ping");
+        for (payload, expected) in cases {
+            assert_eq!(payload_name(Some(payload)), *expected);
+        }
         assert_eq!(payload_name(None), "missing");
+        assert_eq!(
+            cases.len(),
+            39,
+            "a new payload needs a name and a case here"
+        );
     }
 }

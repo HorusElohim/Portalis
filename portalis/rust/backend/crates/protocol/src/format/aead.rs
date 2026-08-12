@@ -72,17 +72,22 @@ pub fn derived_nonce(domain: &[u8], parts: &[&[u8]]) -> [u8; NONCE_BYTES] {
 
 /// Seals `plaintext`, authenticating `aad` alongside it.
 ///
-/// # Errors
+/// Infallible by construction. `ChaCha20-Poly1305` refuses only a plaintext
+/// near 256 GiB, and every caller bounds its input far below that, so an
+/// error case here would be one no caller could act on and no test could
+/// reach.
 ///
-/// Returns [`AeadError::Rejected`] only for a plaintext far larger than
-/// anything this protocol carries; the limit is the caller's to enforce.
+/// # Panics
+///
+/// Only if that bound is ever removed and a caller seals something absurd.
+#[must_use]
 pub fn seal(
     key: &ContentKey,
     version: u8,
     nonce: [u8; NONCE_BYTES],
     aad: &[u8],
     plaintext: &[u8],
-) -> Result<Vec<u8>, AeadError> {
+) -> Vec<u8> {
     let ciphertext = ChaCha20Poly1305::new(&Key::from(*key))
         .encrypt(
             &Nonce::from(nonce),
@@ -91,13 +96,13 @@ pub fn seal(
                 aad,
             },
         )
-        .map_err(|_| AeadError::Rejected)?;
+        .expect("callers bound plaintext far below the cipher's limit");
 
     let mut sealed = Vec::with_capacity(1 + NONCE_BYTES + ciphertext.len());
     sealed.push(version);
     sealed.extend_from_slice(&nonce);
     sealed.extend_from_slice(&ciphertext);
-    Ok(sealed)
+    sealed
 }
 
 /// Opens a sealed value, accepting whatever nonce it carries.
@@ -177,7 +182,7 @@ mod tests {
 
     #[test]
     fn a_value_round_trips_under_its_own_key_and_context() {
-        let sealed = seal(&KEY, VERSION, random_nonce(), b"aad", b"hello").expect("sealed");
+        let sealed = seal(&KEY, VERSION, random_nonce(), b"aad", b"hello");
 
         assert_eq!(sealed[0], VERSION);
         assert_eq!(
@@ -210,7 +215,7 @@ mod tests {
     #[test]
     fn a_derived_open_refuses_a_nonce_it_did_not_expect() {
         let expected = derived_nonce(b"domain", &[b"one"]);
-        let sealed = seal(&KEY, VERSION, expected, b"aad", b"hello").expect("sealed");
+        let sealed = seal(&KEY, VERSION, expected, b"aad", b"hello");
 
         assert_eq!(
             open_derived(&KEY, VERSION, expected, b"aad", &sealed).expect("opened"),
@@ -231,7 +236,7 @@ mod tests {
 
     #[test]
     fn truncated_tampered_and_unknown_versions_are_refused() {
-        let sealed = seal(&KEY, VERSION, random_nonce(), b"aad", b"hello").expect("sealed");
+        let sealed = seal(&KEY, VERSION, random_nonce(), b"aad", b"hello");
 
         assert_eq!(
             open(&KEY, VERSION, b"aad", &[]),
@@ -264,7 +269,7 @@ mod tests {
     /// to make, not this layer's.
     #[test]
     fn an_empty_plaintext_is_this_layers_business_to_carry_not_to_judge() {
-        let sealed = seal(&KEY, VERSION, random_nonce(), b"", b"").expect("sealed");
+        let sealed = seal(&KEY, VERSION, random_nonce(), b"", b"");
 
         assert_eq!(sealed.len(), OVERHEAD_BYTES);
         assert_eq!(open(&KEY, VERSION, b"", &sealed).expect("opened"), b"");

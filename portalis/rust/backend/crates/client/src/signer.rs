@@ -56,5 +56,11 @@ mod tests {
         let signer = FixedSigner;
 
         assert_eq!(signer.device_id(), derive_device_id(&signer.public_key()));
+        assert_ne!(
+            signer.encryption_public_key().as_slice(),
+            signer.public_key().as_slice(),
+            "the two keys are independent, on different curves"
+        );
+        assert_eq!(signer.sign(b"payload").len(), SIGNATURE_BYTES);
     }
 }

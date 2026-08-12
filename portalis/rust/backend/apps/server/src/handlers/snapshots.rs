@@ -704,15 +704,10 @@ mod tests {
             NOW,
         )
         .await;
-        let Some(Payload::ShareAccessGranted(granted)) = granted.payload else {
-            panic!("grant should return recipient devices");
-        };
-        assert_eq!(granted.recipient_devices.len(), 1);
-        assert_eq!(granted.recipient_devices[0].device_id, vec![2; 32]);
-        assert_eq!(
-            granted.recipient_devices[0].encryption_public_key,
-            vec![2; 32]
-        );
+        let devices = granted_devices(&granted).expect("a grant names the devices");
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].device_id, vec![2; 32]);
+        assert_eq!(devices[0].encryption_public_key, vec![2; 32]);
 
         let allowed = fetch(
             &stranger,
@@ -1180,6 +1175,99 @@ mod tests {
             ),
             None,
             "a fetch answers with a fetch, not a publication"
+        );
+    }
+
+    /// The devices a grant named, or `None` when it did not grant anything.
+    fn granted_devices(reply: &Envelope) -> Option<&Vec<ShareRecipientDevice>> {
+        match reply.payload.as_ref() {
+            Some(Payload::ShareAccessGranted(granted)) => Some(&granted.recipient_devices),
+            _ => None,
+        }
+    }
+
+    /// A grant that authorizes but cannot then read the member's devices is
+    /// an outage rather than a refusal: the owner retries instead of
+    /// concluding the member has none.
+    #[tokio::test]
+    async fn a_grant_that_cannot_read_the_members_devices_reports_an_outage() {
+        let state = AppState::default();
+        let owner = signed_in(&state, ADA, 1).await;
+        let _member = signed_in(&state, GRACE, 2).await;
+        publish(&owner, &state, &request(), &publication(1, b"c"), NOW).await;
+
+        state.store().set_devices_unavailable(true);
+        let reply = grant(
+            &owner,
+            &state,
+            &request(),
+            &GrantShareAccess {
+                share_id: SHARE.to_vec(),
+                member_user_id: GRACE.to_vec(),
+            },
+            NOW,
+        )
+        .await;
+
+        assert_eq!(
+            refusal(&reply).expect("a refusal"),
+            (
+                ProtocolErrorCode::Internal,
+                "the identity store is unavailable".to_owned()
+            )
+        );
+        assert!(
+            granted_devices(&reply).is_none(),
+            "a refused grant names no devices"
+        );
+    }
+
+    /// A member who is simply not connected is a different answer from one
+    /// who may not read the share: the sender should retry, not give up.
+    #[tokio::test]
+    async fn a_handoff_to_an_offline_member_reports_it_as_unavailable() {
+        let state = AppState::default();
+        let owner = signed_in(&state, ADA, 1).await;
+        let member = signed_in(&state, GRACE, 2).await;
+        publish(&owner, &state, &request(), &publication(1, b"c"), NOW).await;
+        grant(
+            &owner,
+            &state,
+            &request(),
+            &GrantShareAccess {
+                share_id: SHARE.to_vec(),
+                member_user_id: GRACE.to_vec(),
+            },
+            NOW,
+        )
+        .await;
+
+        // Authorized, enrolled, and holding no live connection.
+        let reply = handoff(
+            &owner,
+            &state,
+            &request(),
+            &ShareHandoff {
+                share_id: SHARE.to_vec(),
+                recipient_device_id: member
+                    .identity()
+                    .expect("signed in")
+                    .device
+                    .device_id
+                    .to_vec(),
+                ciphertext: b"magnet".to_vec(),
+                info_hash: vec![7; 20],
+            },
+            NOW,
+        )
+        .await;
+
+        assert_eq!(
+            refusal(&reply).expect("a refusal"),
+            (
+                ProtocolErrorCode::Unavailable,
+                "the recipient device is offline".to_owned()
+            )
         );
     }
 

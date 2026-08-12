@@ -77,7 +77,7 @@ pub fn seal(
         aead::random_nonce(),
         &context.associated_data(),
         plaintext,
-    )?)
+    ))
 }
 
 /// Opens an entry payload and returns the descriptor inside it.
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn sealing_twice_differs_and_both_open() {
         let first = seal(&KEY, &context(), TORRENT).expect("sealed");
-        let second = seal(&KEY, &context(), TORRENT).expect("sealed again");
+        let second = seal(&KEY, &context(), TORRENT).expect("sealed");
 
         assert_ne!(first, second);
         assert_eq!(open(&KEY, &context(), &first).expect("opened"), TORRENT);

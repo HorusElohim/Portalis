@@ -387,6 +387,31 @@ mod tests {
         );
     }
 
+    /// A key that is not a curve point verifies nothing, and says so rather
+    /// than panicking on the way.
+    #[test]
+    fn an_entry_with_an_unusable_author_key_does_not_verify() {
+        // Found rather than guessed: not every byte pattern is off the
+        // curve, and a hard-coded one that happens to decompress would test
+        // the signature check instead of the key check.
+        let off_curve = (2_u8..=u8::MAX)
+            .map(|byte| [byte; DEVICE_KEY_BYTES])
+            .find(|bytes| VerifyingKey::from_bytes(bytes).is_err())
+            .expect("some byte pattern is not a curve point");
+        let unusable = ManifestEntry {
+            author_public_key: off_curve,
+            ..entry(1, "one")
+        };
+
+        assert!(!unusable.verify());
+        assert_eq!(
+            Manifest::new(vec![unusable]),
+            Err(ManifestError::InvalidSignature {
+                info_hash: [1; INFO_HASH_BYTES]
+            })
+        );
+    }
+
     #[test]
     fn a_manifest_refuses_what_it_cannot_encode() {
         assert_eq!(

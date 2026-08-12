@@ -68,10 +68,8 @@ impl NexusEndpoint {
     /// Current direct and relay addressing information to publish for peers.
     #[must_use]
     pub fn addr(&self) -> EndpointAddr {
-        self.inner
-            .node_addr()
-            .get()
-            .unwrap_or_else(|| EndpointAddr::new(self.id()))
+        let unaddressed = EndpointAddr::new(self.id());
+        self.inner.node_addr().get().unwrap_or(unaddressed)
     }
 
     /// Connects to a known application peer and returns its raw QUIC connection.
@@ -96,16 +94,12 @@ impl NexusEndpoint {
     /// Reports transport truth without turning it into application state.
     #[must_use]
     pub fn path_to(&self, remote: EndpointId) -> ConnectionPath {
-        match self
-            .inner
-            .conn_type(remote)
-            .map(|mut watcher| watcher.get())
-        {
-            Some(ConnectionType::Direct(_)) => ConnectionPath::Direct,
-            Some(ConnectionType::Relay(_)) => ConnectionPath::Relay,
-            Some(ConnectionType::Mixed(_, _)) => ConnectionPath::Mixed,
-            Some(ConnectionType::None) | None => ConnectionPath::Unavailable,
-        }
+        path_of(
+            self.inner
+                .conn_type(remote)
+                .map(|mut watcher| watcher.get())
+                .as_ref(),
+        )
     }
 
     /// Notifies the endpoint after an OS network transition.
@@ -119,6 +113,16 @@ impl NexusEndpoint {
     }
 }
 
+/// Translates the transport's view of a connection into ours.
+fn path_of(conn_type: Option<&ConnectionType>) -> ConnectionPath {
+    match conn_type {
+        Some(ConnectionType::Direct(_)) => ConnectionPath::Direct,
+        Some(ConnectionType::Relay(_)) => ConnectionPath::Relay,
+        Some(ConnectionType::Mixed(_, _)) => ConnectionPath::Mixed,
+        Some(ConnectionType::None) | None => ConnectionPath::Unavailable,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::{IpAddr, Ipv4Addr};
@@ -126,6 +130,35 @@ mod tests {
     use ed25519_dalek::SigningKey;
 
     use super::*;
+
+    /// Every mapping, including the two that need a relay server to arise in
+    /// the wild — which is why the translation is a function rather than a
+    /// match buried in a method that cannot be called without a network.
+    #[test]
+    fn a_connection_type_maps_onto_the_path_we_report() {
+        use std::net::{Ipv4Addr, SocketAddr};
+
+        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1);
+        let relay: iroh::RelayUrl = "https://relay.invalid".parse().expect("a relay url");
+
+        assert_eq!(
+            path_of(Some(&ConnectionType::Direct(socket))),
+            ConnectionPath::Direct
+        );
+        assert_eq!(
+            path_of(Some(&ConnectionType::Relay(relay.clone()))),
+            ConnectionPath::Relay
+        );
+        assert_eq!(
+            path_of(Some(&ConnectionType::Mixed(socket, relay))),
+            ConnectionPath::Mixed
+        );
+        assert_eq!(
+            path_of(Some(&ConnectionType::None)),
+            ConnectionPath::Unavailable
+        );
+        assert_eq!(path_of(None), ConnectionPath::Unavailable);
+    }
 
     #[tokio::test]
     async fn reuses_the_existing_device_identity() {
@@ -192,9 +225,26 @@ mod tests {
             b"raw bytes"
         );
         assert_eq!(client.path_to(server.id()), ConnectionPath::Direct);
+        assert_eq!(client.addr().node_id, client.id());
+        // A peer it has never met has no path, and an OS network change is
+        // something the endpoint absorbs rather than reports on.
+        assert_eq!(
+            client.path_to(
+                NexusEndpoint::bind([3; 32], Vec::new(), RelayMode::Disabled)
+                    .await
+                    .expect("bind a stranger")
+                    .id()
+            ),
+            ConnectionPath::Unavailable
+        );
+        client.network_change().await;
 
         let _server_connection = accepting.await.expect("server task");
         client.close().await;
         server.close().await;
+
+        // A closed endpoint has no addresses left to publish, and still knows
+        // who it is.
+        assert_eq!(client.addr().node_id, client.id());
     }
 }

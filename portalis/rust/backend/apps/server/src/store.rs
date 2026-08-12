@@ -43,6 +43,14 @@ impl NexusStore {
         }
     }
 
+    /// Fails only the device listing on an in-memory store, for reaching a
+    /// caller's second failure path once its first read has succeeded.
+    pub fn set_devices_unavailable(&self, unavailable: bool) {
+        if let Self::Memory(memory) = self {
+            memory.set_devices_unavailable(unavailable);
+        }
+    }
+
     /// Names the backend, for logs and readiness reporting.
     #[must_use]
     pub fn kind(&self) -> &'static str {
@@ -377,6 +385,7 @@ mod tests {
             &store.insert_registration(user(), device()).await
         ));
         assert!(unavailable(&store.find_device([1; 32]).await));
+        assert!(unavailable(&store.list_devices(ADA).await));
         assert!(unavailable(&store.link_device(device()).await));
         assert!(unavailable(&store.touch_device([1; 32], 1).await));
         assert!(unavailable(&store.revoke_device([1; 32], 1).await));

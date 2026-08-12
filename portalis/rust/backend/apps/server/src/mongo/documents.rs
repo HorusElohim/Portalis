@@ -311,40 +311,36 @@ mod tests {
     const WRONG_LENGTH: &[u8] = &[0, 0, 0];
 
     fn valid_user() -> UserDocument {
-        UserDocument {
-            user_id: binary(&USER_ID),
+        UserDocument::from_record(&UserRecord {
+            user_id: USER_ID,
             username: "Ada".to_owned(),
             normalized_username: "ada".to_owned(),
             discriminator: "7Q2XZ".to_owned(),
             created_at_unix_ns: 0,
-            schema_version: SCHEMA_VERSION,
-        }
+        })
     }
 
     fn valid_device() -> DeviceDocument {
-        DeviceDocument {
-            device_id: binary(&DEVICE_ID),
-            user_id: binary(&USER_ID),
-            public_key: binary(&PUBLIC_KEY),
-            encryption_public_key: binary(&ENCRYPTION_PUBLIC_KEY),
+        DeviceDocument::from_record(&DeviceRecord {
+            device_id: DEVICE_ID,
+            user_id: USER_ID,
+            public_key: PUBLIC_KEY,
+            encryption_public_key: ENCRYPTION_PUBLIC_KEY,
             created_at_unix_ns: 0,
             last_authenticated_at_unix_ns: None,
             revoked_at_unix_ns: None,
-            schema_version: SCHEMA_VERSION,
-        }
+        })
     }
 
     fn valid_friendship() -> FriendshipDocument {
-        FriendshipDocument {
-            user_low: binary(&USER_ID),
-            user_high: binary(&OTHER_USER_ID),
-            requested_by: binary(&USER_ID),
-            state: FriendshipState::Pending as i32,
+        FriendshipDocument::from_record(&FriendshipRecord {
+            edge: FriendshipEdge::between(USER_ID, OTHER_USER_ID).expect("distinct users"),
+            requested_by: USER_ID,
+            state: FriendshipState::Pending,
             version: 1,
             created_at_unix_ns: 0,
             updated_at_unix_ns: 0,
-            schema_version: SCHEMA_VERSION,
-        }
+        })
     }
 
     #[test]
@@ -455,16 +451,16 @@ mod tests {
     }
 
     const SHARE_ID: [u8; 16] = [6; 16];
+    const SNAPSHOT_ID: [u8; 32] = [7; 32];
 
     fn valid_key_envelope() -> KeyEnvelopeDocument {
-        KeyEnvelopeDocument {
-            share_id: binary(&SHARE_ID),
-            recipient_device_id: binary(&DEVICE_ID),
-            ephemeral_public_key: binary(&ENCRYPTION_PUBLIC_KEY),
-            ciphertext: binary(b"sealed"),
+        KeyEnvelopeDocument::from_record(&KeyEnvelopeRecord {
+            share_id: SHARE_ID,
+            recipient_device_id: DEVICE_ID,
+            ephemeral_public_key: ENCRYPTION_PUBLIC_KEY,
+            ciphertext: b"sealed".to_vec(),
             created_at_unix_ns: 0,
-            schema_version: SCHEMA_VERSION,
-        }
+        })
     }
 
     #[test]
@@ -501,5 +497,67 @@ mod tests {
             ..valid_key_envelope()
         };
         assert_eq!(document.into_record(), None);
+    }
+
+    /// The share trio crosses the same boundary as everything above, with the
+    /// same two failure modes: a byte field of the wrong length, and a count
+    /// that arrives negative because BSON has no unsigned integers.
+    #[test]
+    fn the_share_documents_round_trip_and_refuse_corrupted_identifiers() {
+        let share = ShareRecord {
+            share_id: SHARE_ID,
+            owner: USER_ID,
+            revision: 7,
+            snapshot_id: SNAPSHOT_ID,
+            capsule: b"sealed".to_vec(),
+            capsule_signature: b"signed".to_vec(),
+            created_at_unix_ns: 1,
+            updated_at_unix_ns: 2,
+        };
+        let round_tripped = ShareDocument::from_record(&share)
+            .into_record()
+            .expect("well formed");
+        assert_eq!(round_tripped.share_id, SHARE_ID);
+        assert_eq!(round_tripped.owner, USER_ID);
+        assert_eq!(round_tripped.revision, 7);
+        assert_eq!(round_tripped.capsule, b"sealed");
+
+        let snapshot = ShareSnapshotRecord {
+            share_id: SHARE_ID,
+            revision: 7,
+            snapshot_id: SNAPSHOT_ID,
+            capsule: b"sealed".to_vec(),
+            capsule_signature: b"signed".to_vec(),
+            created_at_unix_ns: 1,
+        };
+        let round_tripped = ShareSnapshotDocument::from_record(&snapshot)
+            .into_record()
+            .expect("well formed");
+        assert_eq!(round_tripped.snapshot_id, SNAPSHOT_ID);
+        assert_eq!(round_tripped.revision, 7);
+
+        let membership = ShareMembershipRecord {
+            share_id: SHARE_ID,
+            user_id: USER_ID,
+            granted_at_unix_ns: 3,
+        };
+        let round_tripped = ShareMembershipDocument::from_record(&membership)
+            .into_record()
+            .expect("well formed");
+        assert_eq!(round_tripped.share_id, SHARE_ID);
+        assert_eq!(round_tripped.user_id, USER_ID);
+
+        // A corrupted identifier is absent rather than trusted.
+        let mut corrupted = ShareDocument::from_record(&share);
+        corrupted.share_id = binary(WRONG_LENGTH);
+        assert!(corrupted.into_record().is_none());
+
+        let mut corrupted = ShareSnapshotDocument::from_record(&snapshot);
+        corrupted.snapshot_id = binary(WRONG_LENGTH);
+        assert!(corrupted.into_record().is_none());
+
+        let mut corrupted = ShareMembershipDocument::from_record(&membership);
+        corrupted.user_id = binary(WRONG_LENGTH);
+        assert!(corrupted.into_record().is_none());
     }
 }

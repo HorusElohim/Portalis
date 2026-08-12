@@ -1518,6 +1518,16 @@ mod tests {
             .expect("revocation passes through");
 
         assert_eq!(Fault::None.label(), "none");
+        assert_eq!(
+            enrolled
+                .store
+                .list_devices(registered.user.user_id)
+                .await
+                .expect("listing passes through")
+                .len(),
+            0,
+            "a different service's user has no devices in this store"
+        );
 
         // The directory lookups are part of the same store, so exercise both
         // their pass-through and their failure here.

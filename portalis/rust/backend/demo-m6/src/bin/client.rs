@@ -115,7 +115,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     entry.signature = alice_device.sign(&entry.signing_payload());
     let manifest = Manifest::new(vec![entry])?;
     let snapshot_id = manifest.hash();
-    let sealed = seal_manifest(&share_key, share_id, 1, &manifest)?;
+    let sealed = seal_manifest(&share_key, share_id, 1, &manifest);
     let published = alice
         .publish_share(
             &share_id,

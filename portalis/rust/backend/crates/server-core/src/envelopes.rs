@@ -496,7 +496,11 @@ mod tests {
             store.find_user_by_handle("ada", "7Q2XZ").await,
             Ok(Some(user))
         );
-        assert_eq!(store.find_device(SENDER_DEVICE).await, Ok(Some(first)));
+        assert_eq!(
+            store.find_device(SENDER_DEVICE).await,
+            Ok(Some(first.clone()))
+        );
+        assert_eq!(store.list_devices(SENDER).await, Ok(vec![first]));
         assert_eq!(
             store.link_device(device(RECIPIENT_DEVICE, SENDER)).await,
             Ok(())

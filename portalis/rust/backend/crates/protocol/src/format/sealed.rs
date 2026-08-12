@@ -75,29 +75,25 @@ impl ManifestContext {
 /// The context's `manifest_hash` must be the manifest's own content root; it is
 /// taken from the manifest rather than the caller so the two cannot disagree.
 ///
-/// # Errors
-///
-/// Never fails in practice: `ChaCha20Poly1305` refuses only plaintexts far
-/// larger than a manifest can be, and that is reported rather than panicked
-/// on.
+#[must_use]
 pub fn seal(
     key: &ContentKey,
     collection_id: [u8; SHARE_ID_BYTES],
     revision: u64,
     manifest: &Manifest,
-) -> Result<Vec<u8>, SealedManifestError> {
+) -> Vec<u8> {
     let context = ManifestContext {
         collection_id,
         revision,
         manifest_hash: manifest.hash(),
     };
-    Ok(aead::seal(
+    aead::seal(
         key,
         SEALED_MANIFEST_VERSION,
         context.nonce(),
         &context.associated_data(),
         &manifest.encode(),
-    )?)
+    )
 }
 
 /// Opens a sealed manifest and returns the manifest inside it.
@@ -271,7 +267,7 @@ mod tests {
     #[test]
     fn a_sealed_manifest_opens_back_into_the_same_entries() {
         let manifest = manifest();
-        let sealed = seal(&KEY, SHARE, 1, &manifest).expect("sealed");
+        let sealed = seal(&KEY, SHARE, 1, &manifest);
 
         let opened = open(&KEY, &context(&manifest, 1), &sealed).expect("opened");
 
@@ -283,7 +279,7 @@ mod tests {
     #[test]
     fn an_empty_manifest_round_trips_too() {
         let manifest = Manifest::default();
-        let sealed = seal(&KEY, SHARE, 1, &manifest).expect("sealed");
+        let sealed = seal(&KEY, SHARE, 1, &manifest);
 
         assert_eq!(
             open(&KEY, &context(&manifest, 1), &sealed).expect("opened"),
@@ -299,12 +295,12 @@ mod tests {
         let manifest = manifest();
 
         assert_eq!(
-            seal(&KEY, SHARE, 7, &manifest).expect("sealed"),
-            seal(&KEY, SHARE, 7, &manifest).expect("sealed again")
+            seal(&KEY, SHARE, 7, &manifest),
+            seal(&KEY, SHARE, 7, &manifest)
         );
         assert_ne!(
-            seal(&KEY, SHARE, 7, &manifest).expect("sealed"),
-            seal(&KEY, SHARE, 8, &manifest).expect("next revision"),
+            seal(&KEY, SHARE, 7, &manifest),
+            seal(&KEY, SHARE, 8, &manifest),
             "a different revision is a different nonce"
         );
     }
@@ -315,8 +311,8 @@ mod tests {
         let second = Manifest::new(vec![entry(1, "changed.jpg", false)]).expect("built");
 
         assert_ne!(
-            seal(&KEY, SHARE, 7, &first).expect("sealed"),
-            seal(&KEY, SHARE, 7, &second).expect("sealed candidate"),
+            seal(&KEY, SHARE, 7, &first),
+            seal(&KEY, SHARE, 7, &second),
             "different candidate plaintexts must not reuse a key and nonce"
         );
     }
@@ -326,7 +322,7 @@ mod tests {
     #[test]
     fn a_sealed_manifest_does_not_open_anywhere_it_was_not_sealed() {
         let manifest = manifest();
-        let sealed = seal(&KEY, SHARE, 1, &manifest).expect("sealed");
+        let sealed = seal(&KEY, SHARE, 1, &manifest);
         let correct = context(&manifest, 1);
 
         for wrong in [
@@ -361,7 +357,7 @@ mod tests {
     fn a_tampered_sealed_manifest_is_refused() {
         let manifest = manifest();
         let correct = context(&manifest, 1);
-        let sealed = seal(&KEY, SHARE, 1, &manifest).expect("sealed");
+        let sealed = seal(&KEY, SHARE, 1, &manifest);
 
         let mut flipped = sealed.clone();
         let last = flipped.len() - 1;
@@ -485,6 +481,5 @@ mod tests {
             &context.associated_data(),
             plaintext,
         )
-        .expect("test plaintext seals")
     }
 }
