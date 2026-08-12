@@ -9,6 +9,8 @@ pub mod v1 {
     include!(concat!(env!("OUT_DIR"), "/portalis.protocol.v1.rs"));
 }
 
+pub mod format;
+
 mod frame;
 mod ids;
 mod limits;
@@ -17,6 +19,18 @@ mod sealing;
 mod signing;
 mod validate;
 
+pub use format::aead::{AeadError, CONTENT_KEY_BYTES, ContentKey};
+pub use format::entry::{
+    ENTRY_PAYLOAD_VERSION, EntryContext, EntryError, open as open_entry, seal as seal_entry,
+};
+pub use format::manifest::{
+    ENTRY_VERSION, INFO_HASH_BYTES, MAX_ENTRIES, MAX_ENTRY_NAME_BYTES, Manifest, ManifestEntry,
+    ManifestError, ManifestHash, THUMBNAIL_HASH_BYTES,
+};
+pub use format::sealed::{
+    ManifestContext, SEALED_MANIFEST_VERSION, SealedManifestError, open as open_manifest,
+    seal as seal_manifest,
+};
 pub use frame::{FrameError, decode_frame, encode_frame, validate_frame_size};
 pub use ids::{
     UUID_V7_ENTROPY_BYTES, derive_device_id, format_id, new_challenge, new_message_id, user_id_from,

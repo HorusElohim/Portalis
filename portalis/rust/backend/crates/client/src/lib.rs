@@ -6,8 +6,6 @@
 //! Module layout:
 //!
 //! - [`error`]: deterministic protocol failures.
-//! - [`manifest`]: the canonical media manifest and its content root.
-//! - [`capsule`]: sealing that manifest into bytes Nexus cannot read.
 //! - [`handoff`]: encrypting one torrent descriptor for one recipient device.
 //! - [`protocol`]: client-side message construction and validation.
 //! - [`pending`]: the bounded request/response correlation registry.
@@ -18,12 +16,9 @@
 //! - [`transport`]: the socket actor those rules drive.
 
 mod candidates;
-mod capsule;
 mod config;
 mod endpoint;
 mod error;
-mod handoff;
-mod manifest;
 mod pending;
 mod protocol;
 mod reconnect;
@@ -31,23 +26,12 @@ mod signer;
 mod transport;
 
 pub use candidates::{CandidateSource, PeerCandidate, merge_candidates};
-pub use capsule::{
-    CAPSULE_VERSION, CapsuleContext, CapsuleError, SHARE_KEY_BYTES, ShareKey, open as open_capsule,
-    seal as seal_capsule,
-};
 pub use config::{ClientConfig, DEFAULT_REQUEST_TIMEOUT};
 pub use endpoint::{ConnectionPath, NEXUS_ALPN, NexusEndpoint};
 pub use error::ClientError;
-pub use handoff::{
-    HANDOFF_VERSION, HandoffContext, HandoffError, TorrentHandoff, open_handoff, seal_handoff,
-};
 pub use iroh::RelayMode;
 pub use iroh::endpoint::{Connection, Incoming};
 pub use iroh::{NodeAddr as EndpointAddr, NodeId as EndpointId};
-pub use manifest::{
-    ENTRY_VERSION, INFO_HASH_BYTES, MAX_ENTRIES, MAX_ENTRY_NAME_BYTES, Manifest, ManifestEntry,
-    ManifestError, SnapshotId, THUMBNAIL_HASH_BYTES,
-};
 pub use pending::PendingRequests;
 pub use protocol::{
     ClientProtocol, KeyEnvelopePage, validate_authenticated, validate_device_linked,

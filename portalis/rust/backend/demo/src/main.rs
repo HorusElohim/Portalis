@@ -6,13 +6,11 @@
 use std::error::Error;
 use std::net::SocketAddr;
 
-use portalis_nexus_client::{
-    ClientError, DeviceSigner, HandoffContext, NexusClient, SHARE_KEY_BYTES, TransportError,
-    open_handoff, seal_handoff,
-};
+use portalis_nexus_client::{ClientError, DeviceSigner, NexusClient, TransportError};
 use portalis_nexus_demo::{DemoDevice, init_tracing, short};
 use portalis_nexus_protocol::v1::AddressFamily;
 use portalis_nexus_protocol::v1::envelope::Payload;
+use portalis_nexus_protocol::{CONTENT_KEY_BYTES, EntryContext, open_entry, seal_entry};
 use portalis_nexus_server::{AppState, GRACEFUL_DRAIN_TIMEOUT};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -259,7 +257,7 @@ async fn shares(
         .envelopes
         .first()
         .ok_or("Grace should have exactly one envelope")?;
-    let recovered: [u8; SHARE_KEY_BYTES] = portalis_nexus_protocol::open(
+    let recovered: [u8; CONTENT_KEY_BYTES] = portalis_nexus_protocol::open(
         &grace_device.encryption_secret(),
         &context,
         &portalis_nexus_protocol::SealedEnvelope {
@@ -283,13 +281,11 @@ async fn shares(
     // Pass the encrypted torrent descriptor live to the exact device returned
     // by the grant. Nexus relays the bytes without storing or opening them.
     let info_hash = [1_u8; 20];
-    let handoff_context = HandoffContext {
-        share_id: share_id.as_slice().try_into()?,
-        recipient_device_id,
+    let entry_context = EntryContext {
+        collection_id: share_id.as_slice().try_into()?,
         info_hash,
     };
-    let handoff_ciphertext =
-        seal_handoff(&recovered, &handoff_context, "Ada's collection", MAGNET)?;
+    let handoff_ciphertext = seal_entry(&recovered, &entry_context, MAGNET)?;
     ada.share_handoff(
         &share_id,
         &recipient_device_id,
@@ -309,7 +305,7 @@ async fn shares(
         }
     })
     .await??;
-    let received = open_handoff(&recovered, &handoff_context, &handoff.ciphertext)?;
+    let received = open_entry(&recovered, &entry_context, &handoff.ciphertext)?;
     step(
         14,
         "Ada handed the encrypted .torrent descriptor to Grace's exact device",
@@ -317,7 +313,7 @@ async fn shares(
             "device {}, info hash {}, descriptor {:?}",
             short(&handoff.recipient_device_id),
             short(&handoff.info_hash),
-            String::from_utf8_lossy(&received.torrent_bytes)
+            String::from_utf8_lossy(&received)
         ),
     );
     Ok(())

@@ -1,7 +1,7 @@
 //! The canonical manifest, and the content root taken over it.
 //!
 //! This is `SPEC.md` §11. It lives in the client crate because Nexus never
-//! sees it: the server stores a capsule it cannot open and a `SnapshotId` it
+//! sees it: the server stores a capsule it cannot open and a `ManifestHash` it
 //! cannot recompute, so nothing on the server side can catch two clients that
 //! disagree about a byte. One implementation, shared by every platform, is
 //! what makes the agreement hold.
@@ -13,8 +13,8 @@
 //! entries lacked: a name written directly before an optional thumbnail could
 //! be read as a longer name and no thumbnail.
 
+use crate::{DEVICE_KEY_BYTES, SIGNATURE_BYTES, SNAPSHOT_ID_BYTES};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use portalis_nexus_protocol::{DEVICE_KEY_BYTES, SIGNATURE_BYTES, SNAPSHOT_ID_BYTES};
 use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 
@@ -31,7 +31,7 @@ pub const INFO_HASH_BYTES: usize = 20;
 pub const THUMBNAIL_HASH_BYTES: usize = 32;
 
 /// The `BLAKE3` content root of a resolved canonical manifest.
-pub type SnapshotId = [u8; SNAPSHOT_ID_BYTES];
+pub type ManifestHash = [u8; SNAPSHOT_ID_BYTES];
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ManifestError {
@@ -142,7 +142,7 @@ impl Manifest {
     ///
     /// Returns [`ManifestError`] when an info hash repeats, a name is too
     /// long or not NFC-normalized, an entry signature is invalid, or there
-    /// are more entries than a snapshot may carry.
+    /// are more entries than a manifest may carry.
     pub fn new(mut entries: Vec<ManifestEntry>) -> Result<Self, ManifestError> {
         if entries.len() > MAX_ENTRIES {
             return Err(ManifestError::TooManyEntries {
@@ -192,7 +192,7 @@ impl Manifest {
         self.entries.len()
     }
 
-    /// The canonical bytes: what gets hashed, and what a capsule encrypts.
+    /// The canonical bytes: what gets hashed, and what the sealed form encrypts.
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         let mut bytes = Vec::from(MANIFEST_DOMAIN);
@@ -206,7 +206,7 @@ impl Manifest {
 
     /// The content root: `BLAKE3` over [`Manifest::encode`].
     #[must_use]
-    pub fn snapshot_id(&self) -> SnapshotId {
+    pub fn hash(&self) -> ManifestHash {
         *blake3::hash(&self.encode()).as_bytes()
     }
 }
@@ -269,7 +269,7 @@ mod tests {
             .expect("built");
 
         assert_eq!(ascending.encode(), shuffled.encode());
-        assert_eq!(ascending.snapshot_id(), shuffled.snapshot_id());
+        assert_eq!(ascending.hash(), shuffled.hash());
         assert_eq!(
             ascending
                 .entries()
@@ -295,19 +295,15 @@ mod tests {
         );
 
         let roots = [
-            base.snapshot_id(),
+            base.hash(),
             Manifest::new(vec![entry(1, "renamed")])
                 .expect("built")
-                .snapshot_id(),
-            Manifest::new(vec![entry(2, "one")])
-                .expect("built")
-                .snapshot_id(),
+                .hash(),
+            Manifest::new(vec![entry(2, "one")]).expect("built").hash(),
             Manifest::new(vec![entry(1, "one"), entry(2, "two")])
                 .expect("built")
-                .snapshot_id(),
-            Manifest::new(vec![with_thumbnail])
-                .expect("built")
-                .snapshot_id(),
+                .hash(),
+            Manifest::new(vec![with_thumbnail]).expect("built").hash(),
             Manifest::new(vec![signed(
                 ManifestEntry {
                     added_at_unix_ns: 1,
@@ -316,11 +312,11 @@ mod tests {
                 7,
             )])
             .expect("built")
-            .snapshot_id(),
+            .hash(),
             Manifest::new(vec![signed(ManifestEntry { ..entry(1, "one") }, 8)])
                 .expect("built")
-                .snapshot_id(),
-            Manifest::default().snapshot_id(),
+                .hash(),
+            Manifest::default().hash(),
         ];
 
         for (index, root) in roots.iter().enumerate() {
@@ -355,7 +351,7 @@ mod tests {
         .expect("built");
 
         assert_ne!(with_thumbnail.encode(), swallowed.encode());
-        assert_ne!(with_thumbnail.snapshot_id(), swallowed.snapshot_id());
+        assert_ne!(with_thumbnail.hash(), swallowed.hash());
     }
 
     /// A signature covers the entry and not the manifest around it, so an

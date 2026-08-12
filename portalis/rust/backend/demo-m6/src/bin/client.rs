@@ -3,13 +3,14 @@
 use std::error::Error;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use portalis_nexus_client::{
-    CapsuleContext, DeviceSigner, HandoffContext, Manifest, ManifestEntry, NexusClient,
-    SHARE_KEY_BYTES, open_capsule, open_handoff, seal_capsule, seal_handoff,
-};
+use portalis_nexus_client::{DeviceSigner, NexusClient};
 use portalis_nexus_demo::{DemoDevice, init_tracing, short};
 use portalis_nexus_protocol::v1::envelope::Payload;
 use portalis_nexus_protocol::v1::{AddressFamily, FriendAction, FriendshipState, ShareHandoff};
+use portalis_nexus_protocol::{
+    CONTENT_KEY_BYTES, EntryContext, Manifest, ManifestContext, ManifestEntry, open_entry,
+    open_manifest, seal_entry, seal_manifest,
+};
 use portalis_nexus_protocol::{EnvelopeContext, SealedEnvelope, new_challenge, new_message_id};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -100,7 +101,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let share_id: [u8; 16] = new_message_id()
         .try_into()
         .map_err(|_| "a generated share ID has the wrong length")?;
-    let share_key: [u8; SHARE_KEY_BYTES] = new_challenge()
+    let share_key: [u8; CONTENT_KEY_BYTES] = new_challenge()
         .try_into()
         .map_err(|_| "a generated share key has the wrong length")?;
     let mut entry = ManifestEntry {
@@ -113,16 +114,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
     entry.signature = alice_device.sign(&entry.signing_payload());
     let manifest = Manifest::new(vec![entry])?;
-    let snapshot_id = manifest.snapshot_id();
-    let capsule = seal_capsule(&share_key, share_id, 1, &manifest)?;
+    let snapshot_id = manifest.hash();
+    let sealed = seal_manifest(&share_key, share_id, 1, &manifest)?;
     let published = alice
         .publish_share(
             &share_id,
             1,
             None,
             &snapshot_id,
-            &capsule,
-            &alice_device.sign(&capsule),
+            &sealed,
+            &alice_device.sign(&sealed),
         )
         .await?;
     step(
@@ -171,7 +172,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .find(|envelope| envelope.share_id == share_id)
         .ok_or("Bob did not receive the share-key envelope")?;
-    let recovered_key: [u8; SHARE_KEY_BYTES] = portalis_nexus_protocol::open(
+    let recovered_key: [u8; CONTENT_KEY_BYTES] = portalis_nexus_protocol::open(
         &bob_device.encryption_secret(),
         &envelope_context,
         &SealedEnvelope {
@@ -182,46 +183,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .try_into()
     .map_err(|_| "the recovered share key has the wrong length")?;
     let fetched = bob.fetch_share(&share_id).await?;
-    let opened_manifest = open_capsule(
+    let opened_manifest = open_manifest(
         &recovered_key,
-        &CapsuleContext {
-            share_id,
+        &ManifestContext {
+            collection_id: share_id,
             revision: fetched.revision,
-            snapshot_id: fetched.snapshot_id.as_slice().try_into()?,
+            manifest_hash: fetched.snapshot_id.as_slice().try_into()?,
         },
         &fetched.capsule,
     )?;
-    if opened_manifest.snapshot_id() != snapshot_id {
+    if opened_manifest.hash() != snapshot_id {
         return Err("Bob opened a different manifest".into());
     }
     step(
         8,
-        "Bob fetched and opened the encrypted capsule",
+        "Bob fetched and opened the encrypted manifest",
         "Nexus never received the key",
     );
 
-    let handoff_context = HandoffContext {
-        share_id,
-        recipient_device_id,
+    let entry_context = EntryContext {
+        collection_id: share_id,
         info_hash: INFO_HASH,
     };
-    let ciphertext = seal_handoff(&share_key, &handoff_context, "Alice and Bob", TORRENT_BYTES)?;
+    let ciphertext = seal_entry(&share_key, &entry_context, TORRENT_BYTES)?;
     alice
         .share_handoff(&share_id, &recipient_device_id, &INFO_HASH, &ciphertext)
         .await?;
     let delivered = wait_for_handoff(&mut bob_events).await?;
-    let opened = open_handoff(&recovered_key, &handoff_context, &delivered.ciphertext)?;
-    if opened.info_hash != INFO_HASH || opened.torrent_bytes != TORRENT_BYTES {
+    let opened = open_entry(&recovered_key, &entry_context, &delivered.ciphertext)?;
+    if opened != TORRENT_BYTES {
         return Err("the delivered torrent handoff did not match".into());
     }
     step(
         9,
         "Bob received the encrypted .torrent on his exact device",
-        &format!(
-            "{} bytes, info hash {}",
-            opened.torrent_bytes.len(),
-            short(&opened.info_hash)
-        ),
+        &format!("{} bytes, info hash {}", opened.len(), short(&INFO_HASH)),
     );
 
     tokio::try_join!(
