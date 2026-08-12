@@ -50,8 +50,5 @@ pub use ports::{
     ShareMembershipRecord, ShareRepository, ShareSnapshotRecord, UserDirectory, UserId, UserRecord,
 };
 pub use presence::{ConnectionId, PresenceChange, PresenceRegistry};
-pub use share::{
-    Publication, Publish, ShareCommandError, ShareError, ShareRecord, ShareService, SnapshotId,
-    publish as publish_snapshot,
-};
+pub use share::{Publication, ShareCommandError, ShareRecord, ShareService, SnapshotId};
 pub use swarm::{AddressFamily, PeerAnnouncement, PeerLease, SwarmError, SwarmRegistry};

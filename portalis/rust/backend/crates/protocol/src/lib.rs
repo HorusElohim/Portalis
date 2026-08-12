@@ -21,7 +21,8 @@ mod validate;
 
 pub use format::aead::{AeadError, CONTENT_KEY_BYTES, ContentKey};
 pub use format::devicelog::{
-    Action, Device, DeviceLog, DeviceLogError, LOG_HASH_BYTES, LogEntry, LogHash, NO_PREVIOUS,
+    Action, Device, DeviceLog, DeviceLogError, LOG_HASH_BYTES, LogEntry, LogHash,
+    NO_PREVIOUS as NO_PREVIOUS_ENTRY,
 };
 pub use format::entry::{
     ENTRY_PAYLOAD_VERSION, EntryContext, EntryError, open as open_entry, seal as seal_entry,
@@ -29,6 +30,10 @@ pub use format::entry::{
 pub use format::manifest::{
     ENTRY_VERSION, INFO_HASH_BYTES, MAX_ENTRIES, MAX_ENTRY_NAME_BYTES, Manifest, ManifestEntry,
     ManifestError, ManifestHash, THUMBNAIL_HASH_BYTES,
+};
+pub use format::revision::{
+    MAX_MEMBERS, Member, NO_PREVIOUS as NO_PREVIOUS_REVISION, REVISION_HASH_BYTES, Revision,
+    RevisionError, RevisionHash,
 };
 pub use format::sealed::{
     ManifestContext, SEALED_MANIFEST_VERSION, SealedManifestError, open as open_manifest,

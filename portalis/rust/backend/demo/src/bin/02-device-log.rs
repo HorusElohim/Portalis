@@ -16,7 +16,7 @@
 use ed25519_dalek::{Signer, SigningKey};
 use portalis_nexus_protocol::{
     Action, DEVICE_KEY_BYTES, DeviceLog, DeviceLogError, ENCRYPTION_KEY_BYTES, LogEntry,
-    NO_PREVIOUS, SIGNATURE_BYTES,
+    NO_PREVIOUS_ENTRY, SIGNATURE_BYTES,
 };
 
 const LAPTOP: [u8; 32] = [1; 32];
@@ -168,7 +168,7 @@ fn root_entry(root: &SigningKey) -> LogEntry {
         LogEntry {
             root_key: public(root),
             sequence: 1,
-            previous_hash: NO_PREVIOUS,
+            previous_hash: NO_PREVIOUS_ENTRY,
             action: Action::Enrol,
             subject_signing_key: public(root),
             subject_encryption_key: encryption_key(root.to_bytes()),

@@ -14,6 +14,7 @@
 //! - [`aead`]: the one place bytes are encrypted, and the envelope they share.
 //! - [`devicelog`]: a person's devices, signed and append-only.
 //! - [`manifest`]: the canonical list of a revision's entries, and its hash.
+//! - [`revision`]: a collection's history, as a chain of signed revisions.
 //! - [`sealed`]: that manifest, encrypted under a collection's content key.
 //! - [`entry`]: one entry's `.torrent`, encrypted under the same key.
 
@@ -21,4 +22,5 @@ pub mod aead;
 pub mod devicelog;
 pub mod entry;
 pub mod manifest;
+pub mod revision;
 pub mod sealed;

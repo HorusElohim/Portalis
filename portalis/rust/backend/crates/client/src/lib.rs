@@ -6,7 +6,6 @@
 //! Module layout:
 //!
 //! - [`error`]: deterministic protocol failures.
-//! - [`handoff`]: encrypting one torrent descriptor for one recipient device.
 //! - [`protocol`]: client-side message construction and validation.
 //! - [`pending`]: the bounded request/response correlation registry.
 //! - [`reconnect`]: bounded exponential reconnect scheduling.
@@ -14,6 +13,7 @@
 //! - [`config`]: tuning for one supervised connection.
 //! - [`endpoint`]: authenticated direct-or-relayed QUIC connections.
 //! - [`transport`]: the socket actor those rules drive.
+//! - [`verify`]: whether a revision belongs after the one already held.
 
 mod candidates;
 mod config;
@@ -24,6 +24,7 @@ mod protocol;
 mod reconnect;
 mod signer;
 mod transport;
+mod verify;
 
 pub use candidates::{CandidateSource, PeerCandidate, merge_candidates};
 pub use config::{ClientConfig, DEFAULT_REQUEST_TIMEOUT};
@@ -44,3 +45,7 @@ pub use protocol::{
 pub use reconnect::{ReconnectPolicy, ReconnectPolicyError};
 pub use signer::DeviceSigner;
 pub use transport::{NexusClient, TransportError, authority_of};
+pub use verify::{
+    Accepted, ChainError, ChainState, ChainStore, ChainStoreError, MemoryChainStore,
+    verify as verify_revision,
+};

@@ -17,11 +17,7 @@ use crate::messages::{binary_frame, protocol_error, reply_with};
 use crate::session::Session;
 use crate::state::AppState;
 
-type PublicationIds = (
-    [u8; SHARE_ID_BYTES],
-    [u8; SNAPSHOT_ID_BYTES],
-    Option<[u8; SNAPSHOT_ID_BYTES]>,
-);
+type PublicationIds = ([u8; SHARE_ID_BYTES], [u8; SNAPSHOT_ID_BYTES]);
 
 pub(crate) async fn publish(
     session: &Session,
@@ -33,7 +29,7 @@ pub(crate) async fn publish(
     let Some(identity) = session.identity() else {
         return unauthenticated(request, now_unix_ns);
     };
-    let Some((share_id, snapshot_id, prior_snapshot_id)) = publication_ids(command) else {
+    let Some((share_id, snapshot_id)) = publication_ids(command) else {
         return malformed(request, "invalid share or snapshot identifier", now_unix_ns);
     };
     match state
@@ -42,7 +38,6 @@ pub(crate) async fn publish(
             share_id,
             publisher: identity.user.user_id,
             revision: command.revision,
-            prior_snapshot_id,
             snapshot_id,
             capsule: &command.capsule,
             capsule_signature: &command.capsule_signature,
@@ -278,15 +273,14 @@ async fn announce(state: &AppState, share: &ShareRecord, now_unix_ns: u64) {
     }
 }
 
+/// `prior_snapshot_id` still arrives on the wire and is deliberately ignored.
+/// It existed so the service could check that a publication followed the
+/// snapshot the share was on — an ordering rule that is now the reader's, and
+/// the field goes when the wire carries a signed revision instead.
 fn publication_ids(command: &PublishShare) -> Option<PublicationIds> {
     let share_id = command.share_id.as_slice().try_into().ok()?;
     let snapshot_id = command.snapshot_id.as_slice().try_into().ok()?;
-    let prior = if command.prior_snapshot_id.is_empty() {
-        None
-    } else {
-        Some(command.prior_snapshot_id.as_slice().try_into().ok()?)
-    };
-    Some((share_id, snapshot_id, prior))
+    Some((share_id, snapshot_id))
 }
 
 fn snapshot(share: &ShareRecord) -> ShareSnapshot {
@@ -340,9 +334,9 @@ fn unavailable(request: &Envelope, now: u64) -> Envelope {
 fn rejection(request: &Envelope, error: &ShareCommandError, now: u64) -> Envelope {
     let code = match error {
         ShareCommandError::CapsuleTooLarge { .. }
-        | ShareCommandError::InvalidSignatureLength { .. }
-        | ShareCommandError::Publication(_) => ProtocolErrorCode::InvalidMessage,
+        | ShareCommandError::InvalidSignatureLength { .. } => ProtocolErrorCode::InvalidMessage,
         ShareCommandError::NotFound => ProtocolErrorCode::NotFound,
+        // Membership still has an owner; publication no longer does.
         ShareCommandError::NotTheOwner
         | ShareCommandError::UnknownMember
         | ShareCommandError::OwnerCannotBeRemoved => ProtocolErrorCode::Unauthorized,
@@ -554,11 +548,7 @@ mod tests {
             snapshot_id: vec![4; SNAPSHOT_ID_BYTES - 1],
             ..publication(1, b"c")
         };
-        let short_prior = PublishShare {
-            prior_snapshot_id: vec![4; SNAPSHOT_ID_BYTES - 1],
-            ..publication(2, b"c")
-        };
-        for command in [short_share, short_snapshot, short_prior] {
+        for command in [short_share, short_snapshot] {
             let reply = publish(&session, &state, &request(), &command, NOW).await;
             let (code, message) = refusal(&reply).expect("a refusal");
             assert_eq!(code, ProtocolErrorCode::InvalidMessage);
@@ -1092,8 +1082,10 @@ mod tests {
         assert_eq!(published(&first), published(&again));
         assert_eq!(published(&again).expect("a publication").revision, 1);
 
-        // Different bytes for a revision already published are refused: a
-        // revision is immutable once written.
+        // Different bytes for a revision already published still fail, but as
+        // storage refusing to rewrite immutable history rather than the
+        // service judging the revision. A reader sees the same attempt as a
+        // fork against what it already holds, which is where it belongs.
         let rewritten = publish(
             &session,
             &state,
@@ -1104,77 +1096,7 @@ mod tests {
         .await;
         assert_eq!(
             refusal(&rewritten).expect("a refusal").0,
-            ProtocolErrorCode::InvalidMessage
-        );
-    }
-
-    /// A publication has to name the snapshot the share is actually on, so
-    /// one built against a revision another device already replaced is
-    /// refused rather than silently overwriting it.
-    #[tokio::test]
-    async fn a_publication_must_follow_the_snapshot_the_share_is_on() {
-        let state = AppState::default();
-        let session = signed_in(&state, ADA, 1).await;
-
-        // Nothing to follow yet, so naming a prior snapshot is a publisher
-        // working from a share this server has no record of.
-        let invented_history = PublishShare {
-            prior_snapshot_id: SNAPSHOT.to_vec(),
-            ..publication(1, b"one")
-        };
-        let reply = publish(&session, &state, &request(), &invented_history, NOW).await;
-        assert_eq!(
-            refusal(&reply).expect("a refusal").0,
-            ProtocolErrorCode::InvalidMessage
-        );
-
-        publish(&session, &state, &request(), &publication(1, b"one"), NOW).await;
-
-        let built_on_the_wrong_snapshot = PublishShare {
-            prior_snapshot_id: [9; SNAPSHOT_ID_BYTES].to_vec(),
-            snapshot_id: [5; SNAPSHOT_ID_BYTES].to_vec(),
-            ..publication(2, b"two")
-        };
-        let reply = publish(
-            &session,
-            &state,
-            &request(),
-            &built_on_the_wrong_snapshot,
-            NOW,
-        )
-        .await;
-        assert_eq!(
-            refusal(&reply).expect("a refusal").0,
-            ProtocolErrorCode::InvalidMessage
-        );
-
-        // A peer may seed and fetch a share without being able to move it.
-        let stranger = signed_in(&state, GRACE, 2).await;
-        let taking_it_over = PublishShare {
-            prior_snapshot_id: SNAPSHOT.to_vec(),
-            snapshot_id: [5; SNAPSHOT_ID_BYTES].to_vec(),
-            ..publication(2, b"mine now")
-        };
-        let reply = publish(&stranger, &state, &request(), &taking_it_over, NOW).await;
-        assert_eq!(
-            refusal(&reply).expect("a refusal").0,
-            ProtocolErrorCode::InvalidMessage
-        );
-        assert_eq!(
-            published(
-                &fetch(
-                    &session,
-                    &state,
-                    &request(),
-                    &FetchShareRequest {
-                        share_id: SHARE.to_vec(),
-                    },
-                    NOW,
-                )
-                .await
-            ),
-            None,
-            "a fetch answers with a fetch, not a publication"
+            ProtocolErrorCode::Internal
         );
     }
 
@@ -1186,9 +1108,6 @@ mod tests {
         }
     }
 
-    /// A grant that authorizes but cannot then read the member's devices is
-    /// an outage rather than a refusal: the owner retries instead of
-    /// concluding the member has none.
     #[tokio::test]
     async fn a_grant_that_cannot_read_the_members_devices_reports_an_outage() {
         let state = AppState::default();
@@ -1279,22 +1198,29 @@ mod tests {
         let session = signed_in(&state, ADA, 1).await;
         let oversized = publication(1, &vec![0; MAX_SHARE_CAPSULE_BYTES + 1]);
 
-        for (command, expected) in [
-            (oversized, ProtocolErrorCode::InvalidMessage),
-            // Revision two with nothing published is a stale publisher.
-            (publication(2, b"c"), ProtocolErrorCode::InvalidMessage),
-        ] {
-            let reply = publish(&session, &state, &request(), &command, NOW).await;
-            assert_eq!(refusal(&reply).expect("a refusal").0, expected);
-        }
+        let reply = publish(&session, &state, &request(), &oversized, NOW).await;
+        assert_eq!(
+            refusal(&reply).expect("a refusal").0,
+            ProtocolErrorCode::InvalidMessage
+        );
 
-        // Granting on a share nobody published cannot find it.
+        // Revision two with nothing published is stored rather than refused.
+        // The service has no opinion about where a chain starts; a reader does,
+        // and rejects it as beginning midway.
+        let reply = publish(&session, &state, &request(), &publication(2, b"c"), NOW).await;
+        assert!(
+            published(&reply).is_some(),
+            "the service stores what it is given"
+        );
+
+        // Granting on a share nobody published cannot find it. A different
+        // identifier, because the publication above now exists.
         let reply = grant(
             &session,
             &state,
             &request(),
             &GrantShareAccess {
-                share_id: SHARE.to_vec(),
+                share_id: vec![0xee; SHARE_ID_BYTES],
                 member_user_id: GRACE.to_vec(),
             },
             NOW,

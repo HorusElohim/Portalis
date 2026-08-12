@@ -129,11 +129,16 @@ async fn only_an_authorized_user_discovers_the_latest_encrypted_snapshot() {
 
     expect_handoff(&owner, &mut events, &member_device_id).await;
 
+    // Regression is no longer the service's refusal to make. It stores what
+    // it is given, and fails here only because rewriting revision 1 with new
+    // bytes would overwrite immutable history. A reader rejects the same
+    // publication as a rollback against the revision it already verified,
+    // which is where the judgement now lives.
     let regressed = owner
         .publish_share(&SHARE, 1, None, &FIRST, b"changed", &SIGNATURE)
         .await
-        .expect_err("published history never regresses");
-    assert_eq!(refusal(&regressed), ProtocolErrorCode::InvalidMessage);
+        .expect_err("stored history is immutable");
+    assert_eq!(refusal(&regressed), ProtocolErrorCode::Internal);
 
     expect_revocation_to_hide_the_share(
         &owner,
