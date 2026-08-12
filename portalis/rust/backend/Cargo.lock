@@ -4090,6 +4090,7 @@ name = "portalis-nexus-demo"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "backend",
  "blake3",
  "ed25519-dalek",
  "portalis-nexus-client",

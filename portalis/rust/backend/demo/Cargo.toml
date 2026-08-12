@@ -9,6 +9,7 @@ default-run = "portalis-nexus-demo"
 
 [dependencies]
 axum.workspace = true
+backend = { path = ".." }
 blake3.workspace = true
 ed25519-dalek.workspace = true
 portalis-nexus-client.workspace = true
