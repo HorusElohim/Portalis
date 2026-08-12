@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::ports::{
     Clock, DeviceId, DeviceRecord, EncryptionKey, EnvelopeRepository, IdentityRepository,
-    KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId, ShareRepository,
+    KeyEnvelopePage, KeyEnvelopeRecord, RepositoryError, ShareId, ShareRepository, UserId,
 };
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -20,13 +20,24 @@ pub enum EnvelopeError {
     InvalidEphemeralKeyLength { actual: usize },
     #[error("ciphertext exceeds the {MAX_KEY_ENVELOPE_CIPHERTEXT_BYTES}-byte envelope limit")]
     CiphertextTooLarge { actual: usize },
-    /// The address does not name a device this service has ever enrolled.
-    /// Not an authorization rule — whether that device may hold this
-    /// collection's key is the owner's decision, made against a device log the
-    /// service does not have. This only keeps the envelope mailbox from being
-    /// a write-anything target for arbitrary 32-byte addresses.
-    #[error("that device is not enrolled")]
+    /// None of the three below is an authorization rule. Whether a device may
+    /// hold this collection's key is the owner's decision, made against a
+    /// device log the service does not have. These ask a different question —
+    /// is this address a destination worth writing to at all — for the same
+    /// reason the service verifies signatures on write (`SPEC.md` §23):
+    /// storing what can never be read wastes space, and an envelope is 4 KiB.
+    #[error("that device is not authorized")]
     UnknownRecipient,
+    /// Before a share exists there is no membership to deliver against, so the
+    /// only safe destination is one of the sender's own devices. Without this
+    /// any authenticated user could write to every enrolled device in the
+    /// system under an invented share identifier.
+    #[error("that device does not belong to you")]
+    NotYourDevice,
+    /// A revoked device can never authenticate to collect this, so the
+    /// envelope is dead on arrival.
+    #[error("that device was revoked")]
+    RecipientRevoked,
     #[error(transparent)]
     Repository(#[from] RepositoryError),
 }
@@ -57,23 +68,24 @@ where
 
     /// Stores a sealed share key for one of `sender`'s own devices.
     ///
-    /// Who may receive a collection's key is not decided here. Under D2 and
-    /// D3 the owner seals only to devices a verified device log authorizes,
-    /// and the service holds neither that log nor the key — so a rule here
-    /// could only re-check something it cannot see, and would refuse
-    /// legitimate deliveries whenever its view lagged the owner's.
+    /// Who may *read* a collection is not decided here. Under D2 and D3 the
+    /// owner seals only to devices a verified device log authorizes, and the
+    /// service holds neither that log nor the key, so an ownership or
+    /// membership rule here could only re-check a copy that may be behind the
+    /// owner's — refusing deliveries that are in fact correct.
     ///
-    /// What remains is bounds, and that the address names a device that
-    /// exists. An envelope is opaque and 4 KiB; without that check any
-    /// authenticated user could write to any 32-byte address.
+    /// What the service still asks is whether the address is a destination
+    /// worth writing to: a device it has enrolled, not revoked, and — before
+    /// any share exists to deliver against — one of the sender's own.
     ///
     /// # Errors
     ///
     /// Returns [`EnvelopeError`] when the ephemeral key has the wrong length,
-    /// the ciphertext exceeds its bound, the recipient device is not enrolled,
-    /// or storage fails.
+    /// the ciphertext exceeds its bound, the recipient is unknown, revoked, or
+    /// a stranger's device with no share to justify it, or storage fails.
     pub async fn put_key_envelope(
         &self,
+        sender: UserId,
         request: PutKeyEnvelopeRequest<'_>,
     ) -> Result<(), EnvelopeError> {
         let ephemeral_public_key =
@@ -88,13 +100,19 @@ where
             });
         }
 
-        if self
+        let recipient = self
             .store
             .find_device(request.recipient_device_id)
             .await?
-            .is_none()
-        {
-            return Err(EnvelopeError::UnknownRecipient);
+            .ok_or(EnvelopeError::UnknownRecipient)?;
+        if recipient.is_revoked() {
+            return Err(EnvelopeError::RecipientRevoked);
+        }
+        // With a share to deliver against, any enrolled device is a plausible
+        // destination and the owner decides which ones actually get sealed to.
+        // Without one there is nothing to justify writing to a stranger.
+        if self.store.find_share(request.share_id).await?.is_none() && recipient.user_id != sender {
+            return Err(EnvelopeError::NotYourDevice);
         }
 
         self.store
@@ -181,7 +199,7 @@ mod tests {
             .expect("enrolled");
 
         service
-            .put_key_envelope(request(b"sealed"))
+            .put_key_envelope(SENDER, request(b"sealed"))
             .await
             .expect("stored");
 
@@ -235,11 +253,18 @@ mod tests {
             .await
             .expect("share");
 
-        // Neither membership nor ownership is checked here any more: both are
-        // decided by the owner against a device log, and re-checking a stale
-        // copy would only refuse deliveries that are in fact correct.
-        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
-        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
+        // Membership and ownership are no longer checked: both are the owner's
+        // decision, made against a device log, and re-checking a copy that may
+        // be behind it would refuse deliveries that are in fact correct. The
+        // share exists, so any enrolled device is a plausible destination.
+        assert_eq!(
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            Ok(())
+        );
+        assert_eq!(
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            Ok(())
+        );
         service
             .store
             .grant_share_access(crate::ShareMembershipRecord {
@@ -250,7 +275,7 @@ mod tests {
             .await
             .expect("member");
         service
-            .put_key_envelope(request(b"sealed"))
+            .put_key_envelope(SENDER, request(b"sealed"))
             .await
             .expect("authorized delivery");
     }
@@ -281,7 +306,7 @@ mod tests {
         service.store.set_unavailable(true);
 
         assert_eq!(
-            service.put_key_envelope(request(b"sealed")).await,
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
             outage("the store is switched off")
         );
         assert_eq!(
@@ -568,7 +593,7 @@ mod tests {
         let service = EnvelopeService::new(store, FixedClock::new(NOW));
 
         assert_eq!(
-            service.put_key_envelope(request(b"sealed")).await,
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
             outage("put"),
             "the write failed after its checks passed"
         );
@@ -583,33 +608,31 @@ mod tests {
             .expect("enrolled");
 
         assert_eq!(
-            service.put_key_envelope(request(b"sealed")).await,
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
             Err(EnvelopeError::UnknownRecipient)
         );
     }
 
-    /// Pushing to another user's device is no longer the service's refusal.
-    /// A key envelope is sealed to a device's X25519 key, so one addressed to
-    /// a device the sender should not have is unopenable noise; and refusing
-    /// it here would break the legitimate case, which is exactly delivering to
-    /// someone else's device.
+    /// With no share to deliver against, a stranger's device is not a
+    /// destination this service will write to.
     #[tokio::test]
-    async fn an_envelope_may_be_addressed_to_another_users_device() {
+    async fn pushing_to_someone_elses_device_is_refused_before_a_share_exists() {
         let service = service();
         service
             .store
             .enrol_device(device(RECIPIENT_DEVICE, OTHER_USER))
             .expect("enrolled");
 
-        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
+        assert_eq!(
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            Err(EnvelopeError::NotYourDevice)
+        );
     }
 
-    /// A revoked device is refused by the owner, who replays a device log
-    /// before sealing and never produces an envelope for it. The service
-    /// cannot make that judgement — its view of a revocation may lag the
-    /// owner's either way — so it stores what it is given.
+    /// A revoked device can never authenticate to collect an envelope, so
+    /// storing one for it would be writing something guaranteed unread.
     #[tokio::test]
-    async fn a_revoked_recipient_is_the_owners_judgement_not_the_services() {
+    async fn a_revoked_recipient_cannot_receive_a_replacement_envelope() {
         let service = service();
         service
             .store
@@ -621,7 +644,10 @@ mod tests {
             .await
             .expect("revoked");
 
-        assert_eq!(service.put_key_envelope(request(b"sealed")).await, Ok(()));
+        assert_eq!(
+            service.put_key_envelope(SENDER, request(b"sealed")).await,
+            Err(EnvelopeError::RecipientRevoked)
+        );
     }
 
     #[tokio::test]
@@ -634,12 +660,15 @@ mod tests {
 
         assert_eq!(
             service
-                .put_key_envelope(PutKeyEnvelopeRequest {
-                    share_id: SHARE,
-                    recipient_device_id: RECIPIENT_DEVICE,
-                    ephemeral_public_key: &[0; 10],
-                    ciphertext: b"sealed",
-                },)
+                .put_key_envelope(
+                    SENDER,
+                    PutKeyEnvelopeRequest {
+                        share_id: SHARE,
+                        recipient_device_id: RECIPIENT_DEVICE,
+                        ephemeral_public_key: &[0; 10],
+                        ciphertext: b"sealed",
+                    },
+                )
                 .await,
             Err(EnvelopeError::InvalidEphemeralKeyLength { actual: 10 })
         );
@@ -654,11 +683,11 @@ mod tests {
             .expect("enrolled");
 
         service
-            .put_key_envelope(request(b"first"))
+            .put_key_envelope(SENDER, request(b"first"))
             .await
             .expect("stored");
         service
-            .put_key_envelope(request(b"second"))
+            .put_key_envelope(SENDER, request(b"second"))
             .await
             .expect("stored");
 
@@ -698,7 +727,7 @@ mod tests {
         let ciphertext = vec![0; MAX_KEY_ENVELOPE_CIPHERTEXT_BYTES + 1];
 
         assert_eq!(
-            service.put_key_envelope(request(&ciphertext)).await,
+            service.put_key_envelope(SENDER, request(&ciphertext)).await,
             Err(EnvelopeError::CiphertextTooLarge {
                 actual: ciphertext.len(),
             })

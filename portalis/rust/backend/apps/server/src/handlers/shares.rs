@@ -22,10 +22,7 @@ pub(crate) async fn put(
     put: &PutKeyEnvelope,
     now_unix_ns: u64,
 ) -> Envelope {
-    // Authentication is still required — an anonymous writer would make the
-    // envelope mailbox a free-for-all — but who the sender is no longer
-    // decides anything, because authorization moved to the owner.
-    let Some(_identity) = session.identity() else {
+    let Some(identity) = session.identity() else {
         return unauthenticated(request, now_unix_ns);
     };
     let Ok(share_id) = <[u8; SHARE_ID_BYTES]>::try_from(put.share_id.as_slice()) else {
@@ -40,12 +37,15 @@ pub(crate) async fn put(
     };
 
     let outcome = envelopes
-        .put_key_envelope(PutKeyEnvelopeRequest {
-            share_id,
-            recipient_device_id,
-            ephemeral_public_key: &put.ephemeral_public_key,
-            ciphertext: &put.ciphertext,
-        })
+        .put_key_envelope(
+            identity.user.user_id,
+            PutKeyEnvelopeRequest {
+                share_id,
+                recipient_device_id,
+                ephemeral_public_key: &put.ephemeral_public_key,
+                ciphertext: &put.ciphertext,
+            },
+        )
         .await;
     match outcome {
         Ok(()) => reply_with(
@@ -133,9 +133,11 @@ fn rejection(request: &Envelope, error: &EnvelopeError, now_unix_ns: u64) -> Env
     let code = match error {
         EnvelopeError::InvalidEphemeralKeyLength { .. }
         | EnvelopeError::CiphertextTooLarge { .. } => ProtocolErrorCode::InvalidMessage,
-        // Not "you may not", but "there is no such device": authorization is
-        // the owner's, decided against a device log this service never sees.
-        EnvelopeError::UnknownRecipient => ProtocolErrorCode::NotFound,
+        // One code for all three, so a prober cannot learn from the answer
+        // whether a device exists, is revoked, or belongs to someone else.
+        EnvelopeError::UnknownRecipient
+        | EnvelopeError::NotYourDevice
+        | EnvelopeError::RecipientRevoked => ProtocolErrorCode::Unauthorized,
         EnvelopeError::Repository(_) => ProtocolErrorCode::Internal,
     };
     let message = match error {
@@ -416,7 +418,18 @@ mod tests {
                 EnvelopeError::CiphertextTooLarge { actual: 99_999 },
                 ProtocolErrorCode::InvalidMessage,
             ),
-            (EnvelopeError::UnknownRecipient, ProtocolErrorCode::NotFound),
+            (
+                EnvelopeError::UnknownRecipient,
+                ProtocolErrorCode::Unauthorized,
+            ),
+            (
+                EnvelopeError::NotYourDevice,
+                ProtocolErrorCode::Unauthorized,
+            ),
+            (
+                EnvelopeError::RecipientRevoked,
+                ProtocolErrorCode::Unauthorized,
+            ),
         ] {
             let reply = rejection(&request, &error, NOW);
 

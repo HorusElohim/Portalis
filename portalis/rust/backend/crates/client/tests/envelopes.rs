@@ -195,19 +195,17 @@ async fn a_revoked_device_cannot_receive_a_replacement_envelope() {
         .await
         .expect("revocation succeeds");
 
-    // Rotating must not reach the revoked device — and that is now enforced
-    // where the key actually is. An owner replays the device log and produces
-    // no envelope for a revoked device at all, so nothing is sent. The service
-    // stores whatever it is handed, because its view of a revocation can lag
-    // the owner's in either direction and refusing on a stale view would drop
-    // deliveries that are correct.
+    // Rotating the share key now must not reach the revoked device. The owner
+    // would not seal to it — they replay the device log first — and the
+    // service refuses to store it either, because a revoked device can never
+    // authenticate to collect it.
     let sealed = seal_envelope(
         &second.encryption_public_key(),
         &context(&second),
         b"rotated key",
     )
     .expect("seals");
-    first_client
+    let refused = first_client
         .put_key_envelope(
             &SHARE_ID,
             &second_device_id,
@@ -215,13 +213,15 @@ async fn a_revoked_device_cannot_receive_a_replacement_envelope() {
             &sealed.ciphertext,
         )
         .await
-        .expect("the service stores what it is given");
+        .expect_err("a revoked device receives no replacement envelope");
+
+    assert_eq!(refusal(&refused), ProtocolErrorCode::Unauthorized);
     first_client.shutdown().await;
     server.abort();
 }
 
 #[tokio::test]
-async fn an_envelope_may_be_addressed_to_another_users_device() {
+async fn an_envelope_cannot_be_addressed_to_another_users_device() {
     let address = reserve_address().await;
     let (_state, server) = start_server(address).await;
     let ada = device(7);
@@ -244,13 +244,12 @@ async fn an_envelope_may_be_addressed_to_another_users_device() {
         .await
         .expect("registration succeeds");
 
-    // Addressing someone else's device is the whole point of a key envelope:
-    // sharing means delivering to a device that is not yours. It is sealed to
-    // that device's X25519 key, so an envelope nobody should have received is
-    // unopenable noise rather than a leak.
+    // No share has been published under this identifier, so there is nothing
+    // to justify writing into a stranger's mailbox. Once a share exists, the
+    // owner decides who is sealed to and this refusal no longer applies.
     let sealed =
         seal_envelope(&grace.encryption_public_key(), &context(&grace), SHARE_KEY).expect("seals");
-    ada_client
+    let refused = ada_client
         .put_key_envelope(
             &SHARE_ID,
             &derive_device_id(&grace.public_key()),
@@ -258,7 +257,9 @@ async fn an_envelope_may_be_addressed_to_another_users_device() {
             &sealed.ciphertext,
         )
         .await
-        .expect("delivering to a member's device is the point");
+        .expect_err("a device belonging to someone else cannot be addressed");
+
+    assert_eq!(refusal(&refused), ProtocolErrorCode::Unauthorized);
     ada_client.shutdown().await;
     server.abort();
 }
